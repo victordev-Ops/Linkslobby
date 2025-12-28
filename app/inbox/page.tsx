@@ -1,12 +1,12 @@
 // app/inbox/page.tsx
-import { supabaseServer } from '@/lib/supabase/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import InboxClient from '@/components/InboxClient'
 
 export const dynamic = 'force-dynamic' // Keeps data fresh; optional: use revalidate = 60 for caching
 
 export default async function InboxPage() {
-  const supabase = await supabaseServer()
+  const supabase = createSupabaseServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
 
