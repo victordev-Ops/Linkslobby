@@ -23,11 +23,13 @@ const getCachedProfile = unstable_cache(
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   let profile = null
   if (user) {
-    profile = await getCachedProfile(user.id)  // Only one argument: user.id
+    profile = await getCachedProfile(user.id)  // ← Only one argument
   }
 
   const slug = profile?.slug ?? 'anonymous'
@@ -40,4 +42,4 @@ export default async function DashboardPage() {
       confessUrl={confessUrl}
     />
   )
-}
+    }
