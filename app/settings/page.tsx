@@ -15,8 +15,7 @@ const getCachedUsername = unstable_cache(
 
     return data?.username || 'Anonymous'
   },
-  // Dynamic cache key: unique per user
-  (userId: string) => [`settings-username-${userId}`],
+  ['settings-username'],
   {
     revalidate: 3600, // 1 hour
     tags: ['username'],
@@ -33,7 +32,9 @@ export default async function SettingsPage() {
   // Optional: redirect unauthenticated users
   // if (!user) redirect('/login')
 
-  const username = user ? await getCachedUsername(user.id) : 'Anonymous'
+  const username = user
+    ? await getCachedUsername(`settings-username-${user.id}`, user.id)
+    : 'Anonymous'
 
   return (
     <SettingsClient
