@@ -1,5 +1,5 @@
 // app/inbox/[id]/page.tsx
-import { supabaseServer } from '@/lib/supabase/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import MessageViewClient from '@/components/MessageViewClient'
 
@@ -10,7 +10,7 @@ export default async function MessageViewPage({
 }: {
   params: { id: string }
 }) {
-  const supabase = await supabaseServer()
+  const supabase = createSupabaseServerClient()
 
   const {
     data: { user },
