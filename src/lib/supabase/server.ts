@@ -1,9 +1,9 @@
-// src/lib/supabase/server.ts  (small improvement)
+// src/lib/supabase/server.ts
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-export const createSupabaseServerClient = () => {
-  const cookieStore = cookies()  // No need for async/await in Next.js 15+
+export function createSupabaseServerClient() {
+  const cookieStore = cookies()
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,11 +15,11 @@ export const createSupabaseServerClient = () => {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
+            cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options)
-            )
+            })
           } catch {
-            // Ignore in server-only contexts like route handlers
+            // Safe to ignore in middleware/read-only contexts
           }
         },
       },
