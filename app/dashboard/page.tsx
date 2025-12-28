@@ -15,10 +15,11 @@ const getCachedProfile = unstable_cache(
 
     return data ?? { username: 'Anonymous', slug: 'anonymous' }
   },
-  ['dashboard-profile'],
+  // Dynamic cache key: unique per user
+  (userId: string) => [`dashboard-profile-${userId}`],
   {
-    revalidate: 3600, // 1 hour — profile rarely changes
-    tags: ['profile'],
+    revalidate: 3600, // 1 hour
+    tags: ['profile'], // You can make this user-specific too if desired: ['profile', `profile-${userId}`]
   }
 )
 
@@ -47,4 +48,4 @@ export default async function DashboardPage() {
       confessUrl={confessUrl}
     />
   )
-  }
+}
