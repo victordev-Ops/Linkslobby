@@ -17,7 +17,7 @@ const getCachedUsername = unstable_cache(
   },
   ['settings-username'],
   {
-    revalidate: 3600, // 1 hour
+    revalidate: 3600,
     tags: ['username'],
   }
 )
@@ -25,12 +25,7 @@ const getCachedUsername = unstable_cache(
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  // Optional: redirect unauthenticated users
-  // if (!user) redirect('/login')
+  const { data: { user } } = await supabase.auth.getUser()
 
   const username = user ? await getCachedUsername(user.id) : 'Anonymous'
 
@@ -40,4 +35,4 @@ export default async function SettingsPage() {
       initialUsername={username}
     />
   )
-    }
+  }
