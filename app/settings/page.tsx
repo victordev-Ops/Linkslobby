@@ -12,7 +12,7 @@ const getCachedUsername = unstable_cache(
       .select('username')
       .eq('id', userId)
       .single()
-
+ 
     return data?.username || 'Anonymous'
   },
   ['settings-username'],
