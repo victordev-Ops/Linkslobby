@@ -1,9 +1,9 @@
-// app/inbox/page.tsx
+//Refactor this inbox code so that when user opens a message it opens like ngl and it's mark as read. User can now reply to the message by sharing it on social media. // app/inbox/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { RefreshCw, Share2, X } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -20,12 +20,11 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [selectedConfession, setSelectedConfession] = useState<Confession | null>(null)
-
+  
   const supabase = createClient()
   const router = useRouter()
 
-  // Get current user
+  // Get current user once on mount
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -50,8 +49,19 @@ export default function InboxPage() {
     setConfessions(data || [])
     setLoading(false)
     setRefreshing(false)
+
+    // Mark all as read
+    const hasUnread = data?.some(c => !c.is_read)
+    if (hasUnread) {
+      await supabase
+        .from('confessions')
+        .update({ is_read: true })
+        .eq('profile_id', currentUserId)
+        .eq('is_read', false)
+    }
   }
 
+  // Initial load + refresh
   useEffect(() => {
     if (currentUserId) {
       fetchConfessions()
@@ -64,7 +74,7 @@ export default function InboxPage() {
     fetchConfessions()
   }
 
-  // Real-time new confessions
+  // Real-time subscription
   useEffect(() => {
     if (!currentUserId) return
 
@@ -76,11 +86,13 @@ export default function InboxPage() {
           event: 'INSERT',
           schema: 'public',
           table: 'confessions',
-          filter: `profile_id=eq.${currentUserId}`,
         },
         (payload) => {
           const newConfession = payload.new as Confession
-          setConfessions(prev => [newConfession, ...prev])
+          // Only add if it's for the current user
+          if (newConfession.profile_id === currentUserId) {
+            setConfessions(prev => [newConfession, ...prev])
+          }
         }
       )
       .subscribe()
@@ -90,50 +102,7 @@ export default function InboxPage() {
     }
   }, [currentUserId])
 
-  // Mark single confession as read when opened
-  const openMessage = async (confession: Confession) => {
-    setSelectedConfession(confession)
-
-    if (!confession.is_read) {
-      await supabase
-        .from('confessions')
-        .update({ is_read: true })
-        .eq('id', confession.id)
-
-      // Optimistically update UI
-      setConfessions(prev =>
-        prev.map(c => c.id === confession.id ? { ...c, is_read: true } : c)
-      )
-    }
-  }
-
-  // Share reply link (encourage sender to reply back)
-  const handleReplyShare = async () => {
-    if (!currentUserId || !selectedConfession) return
-
-    // Replace with your actual app URL and username logic
-    const username = 'yourusername' // Ideally fetch from profile
-    const shareUrl = `https://yourapp.com/${username}`
-    const text = `Someone sent you an anonymous message! Reply here: ${shareUrl}`
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Reply to my anonymous message',
-          text: text,
-          url: shareUrl,
-        })
-      } catch (err) {
-        console.log('Share canceled or failed')
-      }
-    } else {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(shareUrl)
-      alert('Link copied! Share it to reply.')
-    }
-  }
-
-  // Relative time
+  // Relative time formatter
   const relativeTime = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -157,11 +126,7 @@ export default function InboxPage() {
         </button>
       </div>
 
-      {refreshing && (
-        <div className="py-2 text-center">
-          <RefreshCw className="animate-spin inline" size={28} />
-        </div>
-      )}
+      {refreshing && <div className="py-2 text-center"><RefreshCw className="animate-spin inline" size={28} /></div>}
 
       <div className="divide-y divide-gray-200">
         {loading ? (
@@ -189,11 +154,7 @@ export default function InboxPage() {
           </div>
         ) : (
           confessions.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => openMessage(c)}
-              className="w-full px-6 py-5 flex items-center gap-4 hover:bg-gray-50 transition text-left"
-            >
+            <div key={c.id} className="px-6 py-5 flex items-center gap-4 hover:bg-gray-50 transition">
               {/* Envelope Icon */}
               <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-md">
                 {c.is_read ? (
@@ -211,60 +172,24 @@ export default function InboxPage() {
                 )}
               </div>
 
-              {/* Preview */}
+              {/* Message Preview */}
               <div className="flex-1 min-w-0">
                 <p className={`font-medium truncate ${!c.is_read ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
                   {!c.is_read ? 'New Message!' : c.message || 'Empty message'}
                 </p>
-                <p className="text-sm text-gray-500">{relativeTime(c.created_at)}</p>
+                <p className="text-sm text-gray-500">
+                  {relativeTime(c.created_at)}
+                </p>
               </div>
 
+              {/* Chevron */}
               <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-            </button>
+            </div>
           ))
         )}
       </div>
-
-      {/* NGL-style Modal */}
-      {selectedConfession && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-8 relative animate-in fade-in zoom-in duration-300">
-            <button
-              onClick={() => setSelectedConfession(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
-              <X size={28} />
-            </button>
-
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg">
-                <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                  <path fillRule="evenodd" d="M2 10c0-4.418 4.477-8 10-8s10 3.582 10 8-4.477 8-10 8-10-3.582-10-8zm8-6a6 6 0 00-5.745 4.264 1 1 0 11-1.91-.568A8 8 0 1118 10c0 .34-.02.675-.06 1a1 1 0 11-1.988-.14c.027-.225.048-.454.048-.686 0-3.314-3.358-6-8-6z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Anonymous Message</h2>
-              <p className="text-gray-500">{relativeTime(selectedConfession.created_at)}</p>
-            </div>
-
-            <div className="bg-gray-50 rounded-2xl p-6 mb-8 min-h-32">
-              <p className="text-lg text-gray-800 whitespace-pre-wrap">
-                {selectedConfession.message || 'No message content'}
-              </p>
-            </div>
-
-            <button
-              onClick={handleReplyShare}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-3 hover:opacity-90 transition shadow-lg"
-            >
-              <Share2 size={20} />
-              Reply to Sender
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
-                                         }
+}
