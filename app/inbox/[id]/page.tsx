@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Share2 } from 'lucide-react'
+import { X } from 'lucide-react'
 
 export default function MessageViewPage() {
   const params = useParams()
@@ -20,21 +20,26 @@ export default function MessageViewPage() {
   useEffect(() => {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return router.push('/dashboard')
+      if (!user) {
+        router.push('/dashboard')
+        return
+      }
 
-      // Get username for share link
+      // Fetch profile for share link
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username')
+        .select('username, slug')
         .eq('id', user.id)
         .single()
 
-      setUsername(profile?.username || '')
+      if (profile) {
+        setUsername(profile.username || profile.slug || 'you')
+      }
 
-      // Fetch message
+      // Fetch the specific confession
       const { data, error } = await supabase
         .from('confessions')
-        .select('*')
+        .select('id, message, created_at, is_read, profile_id')
         .eq('id', messageId)
         .single()
 
@@ -46,105 +51,123 @@ export default function MessageViewPage() {
       setConfession(data)
       setLoading(false)
 
-      // Mark as read
+      // Mark as read if not already
       if (!data.is_read) {
         await supabase
           .from('confessions')
           .update({ is_read: true })
           .eq('id', messageId)
 
-        // Important: refresh parent page so unread badge disappears
+        // This triggers the BottomNavbar badge to update
         router.refresh()
       }
     }
 
-    fetchData()
-  }, [messageId, router])
+    if (messageId) fetchData()
+  }, [messageId, router, supabase])
 
-  const handleShare = async () => {
-    const shareUrl = `https://yourdomain.com/${username}` // CHANGE THIS
-    const text = 'Send me anonymous messages 👀'
+  const handleReply = async () => {
+    const shareUrl = `\( {window.location.origin}/confess/ \){username}`
+    const text = `Send me anonymous messages! 👀\n${shareUrl}`
 
     if (navigator.share) {
       try {
-        await navigator.share({ url: shareUrl, text })
-      } catch {}
+        await navigator.share({
+          title: 'Send me anonymous messages!',
+          text: 'Tap to send me a message anonymously',
+          url: shareUrl,
+        })
+      } catch (err) {
+        // Fallback to clipboard
+        await navigator.clipboard.writeText(shareUrl)
+        alert('Link copied to clipboard!')
+      }
     } else {
       await navigator.clipboard.writeText(shareUrl)
-      alert('Link copied!')
+      alert('Link copied to clipboard!')
     }
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin w-12 h-12 border-4 border-purple-500 rounded-full border-t-transparent" />
+        <div className="animate-spin w-12 h-12 border-4 border-purple-600 rounded-full border-t-transparent" />
       </div>
     )
   }
 
+  if (!confession) {
+    return null
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Top bar - exactly like NGL */}
-      <div className="px-6 pt-12 pb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-            <div className="text-2xl">⚠️</div>
+      {/* Top Bar - NGL Style */}
+      <div className="px-6 pt-12 pb-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-red-500 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-md">
+            !
           </div>
           <div className="flex -space-x-3">
-            <div className="w-10 h-10 bg-gray-300 border-2 border-white rounded-full flex items-center justify-center">📷</div>
-            <div className="w-10 h-10 bg-gray-400 border-2 border-white rounded-full flex items-center justify-center">👻</div>
-            <div className="w-10 h-10 bg-gray-500 border-2 border-white rounded-full flex items-center justify-center">💬</div>
+            <div className="w-10 h-10 bg-gray-200 border-4 border-white rounded-full flex items-center justify-center text-lg shadow-md">📸</div>
+            <div className="w-10 h-10 bg-gray-300 border-4 border-white rounded-full flex items-center justify-center text-lg shadow-md">👻</div>
+            <div className="w-10 h-10 bg-gray-400 border-4 border-white rounded-full flex items-center justify-center text-lg shadow-md">💬</div>
           </div>
         </div>
-        <button onClick={() => router.back()} className="text-2xl">✕</button>
+
+        <button
+          onClick={() => router.push('/inbox')}
+          className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center shadow-md"
+        >
+          <X size={24} className="text-gray-700" />
+        </button>
       </div>
 
-      {/* Main message card - gradient top */}
-      <div className="flex-1 flex items-start justify-center px-6 mt-10">
+      {/* Main Message Card */}
+      <div className="flex-1 flex flex-col items-center justify-start px-6 mt-8">
         <div className="w-full max-w-md">
-          <div className="rounded-3xl overflow-hidden shadow-2xl">
-            {/* Gradient header */}
-            <div className="bg-gradient-to-r from-pink-500 via-red-500 to-orange-500 px-8 py-10 text-center">
-              <h1 className="text-white text-2xl font-bold tracking-wider">
-                send me anonymous messages!
+          <div className="rounded-3xl overflow-hidden shadow-2xl bg-white">
+            {/* Gradient Header */}
+            <div className="bg-gradient-to-r from-pink-500 via-red-500 to-orange-500 px-10 py-12 text-center">
+              <h1 className="text-white text-2xl font-extrabold tracking-wide uppercase">
+                Send me anonymous messages!
               </h1>
             </div>
 
-            {/* Message body */}
-            <div className="bg-white px-8 py-12 text-center">
-              <p className="text-gray-800 text-xl leading-relaxed">
-                {confession?.message || 'No message'}
+            {/* Message Content */}
+            <div className="px-10 py-16 text-center bg-white">
+              <p className="text-gray-800 text-2xl leading-relaxed font-medium">
+                "{confession.message}"
               </p>
             </div>
           </div>
 
-          {/* Bottom icons (color wheel + camera) */}
-          <div className="flex justify-center gap-8 mt-10">
-            <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center shadow-lg">
-              <div className="w-10 h-10 bg-gradient-to-tr from-red-500 via-yellow-500 to-blue-500 rounded-full" />
+          {/* Color & Camera Icons */}
+          <div className="flex justify-center gap-10 mt-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center shadow-xl">
+              <div className="w-12 h-12 bg-gradient-to-tr from-purple-500 via-pink-500 to-red-500 rounded-full" />
             </div>
-            <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center shadow-lg">
-              <div className="text-3xl">📷</div>
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center shadow-xl text-4xl">
+              📷
             </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom section: "Who sent this" + Reply button */}
-      <div className="px-6 pb-8 mt-auto">
-        <div className="bg-red-500 text-white text-center py-4 rounded-full font-semibold mb-4 shadow-lg">
+      {/* Bottom Actions */}
+      <div className="px-6 pb-10 mt-auto space-y-4">
+        <div className="bg-red-500 text-white text-center py-5 rounded-full font-bold text-lg shadow-2xl tracking-wider">
           Who sent this 👀 👀
         </div>
 
         <button
-          onClick={handleShare}
-          className="w-full bg-black text-white font-semibold py-5 rounded-full flex items-center justify-center gap-3 shadow-2xl text-lg"
+          onClick={handleReply}
+          className="w-full bg-black text-white font-bold text-xl py-6 rounded-full flex items-center justify-center gap-4 shadow-2xl uppercase tracking-wider"
         >
-          <div className="text-2xl">💬</div>
-          reply
+          <span className="text-3xl">💬</span>
+          Reply
         </button>
       </div>
     </div>
   )
-}
+            }
