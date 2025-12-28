@@ -10,7 +10,7 @@ export default async function MessageViewPage({
 }: {
   params: { id: string }
 }) {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const {
     data: { user },
