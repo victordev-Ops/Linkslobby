@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { GeistSans, GeistMono } from "geist/font";  // ← New official import
 import "./globals.css";
 import BottomNavbar from "@/components/BottomNavbar";
-import { supabaseServer } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Suspense } from "react";
 
 const geistSans = GeistSans;  // Already configured with variable
@@ -24,7 +24,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await supabaseServer();
+  const supabase = createSupabaseServerClient;
 
   const {
     data: { user },
