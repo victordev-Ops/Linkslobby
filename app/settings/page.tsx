@@ -15,9 +15,10 @@ const getCachedUsername = unstable_cache(
 
     return data?.username || 'Anonymous'
   },
-  ['settings-username'],
+  // Dynamic cache key: unique per user
+  (userId: string) => [`settings-username-${userId}`],
   {
-    revalidate: 3600, // 1 hour cache — usernames change rarely
+    revalidate: 3600, // 1 hour
     tags: ['username'],
   }
 )
@@ -38,7 +39,6 @@ export default async function SettingsPage() {
     <SettingsClient
       initialUser={user}
       initialUsername={username}
-      // Pass searchParams if needed on server (rare)
     />
   )
 }
