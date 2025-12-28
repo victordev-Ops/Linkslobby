@@ -24,7 +24,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createSupabaseServerClient;
+  const supabase = createSupabaseServerClient();
 
   const {
     data: { user },
