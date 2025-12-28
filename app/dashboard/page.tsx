@@ -1,6 +1,4 @@
-// app/dashboard/page.tsx
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import DashboardClient from './DashboardClient'
 import { unstable_cache } from 'next/cache'
 
@@ -15,9 +13,9 @@ const getCachedProfile = unstable_cache(
 
     return data ?? { username: 'Anonymous', slug: 'anonymous' }
   },
-  ['dashboard-profile'], // Static base key (optional but good for organization)
+  ['dashboard-profile'],
   {
-    revalidate: 3600, // 1 hour
+    revalidate: 3600,
     tags: ['profile'],
   }
 )
@@ -25,17 +23,11 @@ const getCachedProfile = unstable_cache(
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  // Optional: redirect unauthenticated users
-  // if (!user) redirect('/login')
+  const { data: { user } } = await supabase.auth.getUser()
 
   let profile = null
   if (user) {
-    // Just pass user.id — it automatically becomes part of the cache key
-    profile = await getCachedProfile(user.id)
+    profile = await getCachedProfile(user.id)  // Only one argument: user.id
   }
 
   const slug = profile?.slug ?? 'anonymous'
