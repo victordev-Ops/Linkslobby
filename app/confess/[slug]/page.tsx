@@ -54,7 +54,7 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
   async function sendConfession(formData: FormData) {
     'use server'
 
-    const supabaseAction = createSupabaseServerClient()
+    const supabaseAction = supabase
     const message = (formData.get('message') as string)?.trim()
 
     console.log('[sendConfession] Attempting insert:', {
