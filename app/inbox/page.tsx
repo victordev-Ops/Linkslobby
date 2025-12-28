@@ -1,4 +1,4 @@
-//Refactor this inbox code so that when user opens a message it opens like ngl and it's mark as read. User can now reply to the message by sharing it on social media. // app/inbox/page.tsx
+// app/inbox/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -50,15 +50,8 @@ export default function InboxPage() {
     setLoading(false)
     setRefreshing(false)
 
-    // Mark all as read
-    const hasUnread = data?.some(c => !c.is_read)
-    if (hasUnread) {
-      await supabase
-        .from('confessions')
-        .update({ is_read: true })
-        .eq('profile_id', currentUserId)
-        .eq('is_read', false)
-    }
+    // REMOVED: No longer mark all as read here
+    // Marking as read now happens only when viewing individual message
   }
 
   // Initial load + refresh
@@ -86,13 +79,11 @@ export default function InboxPage() {
           event: 'INSERT',
           schema: 'public',
           table: 'confessions',
+          filter: `profile_id=eq.${currentUserId}`,
         },
         (payload) => {
           const newConfession = payload.new as Confession
-          // Only add if it's for the current user
-          if (newConfession.profile_id === currentUserId) {
-            setConfessions(prev => [newConfession, ...prev])
-          }
+          setConfessions(prev => [newConfession, ...prev])
         }
       )
       .subscribe()
@@ -126,7 +117,11 @@ export default function InboxPage() {
         </button>
       </div>
 
-      {refreshing && <div className="py-2 text-center"><RefreshCw className="animate-spin inline" size={28} /></div>}
+      {refreshing && (
+        <div className="py-2 text-center">
+          <RefreshCw className="animate-spin inline" size={28} />
+        </div>
+      )}
 
       <div className="divide-y divide-gray-200">
         {loading ? (
@@ -154,42 +149,45 @@ export default function InboxPage() {
           </div>
         ) : (
           confessions.map((c) => (
-            <div key={c.id} className="px-6 py-5 flex items-center gap-4 hover:bg-gray-50 transition">
-              {/* Envelope Icon */}
-              <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-md">
-                {c.is_read ? (
-                  <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-3 rounded-full">
-                    <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                    </svg>
-                  </div>
-                ) : (
-                  <div className="bg-gradient-to-br from-red-400 via-pink-500 to-orange-400 p-3 rounded-full shadow-lg">
-                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                    </svg>
-                  </div>
-                )}
-              </div>
+            // Wrap entire item in Link to /inbox/[id]
+            <Link key={c.id} href={`/inbox/${c.id}`} className="block">
+              <div className="px-6 py-5 flex items-center gap-4 hover:bg-gray-50 transition cursor-pointer">
+                {/* Envelope Icon */}
+                <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-md">
+                  {c.is_read ? (
+                    <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-3 rounded-full">
+                      <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="bg-gradient-to-br from-red-400 via-pink-500 to-orange-400 p-3 rounded-full shadow-lg">
+                      <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                      </svg>
+                    </div>
+                  )}
+                </div>
 
-              {/* Message Preview */}
-              <div className="flex-1 min-w-0">
-                <p className={`font-medium truncate ${!c.is_read ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
-                  {!c.is_read ? 'New Message!' : c.message || 'Empty message'}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {relativeTime(c.created_at)}
-                </p>
-              </div>
+                {/* Message Preview */}
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium truncate ${!c.is_read ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
+                    {!c.is_read ? 'New Message!' : c.message || 'Empty message'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {relativeTime(c.created_at)}
+                  </p>
+                </div>
 
-              {/* Chevron */}
-              <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
+                {/* Chevron */}
+                <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </Link>
           ))
         )}
       </div>
     </div>
   )
-}
+          }
