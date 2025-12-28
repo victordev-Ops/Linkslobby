@@ -1,7 +1,7 @@
-// src/lib/supabase/server.ts
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import type { Database } from '@/types/supabase'  // Assuming you have types generated
+// ← Remove this line completely
+// import type { Database } from '@/types/supabase'
 
 // Custom fetch that injects Next.js cache options
 const fetchWithCache = ({ revalidate, tags }: { revalidate?: number; tags?: string[] } = {}) =>
@@ -9,8 +9,8 @@ const fetchWithCache = ({ revalidate, tags }: { revalidate?: number; tags?: stri
     fetch(input, {
       ...init,
       next: {
-        revalidate: revalidate ?? 3600, // Default: cache for 1 hour
-        tags: tags ?? ['supabase'],     // Default tag
+        revalidate: revalidate ?? 3600,
+        tags: tags ?? ['supabase'],
       },
     })
 
@@ -20,7 +20,8 @@ export function createSupabaseServerClient({
 }: { revalidate?: number; tags?: string[] } = {}) {
   const cookieStore = cookies()
 
-  return createServerClient<Database>(
+  // ← Remove <Database> here
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -39,9 +40,8 @@ export function createSupabaseServerClient({
         },
       },
       global: {
-        // Override fetch for all Supabase requests
         fetch: fetchWithCache({ revalidate, tags: ['supabase', ...tags] }),
       },
     }
   )
-              }
+                              }
