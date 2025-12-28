@@ -3,7 +3,11 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import InboxClient from '@/components/InboxClient'
 
-export const dynamic = 'force-dynamic' // Keeps data fresh; optional: use revalidate = 60 for caching
+// Revalidate the page (and its data) every 60 seconds
+export const revalidate = 60
+
+// Optional: remove dynamic = 'force-dynamic' entirely (or comment it out)
+// export const dynamic = 'force-dynamic'  // ← no longer needed
 
 export default async function InboxPage() {
   const supabase = createSupabaseServerClient()
@@ -22,7 +26,7 @@ export default async function InboxPage() {
 
   if (error) {
     console.error('Error fetching confessions:', error)
-    // Optional: return an error state UI here
+    // You could return an error UI here if desired
   }
 
   return (
