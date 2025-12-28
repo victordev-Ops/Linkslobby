@@ -32,9 +32,7 @@ export default async function SettingsPage() {
   // Optional: redirect unauthenticated users
   // if (!user) redirect('/login')
 
-  const username = user
-    ? await getCachedUsername(`settings-username-${user.id}`, user.id)
-    : 'Anonymous'
+  const username = user ? await getCachedUsername(user.id) : 'Anonymous'
 
   return (
     <SettingsClient
@@ -42,4 +40,4 @@ export default async function SettingsPage() {
       initialUsername={username}
     />
   )
-}
+    }
