@@ -10,7 +10,7 @@ export const revalidate = 60
 // export const dynamic = 'force-dynamic'  // ← no longer needed
 
 export default async function InboxPage() {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
 
