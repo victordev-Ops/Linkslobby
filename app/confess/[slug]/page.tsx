@@ -29,7 +29,7 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
     notFound()
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   // Fetch profile
   const { data: profile, error: profileError } = await supabase
