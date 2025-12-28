@@ -1,5 +1,5 @@
 // app/confess/[slug]/page.tsx
-import { supabaseServer } from '@/lib/supabase/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +29,7 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
     notFound()
   }
 
-  const supabase = await supabaseServer()
+  const supabase = createSupabaseServerClient()
 
   // Fetch profile
   const { data: profile, error: profileError } = await supabase
