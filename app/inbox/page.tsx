@@ -1,7 +1,7 @@
 // app/inbox/page.tsx
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RefreshCw } from 'lucide-react'
 import Link from 'next/link'
@@ -18,13 +18,12 @@ type Confession = {
 export default function InboxPage() {
   const [confessions, setConfessions] = useState<Confession[]>([])
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  
+
   const supabase = createClient()
   const router = useRouter()
 
-  // Get current user
+  // Get authenticated user
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -37,62 +36,34 @@ export default function InboxPage() {
     getUser()
   }, [router, supabase])
 
-  const fetchConfessions = useCallback(async () => {
+  // Fetch initial confessions
+  const fetchConfessions = async () => {
     if (!currentUserId) return
 
-    setRefreshing(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('confessions')
       .select('id, message, created_at, is_read, profile_id')
       .eq('profile_id', currentUserId)
       .order('created_at', { ascending: false })
 
-    setConfessions(data || [])
-    setLoading(false)
-    setRefreshing(false)
-  }, [currentUserId, supabase])
-
-  // Initial fetch
-  useEffect(() => {
-    if (currentUserId) {
-      fetchConfessions()
+    if (error) {
+      console.error('Error fetching confessions:', error)
+    } else {
+      setConfessions(data || [])
     }
-  }, [currentUserId, fetchConfessions])
-
-  // Manual pull-to-refresh
-  const handleRefresh = () => {
-    fetchConfessions()
+    setLoading(false)
   }
 
-  // Refetch when page becomes visible/focused (e.g., after viewing a message and coming back)
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && currentUserId) {
-        fetchConfessions()
-      }
-    }
+    if (currentUserId) fetchConfessions()
+  }, [currentUserId])
 
-    const handleFocus = () => {
-      if (currentUserId) {
-        fetchConfessions()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [currentUserId, fetchConfessions])
-
-  // Real-time subscription for new messages
+  // Realtime: new messages appear instantly
   useEffect(() => {
     if (!currentUserId) return
 
     const channel = supabase
-      .channel('confessions-rt')
+      .channel('confessions-realtime')
       .on(
         'postgres_changes',
         {
@@ -103,7 +74,7 @@ export default function InboxPage() {
         },
         (payload) => {
           const newConfession = payload.new as Confession
-          setConfessions(prev => [newConfession, ...prev])
+          setConfessions((prev) => [newConfession, ...prev])
         }
       )
       .subscribe()
@@ -113,18 +84,23 @@ export default function InboxPage() {
     }
   }, [currentUserId, supabase])
 
-  // Relative time formatter
+  // Relative time formatter (e.g., "2mo ago")
   const relativeTime = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
 
-    if (diffInSeconds < 60) return 'just now'
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
-    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`
-    if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)}mo ago`
-    return `${Math.floor(diffInSeconds / 31536000)}y ago`
+    if (diff < 60) return 'just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`
+    if (diff < 31536000) return `${Math.floor(diff / 2592000)}mo ago`
+    return `${Math.floor(diff / 31536000)}y ago`
+  }
+
+  // Navigate to full message view
+  const openMessage = (id: string) => {
+    router.push(`/inbox/${id}`)
   }
 
   return (
@@ -132,25 +108,20 @@ export default function InboxPage() {
       {/* Header */}
       <div className="sticky top-0 bg-white border-b border-gray-200 z-10 px-6 py-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Inbox</h1>
-        <button onClick={handleRefresh} disabled={refreshing}>
-          <RefreshCw size={24} className={refreshing ? 'animate-spin' : ''} />
+        <button onClick={fetchConfessions} className="p-2">
+          <RefreshCw size={24} />
         </button>
       </div>
 
-      {refreshing && !loading && (
-        <div className="py-2 text-center">
-          <RefreshCw className="animate-spin inline" size={28} />
-        </div>
-      )}
-
       <div className="divide-y divide-gray-200">
         {loading ? (
-          Array(5).fill(0).map((_, i) => (
+          // Skeleton
+          Array(6).fill(0).map((_, i) => (
             <div key={i} className="px-6 py-5 flex items-center gap-4 animate-pulse">
               <div className="w-12 h-12 bg-gray-200 rounded-full" />
               <div className="flex-1">
-                <div className="h-4 bg-gray-200 rounded w-32 mb-2" />
-                <div className="h-3 bg-gray-200 rounded w-24" />
+                <div className="h-4 bg-gray-200 rounded w-40 mb-2" />
+                <div className="h-3 bg-gray-200 rounded w-20" />
               </div>
             </div>
           ))
@@ -169,44 +140,44 @@ export default function InboxPage() {
           </div>
         ) : (
           confessions.map((c) => (
-            <Link key={c.id} href={`/inbox/${c.id}`} className="block">
-              <div className="px-6 py-5 flex items-center gap-4 hover:bg-gray-50 transition cursor-pointer">
-                {/* Envelope Icon */}
-                <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-md">
-                  {c.is_read ? (
-                    <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-3 rounded-full">
-                      <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                      </svg>
-                    </div>
-                  ) : (
-                    <div className="bg-gradient-to-br from-red-400 via-pink-500 to-orange-400 p-3 rounded-full shadow-lg">
-                      <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                      </svg>
-                    </div>
-                  )}
-                </div>
-
-                {/* Message Preview */}
-                <div className="flex-1 min-w-0">
-                  <p className={`font-medium truncate ${!c.is_read ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
-                    {!c.is_read ? 'New Message!' : c.message || 'Empty message'}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {relativeTime(c.created_at)}
-                  </p>
-                </div>
-
-                {/* Chevron */}
-                <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+            <button
+              key={c.id}
+              onClick={() => openMessage(c.id)}
+              className="w-full text-left px-6 py-5 flex items-center gap-4 hover:bg-gray-50 transition"
+            >
+              {/* Envelope Icon */}
+              <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-md">
+                {c.is_read ? (
+                  <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-3 rounded-full">
+                    <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="bg-gradient-to-br from-red-400 via-pink-500 to-orange-400 p-3 rounded-full shadow-lg">
+                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                    </svg>
+                  </div>
+                )}
               </div>
-            </Link>
+
+              {/* Text */}
+              <div className="flex-1 min-w-0">
+                <p className={`font-medium truncate ${!c.is_read ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
+                  {!c.is_read ? 'New Message!' : c.message || 'Empty message'}
+                </p>
+                <p className="text-sm text-gray-500">{relativeTime(c.created_at)}</p>
+              </div>
+
+              {/* Chevron */}
+              <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           ))
         )}
       </div>
     </div>
   )
-      }
+        }
