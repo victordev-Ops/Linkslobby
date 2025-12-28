@@ -2,7 +2,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 export async function signUp(email: string) {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   // Use env var if available, otherwise fall back to production URL
   let siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') // remove trailing slash
 
