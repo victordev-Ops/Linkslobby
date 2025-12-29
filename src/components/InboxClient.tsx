@@ -73,8 +73,38 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     return `${Math.floor(diff / 31536000)}y ago`
   }
 
-  // UPDATED: Now updates the database and navigates
   const openMessage = async (confession: Confession) => {
+  // 1. Immediate Navigation: Don't make the user wait for the DB
+  router.push(`/inbox/${confession.id}`)
+
+  // 2. Optimistic UI: Update local state so if they hit 'back', it's already gray
+  if (!confession.is_read) {
+    setConfessions((prev) =>
+      prev.map((c) =>
+        c.id === confession.id ? { ...c, is_read: true } : c
+      )
+    )
+
+    // 3. Background DB Update: We don't 'await' this before moving on
+    try {
+      const { error } = await supabase
+        .from('confessions')
+        .update({ is_read: true })
+        .eq('id', confession.id)
+      
+      if (error) {
+        console.error('Failed to update read status:', error)
+        // Optional: Revert local state if critical, but usually not needed for 'read' status
+      }
+    } catch (err) {
+      console.error('Update error:', err)
+    }
+  }
+}
+
+
+  // UPDATED: Now updates the database and navigates
+/*  const openMessage = async (confession: Confession) => {
     if (!confession.is_read) {
       await supabase
         .from('confessions')
@@ -82,7 +112,7 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
         .eq('id', confession.id)
     }
     router.push(`/inbox/${confession.id}`)
-  }
+  } */
   
   const truncate = (text: string, max: number = 100) => {
     if (!text) return 'Empty message'
