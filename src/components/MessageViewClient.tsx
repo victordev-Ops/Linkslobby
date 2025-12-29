@@ -20,10 +20,20 @@ type Props = {
 export default function MessageViewClient({ confession, username }: Props) {
   const router = useRouter()
 
-  const handleReply = async () => {
-    const shareUrl = `\( {window.location.origin}/confess/ \){username}`
-    const text = `Send me anonymous messages! 👀\n${shareUrl}`
+  // FIX: Handle cache invalidation when closing the message
+  const handleClose = () => {
+    // 1. Force a refresh of the current route context
+    // This ensures that when we land back on /inbox, it fetches fresh data
+    router.refresh()
+    
+    // 2. Navigate back to the inbox
+    router.push('/inbox')
+  }
 
+  const handleReply = async () => {
+    // Fixed string interpolation syntax
+    const shareUrl = `${window.location.origin}/confess/${username}`
+    
     if (navigator.share) {
       try {
         await navigator.share({
@@ -32,12 +42,16 @@ export default function MessageViewClient({ confession, username }: Props) {
           url: shareUrl,
         })
       } catch (err) {
-        await navigator.clipboard.writeText(shareUrl)
-        alert('Link copied to clipboard!')
+        // Fallback if user cancels share or error occurs
+        console.log('Share cancelled or failed', err)
       }
     } else {
-      await navigator.clipboard.writeText(shareUrl)
-      alert('Link copied to clipboard!')
+      try {
+        await navigator.clipboard.writeText(shareUrl)
+        alert('Link copied to clipboard!')
+      } catch (err) {
+        console.error('Failed to copy', err)
+      }
     }
   }
 
@@ -57,8 +71,8 @@ export default function MessageViewClient({ confession, username }: Props) {
         </div>
 
         <button
-          onClick={() => router.push('/inbox')}
-          className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center shadow-md"
+          onClick={handleClose} // Updated to use the smart close handler
+          className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center shadow-md hover:bg-gray-300 transition-colors"
         >
           <X size={24} className="text-gray-700" />
         </button>
@@ -103,7 +117,7 @@ export default function MessageViewClient({ confession, username }: Props) {
 
         <button
           onClick={handleReply}
-          className="w-full bg-black text-white font-bold text-xl py-6 rounded-full flex items-center justify-center gap-4 shadow-2xl uppercase tracking-wider"
+          className="w-full bg-black text-white font-bold text-xl py-6 rounded-full flex items-center justify-center gap-4 shadow-2xl uppercase tracking-wider active:scale-95 transition-transform"
         >
           <span className="text-3xl">💬</span>
           Reply
@@ -111,4 +125,4 @@ export default function MessageViewClient({ confession, username }: Props) {
       </div>
     </div>
   )
-        }
+}
