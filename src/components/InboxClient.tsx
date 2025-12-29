@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { markConfessionAsRead } from '../app/actions/confessions' // Import the action
+import { markConfessionAsRead } from 'app/actions/confessions' // Import the action
 
 type Confession = {
   id: string
