@@ -133,7 +133,7 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
           confessions.map((c) => (
             <button
               key={c.id}
-              onClick={() => openMessage(c.id)}
+              onClick={() => openMessage(c)}
               className="w-full text-left px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
             >
               {/* Icon */}
