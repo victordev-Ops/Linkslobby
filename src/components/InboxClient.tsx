@@ -75,10 +75,31 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     return `${Math.floor(diff / 31536000)}y ago`
   }
 
-  const openMessage = (id: string) => {
+/*  const openMessage = (id: string) => {
     router.push(`/inbox/${id}`)
-  }
+  }*/
+  const openMessage = async (confession: Confession) => {
+    // 1. Update the database if the message is unread
+    if (!confession.is_read) {
+      const { error } = await supabase
+        .from('confessions')
+        .update({ is_read: true })
+        .eq('id', confession.id)
 
+      if (error) {
+        console.error('Failed to update read status:', error)
+      } else {
+        // 2. Optimistically update local state so the UI reflects the change
+        setConfessions((prev) =>
+          prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
+        )
+      }
+    }
+
+    // 3. Navigate to the message details
+    router.push(`/inbox/${confession.id}`)
+    }
+  
   const truncate = (text: string, max: number = 100) => {
     if (!text) return 'Empty message'
     return text.length <= max ? text : text.slice(0, max).trim() + '...'
