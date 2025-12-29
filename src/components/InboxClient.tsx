@@ -4,10 +4,10 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RefreshCw } from 'lucide-react'
-import { useRouter } from 'next/navigation' // Use standard router
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { markConfessionAsRead } from '@/app/actions/confessions' // Import the action
 
-// ... (Keep your Type Definitions here) ...
 type Confession = {
   id: string
   message: string
@@ -24,18 +24,17 @@ type Props = {
 export default function InboxClient({ initialConfessions, userId }: Props) {
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
-  
+
   const supabase = createClient()
   const router = useRouter()
 
-  // ... (Keep your useEffect for Realtime here - it is good) ...
   useEffect(() => {
     const channel = supabase
       .channel('confessions-realtime')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to ALL events to catch updates too
+          event: '*', // Listen to ALL events (INSERT & UPDATE) to sync read status across devices
           schema: 'public',
           table: 'confessions',
           filter: `profile_id=eq.${userId}`,
@@ -44,8 +43,10 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
           if (payload.eventType === 'INSERT') {
             setConfessions((prev) => [payload.new as Confession, ...prev])
           } else if (payload.eventType === 'UPDATE') {
-            setConfessions((prev) => 
-              prev.map(c => c.id === payload.new.id ? payload.new as Confession : c)
+            setConfessions((prev) =>
+              prev.map((c) =>
+                c.id === payload.new.id ? (payload.new as Confession) : c
+              )
             )
           }
         }
@@ -57,8 +58,7 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     }
   }, [userId, supabase])
 
-  // ... (Keep handleRefresh and relativeTime and truncate) ...
-    const handleRefresh = async () => {
+  const handleRefresh = async () => {
     setRefreshing(true)
     const { data } = await supabase
       .from('confessions')
@@ -66,7 +66,10 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
       .eq('profile_id', userId)
       .order('created_at', { ascending: false })
 
-    if (data) setConfessions(data)
+    if (data) {
+      setConfessions(data)
+      router.refresh() // Ensure server components are in sync with client fetch
+    }
     setRefreshing(false)
   }
 
@@ -83,34 +86,31 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     return `${Math.floor(diff / 31536000)}y ago`
   }
 
-  const truncate = (text: string, max: number = 100) => {
-    if (!text) return 'Empty message'
-    return text.length <= max ? text : text.slice(0, max).trim() + '...'
-  }
-
-  // --- THE FIXED FUNCTION ---
+  // --- REFACTORED FUNCTION ---
   const openMessage = async (confession: Confession) => {
-    // 1. Immediate Navigation (Feels fastest to user)
+    // 1. Navigate immediately for perceived speed
     router.push(`/inbox/${confession.id}`)
 
-    // 2. Optimistic UI Update
-    // Even though we navigated away, if they click "Back" quickly, 
-    // the state helps, but the revalidatePath is the real fix.
     if (!confession.is_read) {
+      // 2. Optimistic Update (Local State)
+      // Instant visual feedback if they hit back immediately
       setConfessions((prev) =>
         prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
       )
 
       // 3. Server Action (Background)
-      // We do NOT await this. We let it run in the background.
-      // It will update DB and mark /inbox as dirty on the server.
+      // Fire and forget - updates DB and invalidates Next.js cache
       markConfessionAsRead(confession.id)
     }
   }
 
+  const truncate = (text: string, max: number = 100) => {
+    if (!text) return 'Empty message'
+    return text.length <= max ? text : text.slice(0, max).trim() + '...'
+  }
+
   return (
-    // ... (Your existing JSX remains exactly the same) ...
-     <div className="min-h-screen bg-white pb-32">
+    <div className="min-h-screen bg-white pb-32">
       <div className="sticky top-0 bg-white border-b border-gray-200 z-10 px-6 py-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Inbox</h1>
         <button onClick={handleRefresh} disabled={refreshing} className="p-2">
@@ -173,5 +173,5 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
       </div>
     </div>
   )
-                                                  }
-                     
+                                  }
+                                      
