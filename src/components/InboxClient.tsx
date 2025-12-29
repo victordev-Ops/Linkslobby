@@ -74,6 +74,36 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
   }
 
   const openMessage = async (confession: Confession) => {
+  // 1. Optimistic Update: Update local state immediately 
+  // This ensures the UI turns gray the moment the user clicks.
+  if (!confession.is_read) {
+    setConfessions((prev) =>
+      prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
+    );
+
+    // 2. Background Update: Fire and forget (no 'await' here)
+    // We don't wait for this to finish before navigating.
+    supabase
+      .from('confessions')
+      .update({ is_read: true })
+      .eq('id', confession.id)
+      .then(({ error }) => {
+        if (error) {
+          console.error('Failed to update read status:', error);
+          // Optional: Revert state if the DB update fails
+          setConfessions(prev => 
+            prev.map(c => c.id === confession.id ? { ...c, is_read: false } : c)
+          );
+        }
+      });
+  }
+
+  // 3. Navigate immediately
+  router.push(`/inbox/${confession.id}`);
+};
+      
+
+ /* const openMessage = async (confession: Confession) => {
   // 1. Immediate Navigation: Don't make the user wait for the DB
   router.push(`/inbox/${confession.id}`)
 
@@ -101,7 +131,7 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     }
   }
 }
-
+*/
 
   // UPDATED: Now updates the database and navigates
 /*  const openMessage = async (confession: Confession) => {
