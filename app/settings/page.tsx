@@ -1,33 +1,26 @@
-// app/settings/page.tsx
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import SettingsClient from './SettingsClient'
-import { unstable_cache } from 'next/cache'
-
-const getCachedUsername = unstable_cache(
-  async (userId: string) => {
-    const supabase = await createSupabaseServerClient()
-    const { data } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', userId)
-      .single()
- 
-    return data?.username || 'Anonymous'
-  },
-  ['settings-username'],
-  {
-    revalidate: 3600,
-    tags: ['username'],
-  }
-)
+// REMOVE: import { unstable_cache } from 'next/cache'
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const username = user ? await getCachedUsername(user.id) : 'Anonymous'
+  let username = 'Anonymous'
+
+  // DIRECT FETCH: Get the username directly
+  if (user) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', user.id)
+      .single()
+    
+    if (data?.username) {
+      username = data.username
+    }
+  }
 
   return (
     <SettingsClient
@@ -35,4 +28,4 @@ export default async function SettingsPage() {
       initialUsername={username}
     />
   )
-  }
+}
