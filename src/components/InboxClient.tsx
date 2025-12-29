@@ -72,8 +72,40 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     if (diff < 31536000) return `${Math.floor(diff / 2592000)}mo ago`
     return `${Math.floor(diff / 31536000)}y ago`
   }
+  
+const openMessage = async (confession: Confession) => {
+  if (!confession.is_read) {
+    // 1. Optimistic Update (Local State)
+    // This handles the immediate UI change on the current screen.
+    setConfessions((prev) =>
+      prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
+    );
 
-  const openMessage = async (confession: Confession) => {
+    // 2. Background Update (Database)
+    supabase
+      .from('confessions')
+      .update({ is_read: true })
+      .eq('id', confession.id)
+      .then(({ error }) => {
+        if (error) {
+          console.error('Failed to update read status:', error);
+          setConfessions(prev => 
+            prev.map(c => c.id === confession.id ? { ...c, is_read: false } : c)
+          );
+        }
+      });
+
+    // 3. Invalidate Router Cache
+    // This tells Next.js to fetch fresh data for the background
+    // so when the user hits "Back", the server-side data is synced.
+    router.refresh();
+  }
+
+  // 4. Navigate
+  router.push(`/inbox/${confession.id}`);
+};
+
+  /*const openMessage = async (confession: Confession) => {
   // 1. Optimistic Update: Update local state immediately 
   // This ensures the UI turns gray the moment the user clicks.
   if (!confession.is_read) {
@@ -101,7 +133,7 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
   // 3. Navigate immediately
   router.push(`/inbox/${confession.id}`);
 };
-      
+ */     
 
  /* const openMessage = async (confession: Confession) => {
   // 1. Immediate Navigation: Don't make the user wait for the DB
