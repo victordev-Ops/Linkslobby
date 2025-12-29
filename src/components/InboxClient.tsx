@@ -1,11 +1,13 @@
+// components/InboxClient.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RefreshCw } from 'lucide-react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation' // Use standard router
+import { markConfessionAsRead } from '@/app/actions/confessions' // Import the action
 
+// ... (Keep your Type Definitions here) ...
 type Confession = {
   id: string
   message: string
@@ -22,23 +24,30 @@ type Props = {
 export default function InboxClient({ initialConfessions, userId }: Props) {
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
-
+  
   const supabase = createClient()
   const router = useRouter()
 
+  // ... (Keep your useEffect for Realtime here - it is good) ...
   useEffect(() => {
     const channel = supabase
       .channel('confessions-realtime')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*', // Listen to ALL events to catch updates too
           schema: 'public',
           table: 'confessions',
           filter: `profile_id=eq.${userId}`,
         },
         (payload) => {
-          setConfessions((prev) => [payload.new as Confession, ...prev])
+          if (payload.eventType === 'INSERT') {
+            setConfessions((prev) => [payload.new as Confession, ...prev])
+          } else if (payload.eventType === 'UPDATE') {
+            setConfessions((prev) => 
+              prev.map(c => c.id === payload.new.id ? payload.new as Confession : c)
+            )
+          }
         }
       )
       .subscribe()
@@ -48,7 +57,8 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     }
   }, [userId, supabase])
 
-  const handleRefresh = async () => {
+  // ... (Keep handleRefresh and relativeTime and truncate) ...
+    const handleRefresh = async () => {
     setRefreshing(true)
     const { data } = await supabase
       .from('confessions')
@@ -72,117 +82,35 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     if (diff < 31536000) return `${Math.floor(diff / 2592000)}mo ago`
     return `${Math.floor(diff / 31536000)}y ago`
   }
-  
-const openMessage = async (confession: Confession) => {
-  if (!confession.is_read) {
-    // 1. Optimistic Update (Local State)
-    // This handles the immediate UI change on the current screen.
-    setConfessions((prev) =>
-      prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
-    );
 
-    // 2. Background Update (Database)
-    supabase
-      .from('confessions')
-      .update({ is_read: true })
-      .eq('id', confession.id)
-      .then(({ error }) => {
-        if (error) {
-          console.error('Failed to update read status:', error);
-          setConfessions(prev => 
-            prev.map(c => c.id === confession.id ? { ...c, is_read: false } : c)
-          );
-        }
-      });
-
-    // 3. Invalidate Router Cache
-    // This tells Next.js to fetch fresh data for the background
-    // so when the user hits "Back", the server-side data is synced.
-    router.refresh();
-  }
-
-  // 4. Navigate
-  router.push(`/inbox/${confession.id}`);
-};
-
-  /*const openMessage = async (confession: Confession) => {
-  // 1. Optimistic Update: Update local state immediately 
-  // This ensures the UI turns gray the moment the user clicks.
-  if (!confession.is_read) {
-    setConfessions((prev) =>
-      prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
-    );
-
-    // 2. Background Update: Fire and forget (no 'await' here)
-    // We don't wait for this to finish before navigating.
-    supabase
-      .from('confessions')
-      .update({ is_read: true })
-      .eq('id', confession.id)
-      .then(({ error }) => {
-        if (error) {
-          console.error('Failed to update read status:', error);
-          // Optional: Revert state if the DB update fails
-          setConfessions(prev => 
-            prev.map(c => c.id === confession.id ? { ...c, is_read: false } : c)
-          );
-        }
-      });
-  }
-
-  // 3. Navigate immediately
-  router.push(`/inbox/${confession.id}`);
-};
- */     
-
- /* const openMessage = async (confession: Confession) => {
-  // 1. Immediate Navigation: Don't make the user wait for the DB
-  router.push(`/inbox/${confession.id}`)
-
-  // 2. Optimistic UI: Update local state so if they hit 'back', it's already gray
-  if (!confession.is_read) {
-    setConfessions((prev) =>
-      prev.map((c) =>
-        c.id === confession.id ? { ...c, is_read: true } : c
-      )
-    )
-
-    // 3. Background DB Update: We don't 'await' this before moving on
-    try {
-      const { error } = await supabase
-        .from('confessions')
-        .update({ is_read: true })
-        .eq('id', confession.id)
-      
-      if (error) {
-        console.error('Failed to update read status:', error)
-        // Optional: Revert local state if critical, but usually not needed for 'read' status
-      }
-    } catch (err) {
-      console.error('Update error:', err)
-    }
-  }
-}
-*/
-
-  // UPDATED: Now updates the database and navigates
-/*  const openMessage = async (confession: Confession) => {
-    if (!confession.is_read) {
-      await supabase
-        .from('confessions')
-        .update({ is_read: true })
-        .eq('id', confession.id)
-    }
-    router.push(`/inbox/${confession.id}`)
-  } */
-  
   const truncate = (text: string, max: number = 100) => {
     if (!text) return 'Empty message'
     return text.length <= max ? text : text.slice(0, max).trim() + '...'
   }
 
+  // --- THE FIXED FUNCTION ---
+  const openMessage = async (confession: Confession) => {
+    // 1. Immediate Navigation (Feels fastest to user)
+    router.push(`/inbox/${confession.id}`)
+
+    // 2. Optimistic UI Update
+    // Even though we navigated away, if they click "Back" quickly, 
+    // the state helps, but the revalidatePath is the real fix.
+    if (!confession.is_read) {
+      setConfessions((prev) =>
+        prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
+      )
+
+      // 3. Server Action (Background)
+      // We do NOT await this. We let it run in the background.
+      // It will update DB and mark /inbox as dirty on the server.
+      markConfessionAsRead(confession.id)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-white pb-32">
+    // ... (Your existing JSX remains exactly the same) ...
+     <div className="min-h-screen bg-white pb-32">
       <div className="sticky top-0 bg-white border-b border-gray-200 z-10 px-6 py-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Inbox</h1>
         <button onClick={handleRefresh} disabled={refreshing} className="p-2">
@@ -245,5 +173,5 @@ const openMessage = async (confession: Confession) => {
       </div>
     </div>
   )
-      }
-    
+                                                  }
+                     
