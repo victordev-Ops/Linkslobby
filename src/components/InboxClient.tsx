@@ -27,7 +27,7 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
   const supabase = createClient()
   const router = useRouter()
 
-  // Realtime subscription for new messages only
+  // Realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('confessions-realtime')
@@ -50,7 +50,6 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     }
   }, [userId, supabase])
 
-  // Manual refresh
   const handleRefresh = async () => {
     setRefreshing(true)
     const { data } = await supabase
@@ -80,10 +79,9 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     router.push(`/inbox/${id}`)
   }
 
-  // Helper to truncate message preview safely
-  const truncateMessage = (message: string, maxLength: number = 80) => {
-    if (!message || message.trim() === '') return 'Empty message'
-    return message.length <= maxLength ? message : message.slice(0, maxLength).trim() + '...'
+  const truncate = (text: string, max: number = 100) => {
+    if (!text) return 'Empty message'
+    return text.length <= max ? text : text.slice(0, max).trim() + '...'
   }
 
   return (
@@ -96,7 +94,7 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
         </button>
       </div>
 
-      <div className="divide-y divide-gray-200">
+      <div className="divide-y divide-gray-100">
         {confessions.length === 0 ? (
           <div className="text-center py-20">
             <div className="bg-gray-100 w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center">
@@ -115,40 +113,37 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
             <button
               key={c.id}
               onClick={() => openMessage(c.id)}
-              className="w-full text-left px-6 py-5 flex items-start gap-4 hover:bg-gray-50 transition"
+              className="w-full text-left px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
             >
-              <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-md mt-0.5">
+              {/* Icon */}
+              <div className="w-14 h-14 rounded-full flex-shrink-0 shadow-md flex items-center justify-center">
                 {c.is_read ? (
-                  <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-3 rounded-full">
-                    <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                    </svg>
+                  <div className="w-12 h-12 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center">
+                    <span className="text-2xl">💌</span>
                   </div>
                 ) : (
-                  <div className="bg-gradient-to-br from-red-400 via-pink-500 to-orange-400 p-3 rounded-full shadow-lg">
-                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                    </svg>
+                  <div className="w-12 h-12 bg-gradient-to-br from-red-400 via-pink-500 to-orange-400 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-2xl">💌</span>
                   </div>
                 )}
               </div>
 
+              {/* Text content */}
               <div className="flex-1 min-w-0">
-                {/* Title line */}
-                <p className={`font-medium ${!c.is_read ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
-                  {!c.is_read ? 'New Message!' : 'Message'}
+                <p
+                  className={`text-base leading-snug ${
+                    c.is_read ? 'text-gray-800' : 'text-red-600 font-bold'
+                  }`}
+                >
+                  {c.is_read ? truncate(c.message) : 'New Message!'}
                 </p>
-
-                {/* Message preview line */}
-                <p className={`text-sm mt-1 truncate ${!c.is_read ? 'text-gray-800 font-medium' : 'text-gray-600'}`}>
-                  {truncateMessage(c.message)}
+                <p className="text-sm text-gray-500 mt-1">
+                  {relativeTime(c.created_at)}
                 </p>
-
-                {/* Timestamp */}
-                <p className="text-xs text-gray-500 mt-2">{relativeTime(c.created_at)}</p>
               </div>
 
-              <svg className="w-5 h-5 text-gray-400 flex-shrink-0 mt-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {/* Chevron */}
+              <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -157,4 +152,4 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
       </div>
     </div>
   )
-              }
+        }
