@@ -50,7 +50,7 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     }
   }, [userId, supabase])
 
-  // Manual refresh (optional)
+  // Manual refresh
   const handleRefresh = async () => {
     setRefreshing(true)
     const { data } = await supabase
@@ -78,6 +78,12 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
 
   const openMessage = (id: string) => {
     router.push(`/inbox/${id}`)
+  }
+
+  // Helper to truncate message preview safely
+  const truncateMessage = (message: string, maxLength: number = 80) => {
+    if (!message || message.trim() === '') return 'Empty message'
+    return message.length <= maxLength ? message : message.slice(0, maxLength).trim() + '...'
   }
 
   return (
@@ -109,9 +115,9 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
             <button
               key={c.id}
               onClick={() => openMessage(c.id)}
-              className="w-full text-left px-6 py-5 flex items-center gap-4 hover:bg-gray-50 transition"
+              className="w-full text-left px-6 py-5 flex items-start gap-4 hover:bg-gray-50 transition"
             >
-              <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-md">
+              <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-md mt-0.5">
                 {c.is_read ? (
                   <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-3 rounded-full">
                     <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
@@ -128,13 +134,21 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className={`font-medium truncate ${!c.is_read ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
-                  {!c.is_read ? 'New Message!' : c.message || 'Empty message'}
+                {/* Title line */}
+                <p className={`font-medium ${!c.is_read ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
+                  {!c.is_read ? 'New Message!' : 'Message'}
                 </p>
-                <p className="text-sm text-gray-500">{relativeTime(c.created_at)}</p>
+
+                {/* Message preview line */}
+                <p className={`text-sm mt-1 truncate ${!c.is_read ? 'text-gray-800 font-medium' : 'text-gray-600'}`}>
+                  {truncateMessage(c.message)}
+                </p>
+
+                {/* Timestamp */}
+                <p className="text-xs text-gray-500 mt-2">{relativeTime(c.created_at)}</p>
               </div>
 
-              <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-400 flex-shrink-0 mt-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -143,4 +157,4 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
       </div>
     </div>
   )
-  }
+              }
