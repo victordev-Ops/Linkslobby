@@ -3,13 +3,17 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import MessageViewClient from '@/components/MessageViewClient'
 
-export const dynamic = 'force-dynamic' // Keeps it fresh on every view
+export const dynamic = 'force-dynamic'
 
+// 1. Update the type definition to wrap params in Promise
 export default async function MessageViewPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }> 
 }) {
+  // 2. Await the params to get the actual ID
+  const { id } = await params 
+
   const supabase = await createSupabaseServerClient()
 
   const {
@@ -23,7 +27,7 @@ export default async function MessageViewPage({
   const { data: confession, error } = await supabase
     .from('confessions')
     .select('id, message, created_at, is_read, profile_id')
-    .eq('id', params.id)
+    .eq('id', id) // 3. Use the awaited 'id' variable here
     .eq('profile_id', user.id)
     .single()
 
@@ -31,18 +35,14 @@ export default async function MessageViewPage({
     redirect('/inbox')
   }
 
-  // Mark as read on the server (reliable + instant)
+  // Mark as read
   if (!confession.is_read) {
     await supabase
       .from('confessions')
       .update({ is_read: true })
-      .eq('id', params.id)
-
-    // Optional: trigger client refresh for badge counts elsewhere
-    // revalidatePath('/inbox') // if you use caching later
+      .eq('id', id) // Use 'id' here as well
   }
 
-  // Fetch username/slug for share link
   const { data: profile } = await supabase
     .from('profiles')
     .select('username, slug')
@@ -57,4 +57,5 @@ export default async function MessageViewPage({
       username={username}
     />
   )
-      }
+    }
+    
