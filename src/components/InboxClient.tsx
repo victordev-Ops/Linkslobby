@@ -1,4 +1,3 @@
-// src/components/InboxClient.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -27,7 +26,6 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
   const supabase = createClient()
   const router = useRouter()
 
-  // Realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('confessions-realtime')
@@ -75,14 +73,16 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
     return `${Math.floor(diff / 31536000)}y ago`
   }
 
-  const openMessage = (id: string) => {
-    router.push(`/inbox/${id}`)
-  }
-
-            
-    // 3. Navigate to the message details
-    router.push(`/inbox/${confession.id}`)
+  // UPDATED: Now updates the database and navigates
+  const openMessage = async (confession: Confession) => {
+    if (!confession.is_read) {
+      await supabase
+        .from('confessions')
+        .update({ is_read: true })
+        .eq('id', confession.id)
     }
+    router.push(`/inbox/${confession.id}`)
+  }
   
   const truncate = (text: string, max: number = 100) => {
     if (!text) return 'Empty message'
@@ -91,7 +91,6 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
 
   return (
     <div className="min-h-screen bg-white pb-32">
-      {/* Header */}
       <div className="sticky top-0 bg-white border-b border-gray-200 z-10 px-6 py-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Inbox</h1>
         <button onClick={handleRefresh} disabled={refreshing} className="p-2">
@@ -120,7 +119,6 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
               onClick={() => openMessage(c)}
               className="w-full text-left px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
             >
-              {/* Icon */}
               <div className="w-14 h-14 rounded-full flex-shrink-0 shadow-md flex items-center justify-center">
                 {c.is_read ? (
                   <div className="w-12 h-12 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center">
@@ -133,7 +131,6 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
                 )}
               </div>
 
-              {/* Text content */}
               <div className="flex-1 min-w-0">
                 <p
                   className={`text-base leading-snug ${
@@ -147,7 +144,6 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
                 </p>
               </div>
 
-              {/* Chevron */}
               <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
@@ -157,4 +153,5 @@ export default function InboxClient({ initialConfessions, userId }: Props) {
       </div>
     </div>
   )
-        }
+      }
+    
