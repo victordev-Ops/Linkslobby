@@ -50,11 +50,13 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
 
   const { id: profileId, username } = profile
 
-  // Server Action
+  // Server Action – create a fresh Supabase client inside the action
   async function sendConfession(formData: FormData) {
     'use server'
 
-    const supabaseAction = supabase
+    // Create a new isolated Supabase client for this action
+    const supabaseAction = await createSupabaseServerClient()
+
     const message = (formData.get('message') as string)?.trim()
 
     console.log('[sendConfession] Attempting insert:', {
@@ -142,4 +144,4 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
       </div>
     </div>
   )
-              }
+}
