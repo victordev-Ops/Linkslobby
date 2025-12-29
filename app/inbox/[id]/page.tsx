@@ -35,13 +35,7 @@ export default async function MessageViewPage({
     redirect('/inbox')
   }
 
-  // Mark as read
-  if (!confession.is_read) {
-    await supabase
-      .from('confessions')
-      .update({ is_read: true })
-      .eq('id', id) // Use 'id' here as well
-  }
+  
 
   const { data: profile } = await supabase
     .from('profiles')
