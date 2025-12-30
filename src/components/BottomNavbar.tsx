@@ -1,6 +1,7 @@
 // src/components/BottomNavbar.tsx
 'use client'
 
+import { useNotifications } from '@context/NotificationContext'
 import { useState, useEffect } from 'react'
 import { Home, Inbox, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -8,6 +9,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 export default function BottomNavbar({ profileId }: { profileId: string }) {
+  const {unreadCount} = useNotifications()
   const pathname = usePathname()
   const supabase = createClient()
   
