@@ -1,7 +1,7 @@
 // src/components/BottomNavbar.tsx
 'use client'
 
-import { useNotifications } from '@context/NotificationContext'
+import { useNotifications } from '@/context/NotificationContext'
 import { useState, useEffect } from 'react'
 import { Home, Inbox, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
