@@ -1,6 +1,7 @@
 // components/InboxClient.tsx
 'use client'
 
+import { useNotifications } from '@/context/NotificationContext'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RefreshCw } from 'lucide-react'
@@ -22,6 +23,7 @@ type Props = {
 }
 
 export default function InboxClient({ initialConfessions, userId }: Props) {
+  const { setUnreadCount } = useNotifications()
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
 
