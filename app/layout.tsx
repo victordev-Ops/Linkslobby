@@ -1,23 +1,18 @@
 import type { Metadata } from "next";
-import { GeistSans, GeistMono } from "geist/font";  // ← New official import
+import { GeistSans, GeistMono } from "geist/font";
 import "./globals.css";
 import BottomNavbar from "@/components/BottomNavbar";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { Suspense } from "react";
+import { NotificationProvider } from "@/context/NotificationContext"; // 1. Import Provider
+import { Toaster } from "sonner"; // 2. Import Toaster
 
-const geistSans = GeistSans;  // Already configured with variable
-const geistMono = GeistMono;  // Already configured with variable
+const geistSans = GeistSans;
+const geistMono = GeistMono;
 
 export const metadata: Metadata = {
   title: "say",
   description: "Receive anonymous confessions from anyone.",
 };
-
-function BottomNavbarFallback() {
-  return (
-    <div className="fixed bottom-0 left-0 right-0 h-24 bg-gray-50 border-t border-gray-200" />
-  );
-}
 
 export default async function RootLayout({
   children,
@@ -30,21 +25,25 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // We pass this ID to the Provider, not the Navbar
   const profileId = user?.id ?? null;
 
   return (
-    <html lang="en" className={`\( {geistSans.variable} \){geistMono.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased min-h-screen bg-gray-50 pb-24">
-        {children}
+        {/* 3. Wrap application in the Provider */}
+        <NotificationProvider profileId={profileId}>
+          
+          {children}
 
-        <Suspense fallback={<BottomNavbarFallback />}>
-          {profileId ? (
-            <BottomNavbar profileId={profileId} />
-          ) : (
-            <div className="h-24" />
-          )}
-        </Suspense>
+          {/* 4. Render Navbar globally if user exists (No props needed!) */}
+          {profileId && <BottomNavbar />}
+          
+          {/* 5. Global Toast Notification Container */}
+          <Toaster position="top-center" richColors />
+
+        </NotificationProvider>
       </body>
     </html>
   );
-        }
+}
