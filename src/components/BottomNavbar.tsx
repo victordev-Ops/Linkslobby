@@ -1,117 +1,61 @@
-// src/components/BottomNavbar.tsx
 'use client'
 
-import { useNotifications } from '@/context/NotificationContext'
-import { useState, useEffect } from 'react'
 import { Home, Inbox, Settings } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useNotifications } from '@/context/NotificationContext'
+import { motion, AnimatePresence } from 'framer-motion'
 
-export default function BottomNavbar({ profileId }: { profileId: string }) {
-  const {unreadCount} = useNotifications()
+export default function BottomNavbar() {
   const pathname = usePathname()
-  const supabase = createClient()
-  
-  
-  // 1. Fetch Initial Unread Count
-  useEffect(() => {
-    const fetchUnread = async () => {
-      const { count } = await supabase
-        .from('confessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('profile_id', profileId)
-        .eq('is_read', false)
+  // Now we just consume the global state. 
+  // No useEffect, No supabase client, No fetching here!
+  const { unreadCount } = useNotifications()
 
-      setUnreadCount(count || 0)
-    }
-
-    if (profileId) fetchUnread()
-  }, [profileId, supabase])
-
-  // 2. Real-time Listener for Badge Updates
-  useEffect(() => {
-    if (!profileId) return
-
-    const channel = supabase
-      .channel(`navbar-unread-${profileId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to INSERT (new message) and UPDATE (marked read)
-          schema: 'public',
-          table: 'confessions',
-          filter: `profile_id=eq.${profileId}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setUnreadCount((prev) => prev + 1)
-          } else if (payload.eventType === 'UPDATE') {
-            // If a message was marked as read, decrement the badge
-            if (payload.new.is_read === true && payload.old.is_read === false) {
-              setUnreadCount((prev) => Math.max(0, prev - 1))
-            }
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [profileId, supabase])
-
-  const isHomeActive = pathname === '/dashboard'
-  const isInboxActive = pathname.startsWith('/inbox')
-  const isSettingsActive = pathname === '/settings'
-
-  const tabClass = (isActive: boolean) =>
-    `group relative flex flex-col items-center gap-1 p-4 rounded-2xl transition-all duration-200 ${
-      isActive ? 'text-purple-600' : 'text-gray-500 hover:text-purple-600'
-    }`
-
-  const iconClass = "group-active:scale-90 transition-transform"
+  const navItems = [
+    { name: 'Home', href: '/dashboard', icon: Home, active: pathname === '/dashboard' },
+    { name: 'Inbox', href: '/inbox', icon: Inbox, active: pathname.startsWith('/inbox'), badge: unreadCount },
+    { name: 'Settings', href: '/settings', icon: Settings, active: pathname === '/settings' },
+  ]
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-200 px-4 py-3 z-50">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex justify-around items-center">
-          {/* Home */}
-          <Link href="/dashboard" className={tabClass(isHomeActive)}>
-            <Home size={26} strokeWidth={2.5} className={iconClass} />
-            <span className="text-xs font-medium">Home</span>
-            {isHomeActive && (
-              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-12 h-1 bg-purple-600 rounded-full" />
-            )}
-          </Link>
-
-          {/* Inbox */}
-          <Link href="/inbox" className={tabClass(isInboxActive)}>
-            <div className="relative">
-              <Inbox size={26} strokeWidth={2.5} className={iconClass} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-2 -right-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white shadow-lg">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-gray-100 z-50 pb-[env(safe-area-inset-bottom)]">
+      <div className="max-w-2xl mx-auto px-6 h-16 flex justify-between items-center">
+        {navItems.map((item) => (
+          <Link 
+            key={item.name} 
+            href={item.href} 
+            className={`relative flex flex-col items-center justify-center w-full h-full transition-colors ${
+              item.active ? 'text-purple-600' : 'text-gray-400 hover:text-purple-400'
+            }`}
+          >
+            <div className="relative p-1">
+              <item.icon size={24} strokeWidth={item.active ? 2.5 : 2} />
+              
+              <AnimatePresence>
+                {item.badge !== undefined && item.badge > 0 && (
+                  <motion.span 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    className="absolute -top-1 -right-2 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm"
+                  >
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </div>
-            <span className="text-xs font-medium">Inbox</span>
-            {isInboxActive && (
-              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-12 h-1 bg-purple-600 rounded-full" />
+            <span className="text-[10px] font-medium mt-0.5">{item.name}</span>
+            
+            {item.active && (
+              <motion.div 
+                layoutId="nav-indicator"
+                className="absolute -bottom-1 w-1 h-1 bg-purple-600 rounded-full"
+              />
             )}
           </Link>
-
-          {/* Settings */}
-          <Link href="/settings" className={tabClass(isSettingsActive)}>
-            <Settings size={26} strokeWidth={2.5} className={iconClass} />
-            <span className="text-xs font-medium">Settings</span>
-            {isSettingsActive && (
-              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-12 h-1 bg-purple-600 rounded-full" />
-            )}
-          </Link>
-        </div>
+        ))}
       </div>
-    </div>
+    </nav>
   )
-            }
-          
+}
