@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { markConfessionAsRead } from 'app/actions/confessions'
 import { useNotifications } from '@/context/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
-import { toast } from 'sonner' // Recommended for Next.js
+import { toast } from 'sonner'
 
 type Confession = {
   id: string
@@ -19,47 +19,64 @@ type Confession = {
 }
 
 export default function InboxClient({ initialConfessions, userId }: { initialConfessions: Confession[], userId: string }) {
+  // 1. Local State initialized with server data
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+ 
   const { setUnreadCount } = useNotifications()
   const supabase = createClient()
   const router = useRouter()
 
-  // Real-time listener
+  // 2. Sync State when Server Data updates (via router.refresh)
+  useEffect(() => {
+    setConfessions(initialConfessions)
+    const unread = initialConfessions.filter(c => !c.is_read).length
+    setUnreadCount(unread)
+  }, [initialConfessions, setUnreadCount])
+
+  // 3. Robust Realtime Listener
   useEffect(() => {
     const channel = supabase
-      .channel('confessions-inbox-sync')
+      .channel(`inbox-realtime-${userId}`)
       .on('postgres_changes', {
-          event: '*',
+          event: '*', // Listen for INSERTS, UPDATES, and DELETES
           schema: 'public',
           table: 'confessions',
           filter: `profile_id=eq.${userId}`,
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setConfessions((prev) => [payload.new as Confession, ...prev])
+            const newMsg = payload.new as Confession
+            setConfessions((prev) => [newMsg, ...prev])
+            setUnreadCount((prev) => prev + 1)
+            toast('New secret message! 💌', {
+              description: 'Tap to view',
+              action: { label: 'View', onClick: () => router.push(`/inbox/${newMsg.id}`) }
+            })
           } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as Confession
             setConfessions((prev) =>
-              prev.map((c) => (c.id === payload.new.id ? (payload.new as Confession) : c))
+              prev.map((c) => (c.id === updated.id ? updated : c))
             )
+          } else if (payload.eventType === 'DELETE') {
+            setConfessions((prev) => prev.filter((c) => c.id !== payload.old.id))
           }
         }
       )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [userId, supabase])
+  }, [userId, supabase, setUnreadCount, router])
 
+  // 4. Manual Refresh (The "Hard Reset")
   const handleRefresh = async () => {
+    if (refreshing) return
+    
     try {
-      setError(null)
       setRefreshing(true)
-      
-      if (typeof window !== 'undefined' && window.navigator.vibrate) {
-        window.navigator.vibrate(10)
-      }
+      setError(null)
+      if (window.navigator.vibrate) window.navigator.vibrate(10)
 
       const { data, error: supabaseError } = await supabase
         .from('confessions')
@@ -71,40 +88,41 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
 
       if (data) {
         setConfessions(data)
+        const unread = data.filter(c => !c.is_read).length
+        setUnreadCount(unread)
         router.refresh()
         toast.success('Inbox updated')
       }
     } catch (err) {
-      setError('Failed to load messages. Please check your connection.')
+      setError('Failed to load messages.')
       toast.error('Sync failed')
     } finally {
-      setTimeout(() => setRefreshing(false), 500)
+      setTimeout(() => setRefreshing(false), 600)
     }
   }
 
+  // 5. Optimistic Message Opening
   const openMessage = async (confession: Confession) => {
-    // Save original states for potential rollback
     const originalConfessions = [...confessions]
-    
-    // 1. Immediate Navigation
+   
+    // Navigate immediately for speed
     router.push(`/inbox/${confession.id}`)
 
     if (!confession.is_read) {
-      // 2. Optimistic Updates
+      // Optimistically update UI
       setUnreadCount((prev) => Math.max(0, prev - 1))
       setConfessions((prev) =>
         prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
       )
 
-      // 3. Background Server Action with Error Handling
       try {
         const result = await markConfessionAsRead(confession.id)
         if (result?.error) throw new Error(result.error)
       } catch (err) {
-        // 4. Rollback on failure
+        // Rollback on failure
         setConfessions(originalConfessions)
         setUnreadCount((prev) => prev + 1)
-        toast.error('Could not update read status')
+        toast.error('Sync error')
       }
     }
   }
@@ -115,34 +133,44 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
 
   return (
     <div className="min-h-screen bg-white pb-32">
+      {/* Header */}
       <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-100 z-10 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Inbox</h1>
-        <button 
-          onClick={handleRefresh} 
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Inbox</h1>
+        <button
+          onClick={handleRefresh}
           disabled={refreshing}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors active:scale-90 disabled:opacity-50"
+          className="p-2 hover:bg-gray-100 rounded-full transition-all active:scale-90 disabled:opacity-50"
+          aria-label="Refresh messages"
         >
           <RefreshCw size={20} className={`${refreshing ? 'animate-spin text-purple-600' : 'text-gray-500'}`} />
         </button>
       </div>
 
+      {/* Message List */}
       <div className="divide-y divide-gray-50">
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence mode="popLayout" initial={false}>
           {confessions.length === 0 ? (
-            <EmptyState />
+            <motion.div 
+              key="empty"
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+            >
+              <EmptyState />
+            </motion.div>
           ) : (
             confessions.map((c) => (
               <motion.button
                 layout
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
                 key={c.id}
                 onClick={() => openMessage(c)}
                 className="w-full text-left px-6 py-5 flex items-start gap-4 hover:bg-gray-50/50 transition-colors active:bg-gray-100 group"
               >
                 <div className="relative flex-shrink-0">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm transition-all ${
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm transition-all duration-500 ${
                     c.is_read ? 'bg-gray-100 grayscale' : 'bg-gradient-to-tr from-purple-500 to-pink-500 shadow-purple-200'
                   }`}>
                     💌
@@ -151,12 +179,15 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
 
                 <div className="flex-1 min-w-0 pt-0.5">
                   <div className="flex justify-between items-baseline mb-1">
-                    <p className={`text-xs tracking-wider uppercase font-bold ${c.is_read ? 'text-gray-400' : 'text-purple-600'}`}>
-                      {c.is_read ? 'Read' : 'New'}
+                    <p className={`text-[10px] tracking-widest uppercase font-black ${c.is_read ? 'text-gray-400' : 'text-purple-600'}`}>
+                      {c.is_read ? 'Opened' : 'New Message'}
                     </p>
+                    <span className="text-[10px] text-gray-400 font-medium">
+                      {new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </span>
                   </div>
-                  <p className={`text-base line-clamp-2 leading-relaxed ${c.is_read ? 'text-gray-500' : 'text-gray-900 font-medium'}`}>
-                    {c.is_read ? c.message : "You have a new secret message..."}
+                  <p className={`text-base line-clamp-2 leading-relaxed ${c.is_read ? 'text-gray-500' : 'text-gray-900 font-semibold'}`}>
+                    {c.is_read ? c.message : "You received a new secret message..."}
                   </p>
                 </div>
 
@@ -170,18 +201,17 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
   )
 }
 
+// --- Sub-Components ---
+
 function ErrorState({ retry, message }: { retry: () => void, message: string }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
       <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4">
         <AlertCircle size={32} />
       </div>
-      <h3 className="text-lg font-bold text-gray-900">Connection Error</h3>
+      <h3 className="text-lg font-bold text-gray-900">Unable to sync</h3>
       <p className="text-gray-500 mb-6 text-sm">{message}</p>
-      <button 
-        onClick={retry}
-        className="bg-gray-900 text-white px-6 py-2 rounded-xl font-medium active:scale-95 transition-transform"
-      >
+      <button onClick={retry} className="bg-gray-900 text-white px-8 py-2.5 rounded-xl font-bold active:scale-95 transition-transform">
         Try Again
       </button>
     </div>
@@ -192,14 +222,14 @@ function EmptyState() {
   return (
     <div className="text-center py-20 px-6">
       <div className="bg-purple-50 w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center">
-        <MessageSquare className="w-10 h-10 text-purple-200" />
+        <MessageSquare className="w-10 h-10 text-purple-300" />
       </div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">Your inbox is quiet</h3>
-      <p className="text-gray-500 mb-8 max-w-xs mx-auto text-sm">Share your profile link to start receiving anonymous messages.</p>
-      <Link href="/dashboard" className="inline-block bg-purple-600 text-white px-8 py-3 rounded-2xl font-semibold shadow-lg shadow-purple-100">
+      <h3 className="text-xl font-bold text-gray-900 mb-2">Your inbox is empty</h3>
+      <p className="text-gray-500 mb-8 max-w-xs mx-auto text-sm">Share your profile link with others to get anonymous messages.</p>
+      <Link href="/dashboard" className="inline-block bg-purple-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-purple-100 active:scale-95 transition-transform">
         Get My Link
       </Link>
     </div>
   )
-          }
-             
+         }
+    
