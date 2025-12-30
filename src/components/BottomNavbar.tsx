@@ -13,9 +13,7 @@ export default function BottomNavbar({ profileId }: { profileId: string }) {
   const pathname = usePathname()
   const supabase = createClient()
   
-  // FIX: Use state so the UI actually re-renders when the count changes
-  const [unreadCount, setUnreadCount] = useState(0)
-
+  
   // 1. Fetch Initial Unread Count
   useEffect(() => {
     const fetchUnread = async () => {
