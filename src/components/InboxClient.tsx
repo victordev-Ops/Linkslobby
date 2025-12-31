@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RefreshCw, MessageSquare, ChevronRight, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
@@ -18,29 +18,85 @@ type Confession = {
   profile_id: string
 }
 
+/**
+ * HELPER: Merges two arrays of messages, removes duplicates by ID, 
+ * and sorts them by date (newest first).
+ */
+const mergeConfessions = (current: Confession[], incoming: Confession[]) => {
+  const map = new Map();
+  [...current, ...incoming].forEach(item => map.set(item.id, item));
+  return Array.from(map.values()).sort((a, b) => 
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
 export default function InboxClient({ initialConfessions, userId }: { initialConfessions: Confession[], userId: string }) {
-  // 1. Local State initialized with server data
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Track if we have performed the initial mount background sync
+  const hasMounted = useRef(false)
  
   const { setUnreadCount } = useNotifications()
   const supabase = createClient()
   const router = useRouter()
 
-  // 2. Sync State when Server Data updates (via router.refresh)
+  // --- 1. CORE FETCH LOGIC ---
+  const fetchLatest = async (isManual = false) => {
+    if (isManual) {
+      setRefreshing(true)
+      setError(null)
+      if (window.navigator.vibrate) window.navigator.vibrate(10)
+    }
+
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('confessions')
+        .select('*')
+        .eq('profile_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (supabaseError) throw supabaseError
+
+      if (data) {
+        // Use smart merge to update state
+        setConfessions(prev => mergeConfessions(prev, data))
+        const unread = data.filter(c => !c.is_read).length
+        setUnreadCount(unread)
+        if (isManual) toast.success('Inbox updated')
+      }
+    } catch (err) {
+      if (isManual) {
+        setError('Failed to load messages.')
+        toast.error('Sync failed')
+      }
+    } finally {
+      if (isManual) setTimeout(() => setRefreshing(false), 600)
+    }
+  }
+
+  // --- 2. SYNC SERVER PROPS & HANDLE NAVIGATION ---
   useEffect(() => {
-    setConfessions(initialConfessions)
+    // Merge data coming from server props
+    setConfessions(prev => mergeConfessions(prev, initialConfessions))
     const unread = initialConfessions.filter(c => !c.is_read).length
     setUnreadCount(unread)
+
+    // NAVIGATION FIX: If this is the first time the component mounts (e.g. via BottomNav),
+    // trigger a silent background fetch to bypass the Next.js stale router cache.
+    if (!hasMounted.current) {
+      fetchLatest(false) 
+      hasMounted.current = true
+    }
   }, [initialConfessions, setUnreadCount])
 
-  // 3. Robust Realtime Listener
+  // --- 3. REALTIME LISTENER ---
   useEffect(() => {
     const channel = supabase
       .channel(`inbox-realtime-${userId}`)
       .on('postgres_changes', {
-          event: '*', // Listen for INSERTS, UPDATES, and DELETES
+          event: '*', 
           schema: 'public',
           table: 'confessions',
           filter: `profile_id=eq.${userId}`,
@@ -48,7 +104,7 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const newMsg = payload.new as Confession
-            setConfessions((prev) => [newMsg, ...prev])
+            setConfessions((prev) => mergeConfessions(prev, [newMsg]))
             setUnreadCount((prev) => prev + 1)
             toast('New secret message! 💌', {
               description: 'Tap to view',
@@ -69,47 +125,14 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
     return () => { supabase.removeChannel(channel) }
   }, [userId, supabase, setUnreadCount, router])
 
-  // 4. Manual Refresh (The "Hard Reset")
-  const handleRefresh = async () => {
-    if (refreshing) return
-    
-    try {
-      setRefreshing(true)
-      setError(null)
-      if (window.navigator.vibrate) window.navigator.vibrate(10)
+  // --- 4. ACTION HANDLERS ---
+  const handleRefresh = () => fetchLatest(true)
 
-      const { data, error: supabaseError } = await supabase
-        .from('confessions')
-        .select('*')
-        .eq('profile_id', userId)
-        .order('created_at', { ascending: false })
-
-      if (supabaseError) throw supabaseError
-
-      if (data) {
-        setConfessions(data)
-        const unread = data.filter(c => !c.is_read).length
-        setUnreadCount(unread)
-       // router.refresh()
-        toast.success('Inbox updated')
-      }
-    } catch (err) {
-      setError('Failed to load messages.')
-      toast.error('Sync failed')
-    } finally {
-      setTimeout(() => setRefreshing(false), 600)
-    }
-  }
-
-  // 5. Optimistic Message Opening
   const openMessage = async (confession: Confession) => {
     const originalConfessions = [...confessions]
-   
-    // Navigate immediately for speed
     router.push(`/inbox/${confession.id}`)
 
     if (!confession.is_read) {
-      // Optimistically update UI
       setUnreadCount((prev) => Math.max(0, prev - 1))
       setConfessions((prev) =>
         prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
@@ -119,7 +142,6 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
         const result = await markConfessionAsRead(confession.id)
         if (result?.error) throw new Error(result.error)
       } catch (err) {
-        // Rollback on failure
         setConfessions(originalConfessions)
         setUnreadCount((prev) => prev + 1)
         toast.error('Sync error')
@@ -201,7 +223,7 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
   )
 }
 
-// --- Sub-Components ---
+// --- Sub-Components (Unchanged) ---
 
 function ErrorState({ retry, message }: { retry: () => void, message: string }) {
   return (
@@ -231,5 +253,5 @@ function EmptyState() {
       </Link>
     </div>
   )
-         }
-    
+    }
+                   
