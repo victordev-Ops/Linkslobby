@@ -90,7 +90,7 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
         setConfessions(data)
         const unread = data.filter(c => !c.is_read).length
         setUnreadCount(unread)
-        router.refresh()
+       // router.refresh()
         toast.success('Inbox updated')
       }
     } catch (err) {
