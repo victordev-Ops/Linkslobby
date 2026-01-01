@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { X, Share2, Lock, Camera, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toPng } from 'html-to-image'
-import { createClient } from '@/utils/supabase/client' // Assuming standard path
+import { createClient } from '@/libs/supabase/client' // Assuming standard path
 
 type Confession = {
   id: string
