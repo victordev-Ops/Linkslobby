@@ -30,6 +30,28 @@ const mergeConfessions = (current: Confession[], incoming: Confession[]) => {
   );
 }
 
+/**
+ * HELPER: Formats a date string into a relative time (e.g., "5m ago")
+ */
+const formatRelativeTime = (dateString: string) => {
+  const now = new Date()
+  const then = new Date(dateString)
+  const diffInSeconds = Math.floor((now.getTime() - then.getTime()) / 1000)
+
+  if (diffInSeconds < 60) return 'Just now'
+  
+  const diffInMinutes = Math.floor(diffInSeconds / 60)
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+  
+  const diffInHours = Math.floor(diffInMinutes / 60)
+  if (diffInHours < 24) return `${diffInHours}h ago`
+  
+  const diffInDays = Math.floor(diffInHours / 24)
+  if (diffInDays < 7) return `${diffInDays}d ago`
+
+  return then.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
 export default function InboxClient({ initialConfessions, userId }: { initialConfessions: Confession[], userId: string }) {
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
@@ -60,7 +82,6 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
       if (supabaseError) throw supabaseError
 
       if (data) {
-        // Use smart merge to update state
         setConfessions(prev => mergeConfessions(prev, data))
         const unread = data.filter(c => !c.is_read).length
         setUnreadCount(unread)
@@ -78,13 +99,10 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
 
   // --- 2. SYNC SERVER PROPS & HANDLE NAVIGATION ---
   useEffect(() => {
-    // Merge data coming from server props
     setConfessions(prev => mergeConfessions(prev, initialConfessions))
     const unread = initialConfessions.filter(c => !c.is_read).length
     setUnreadCount(unread)
 
-    // NAVIGATION FIX: If this is the first time the component mounts (e.g. via BottomNav),
-    // trigger a silent background fetch to bypass the Next.js stale router cache.
     if (!hasMounted.current) {
       fetchLatest(false) 
       hasMounted.current = true
@@ -205,7 +223,7 @@ export default function InboxClient({ initialConfessions, userId }: { initialCon
                       {c.is_read ? 'Opened' : 'New Message'}
                     </p>
                     <span className="text-[10px] text-gray-400 font-medium">
-                      {new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      {formatRelativeTime(c.created_at)}
                     </span>
                   </div>
                   <p className={`text-base line-clamp-2 leading-relaxed ${c.is_read ? 'text-gray-500' : 'text-gray-900 font-semibold'}`}>
@@ -253,5 +271,5 @@ function EmptyState() {
       </Link>
     </div>
   )
-    }
-                   
+}
+  
