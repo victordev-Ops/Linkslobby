@@ -72,7 +72,7 @@ export default function MessageViewClient({ confession, username }: Props) {
       })
       
       const link = document.createElement('a')
-      link.download = `msg-${username}-${Date.now()}.png`
+      link.download = `say-app/confess-${username}-${Date.now()}.png`
       link.href = dataUrl
       link.click()
     } catch (err) {
@@ -124,7 +124,7 @@ export default function MessageViewClient({ confession, username }: Props) {
 
               <div className="mt-8 flex items-center gap-1.5 opacity-30">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                  say-app/{username}
+                  say-app/confess/{username}
                 </span>
               </div>
             </div>
@@ -145,7 +145,7 @@ export default function MessageViewClient({ confession, username }: Props) {
 
       {/* Footer Actions */}
       <div className="px-6 pb-10 space-y-3 z-10 max-w-sm mx-auto w-full">
-        <button className="w-full bg-red-50 text-red-500 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-red-100 transition-colors">
+        <button className="w-full bg-purple-50 text-purple-500 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-purple-100 transition-colors">
           <Lock size={16} />
           <span>Reveal Sender</span>
         </button>
