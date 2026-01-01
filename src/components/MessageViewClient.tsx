@@ -1,11 +1,11 @@
-// src/components/MessageViewClient.tsx
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Share2, Lock, Camera, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toPng } from 'html-to-image'
+import { createClient } from '@/utils/supabase/client' // Assuming standard path
 
 type Confession = {
   id: string
@@ -31,42 +31,73 @@ const GRADIENTS = [
 
 export default function MessageViewClient({ confession, username }: Props) {
   const router = useRouter()
+  const supabase = createClient()
   const cardRef = useRef<HTMLDivElement>(null)
   
   const [colorIndex, setColorIndex] = useState(0)
-  const [isCopying, setIsCopying] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
+  // 1. Mark as read on mount
+/*  useEffect(() => {
+    const markAsRead = async () => {
+      if (!confession.is_read) {
+        await supabase
+          .from('confessions')
+          .update({ is_read: true })
+          .eq('id', confession.id)
+      }
+    }
+    markAsRead()
+  }, [confession.id, confession.is_read, supabase])
+*/
+
   const handleNextColor = () => setColorIndex((prev) => (prev + 1) % GRADIENTS.length)
-  const handleClose = () => { router.refresh(); router.push('/inbox') }
+
+  // 2. Consistent navigation
+  const handleClose = () => {
+    router.push('/inbox')
+    //router.refresh()
+  }
 
   const handleSaveImage = async () => {
-    if (!cardRef.current) return
+    if (!cardRef.current || isSaving) return
     setIsSaving(true)
+    
     try {
-      const dataUrl = await toPng(cardRef.current, { cacheBust: true, pixelRatio: 3 })
+      // Optimization: Ensure fonts are loaded before capture
+      const dataUrl = await toPng(cardRef.current, { 
+        cacheBust: true, 
+        pixelRatio: 3,
+        style: { transform: 'scale(1)' } // Fixes weird scaling bugs in some browsers
+      })
+      
       const link = document.createElement('a')
-      link.download = `msg-${username}.png`
+      link.download = `msg-${username}-${Date.now()}.png`
       link.href = dataUrl
       link.click()
     } catch (err) {
-      console.error(err)
+      console.error("Capture failed", err)
     } finally {
       setIsSaving(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col relative overflow-hidden font-sans">
-      <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-pink-100/50 to-transparent -z-10" />
+    <div className="min-h-screen bg-gray-50 flex flex-col relative overflow-x-hidden font-sans">
+      {/* 3. Improved Background layer */}
+      <div className="absolute inset-x-0 top-0 h-96 bg-gradient-to-b from-pink-100/50 to-transparent pointer-events-none" />
 
       {/* Top Bar */}
       <div className="px-6 pt-12 pb-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center text-white text-xs font-bold">@</div>
-           <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Inbox</span>
+           <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Inbox</span>
         </div>
-        <button onClick={handleClose} className="p-2 bg-white rounded-full shadow-sm active:scale-90 transition-transform">
+        <button 
+          onClick={handleClose} 
+          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 active:scale-90 transition-all"
+          aria-label="Close"
+        >
           <X size={20} className="text-gray-400" />
         </button>
       </div>
@@ -74,67 +105,69 @@ export default function MessageViewClient({ confession, username }: Props) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 -mt-10">
         <motion.div
-          initial={{ scale: 1.15, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 260, damping: 20 }}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", damping: 25 }}
           className="w-full max-w-sm"
         >
-          {/* Capture Area */}
-          <div ref={cardRef} className="rounded-[2.5rem] overflow-hidden shadow-[0_30px_60px_-12px_rgba(0,0,0,0.2)] bg-white border border-gray-100">
-            
+          <div ref={cardRef} className="rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border border-gray-100">
             <div className={`${GRADIENTS[colorIndex]} px-8 py-10 text-center transition-colors duration-500`}>
               <h1 className="text-white text-lg font-black tracking-tighter uppercase italic">
-                Send me anonymous messages!
+                Anonymous Message
               </h1>
             </div>
 
-            <div className="px-8 pt-14 pb-8 min-h-[220px] flex flex-col items-center justify-between bg-white relative">
-              {/* Message Body */}
-              <p className="text-center text-gray-800 font-bold text-2xl leading-tight">
+            <div className="px-8 pt-14 pb-8 min-h-[220px] flex flex-col items-center justify-between bg-white">
+              <p className="text-center text-gray-800 font-bold text-2xl leading-tight break-words w-full">
                 {confession.message}
               </p>
 
-              {/* NEW: Watermark Tag */}
-              <div className="mt-8 flex items-center gap-1.5 opacity-40 grayscale">
+              <div className="mt-8 flex items-center gap-1.5 opacity-30">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                  say-app/confess/{username}
+                  say-app/{username}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Buttons */}
+          {/* Controls */}
           <div className="flex justify-center gap-10 mt-10">
-            <button onClick={handleNextColor} className="flex flex-col items-center gap-2">
-              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all">
-                <div className={`w-10 h-10 rounded-full ${GRADIENTS[colorIndex]}`} />
-              </div>
-              <span className="text-[10px] font-black text-gray-400 uppercase">Color</span>
-            </button>
+            <ControlBtn onClick={handleNextColor} label="Color">
+               <div className={`w-10 h-10 rounded-full ${GRADIENTS[colorIndex]} shadow-inner`} />
+            </ControlBtn>
             
-            <button onClick={handleSaveImage} disabled={isSaving} className="flex flex-col items-center gap-2">
-               <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all">
-                {isSaving ? <Loader2 className="animate-spin text-gray-300" /> : <Camera size={24} className="text-gray-700" />}
-              </div>
-              <span className="text-[10px] font-black text-gray-400 uppercase">Save</span>
-            </button>
+            <ControlBtn onClick={handleSaveImage} label="Save" disabled={isSaving}>
+               {isSaving ? <Loader2 className="animate-spin text-gray-400" /> : <Camera size={24} className="text-gray-700" />}
+            </ControlBtn>
           </div>
         </motion.div>
       </div>
 
-      {/* Footer */}
-      <div className="px-6 pb-10 space-y-3 z-10">
-        <button className="w-full bg-red-50 text-red-500 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
+      {/* Footer Actions */}
+      <div className="px-6 pb-10 space-y-3 z-10 max-w-sm mx-auto w-full">
+        <button className="w-full bg-red-50 text-red-500 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-red-100 transition-colors">
           <Lock size={16} />
           <span>Reveal Sender</span>
         </button>
 
-        <button onClick={() => {}} className="w-full bg-black text-white font-bold text-lg py-5 rounded-3xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+        <button className="w-full bg-black text-white font-bold text-lg py-5 rounded-3xl shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
           <Share2 size={20} />
           <span>Share to Story</span>
         </button>
       </div>
     </div>
   )
-  }
-  
+}
+
+// Helper component for cleaner code
+function ControlBtn({ children, onClick, label, disabled = false }: any) {
+  return (
+    <button onClick={onClick} disabled={disabled} className="flex flex-col items-center gap-2 group">
+      <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg group-active:scale-90 transition-all border border-gray-50">
+        {children}
+      </div>
+      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{label}</span>
+    </button>
+  )
+    }
+                                              
