@@ -1,10 +1,16 @@
-// src/components/MessageViewClient.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Share2, AlertTriangle, ShieldAlert } from 'lucide-react'
+import { X, Share2, AlertTriangle, Camera } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toPng } from 'html-to-image' // Import the library
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 type Confession = {
   id: string
@@ -21,21 +27,40 @@ type Props = {
 
 export default function MessageViewClient({ confession, username }: Props) {
   const router = useRouter()
+  const cardRef = useRef<HTMLDivElement>(null) // Reference for the screenshot
   const [copied, setCopied] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
-  // Strip "message" keyword and cleanup whitespace
-  const finalMessage = confession.message
-    .replace(/^(message|Message)[:\s-]*/, '')
-    .trim()
+  const cleanMessageText = (text: string) => {
+    return text.replace(/^(message|Message)[:\s-]*/, '').trim()
+  }
+
+  const finalMessage = cleanMessageText(confession.message)
 
   const handleClose = () => {
     router.refresh()
     router.push('/inbox')
   }
 
-  const handleReport = () => {
-    // Logic for reporting (e.g., opening a modal or API call)
-    alert("Message reported. Thank you for keeping the community safe.")
+  // PNG Export Function
+  const exportAsPng = async () => {
+    if (cardRef.current === null) return
+    setIsExporting(true)
+    
+    try {
+      const dataUrl = await toPng(cardRef.current, { 
+        cacheBust: true,
+        backgroundColor: 'transparent' // Ensures only the card shows
+      })
+      const link = document.createElement('a')
+      link.download = `confession-${confession.id}.png`
+      link.href = dataUrl
+      link.click()
+    } catch (err) {
+      console.error('Export failed', err)
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const handleReply = async () => {
@@ -47,7 +72,7 @@ export default function MessageViewClient({ confession, username }: Props) {
           text: 'Check out this message!',
           url: shareUrl,
         })
-      } catch (err) { console.log(err) }
+      } catch (err) { console.log('Cancelled', err) }
     } else {
       await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
@@ -56,95 +81,89 @@ export default function MessageViewClient({ confession, username }: Props) {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#FAFAFA] flex flex-col items-center justify-between py-10 px-6 overflow-hidden">
+    <div className="min-h-screen w-full bg-gray-50 flex flex-col items-center justify-center relative overflow-hidden font-sans">
       
-      {/* 1. Header Navigation - Fast Fade X */}
-      <div className="w-full max-w-md flex justify-between items-center z-50">
-        <div className="w-10" /> {/* Spacer for centering */}
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2 }} // Fast fade as requested
-          onClick={handleClose}
-          className="p-2 bg-white rounded-full shadow-sm border border-gray-100 active:scale-90 transition-transform"
-        >
-          <X size={24} className="text-gray-400" />
-        </motion.button>
-      </div>
+      {/* Background Gradients */}
+      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-400/30 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-orange-400/30 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* 2. The Message Card (Target for HTML-to-PNG) */}
-      <motion.div
-        id="message-card" 
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 260, damping: 20 }}
-        className="w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] overflow-hidden border border-gray-100 flex flex-col"
+      {/* Close Button - Fast Fade In */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+        onClick={handleClose}
+        className="absolute top-6 right-6 p-3 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white transition-colors z-50 group"
       >
-        {/* Card Header with Report Icon */}
-        <div className="bg-gradient-to-r from-rose-500 to-orange-400 p-6 flex justify-between items-center">
-          <span className="text-white/80 font-bold tracking-widest text-xs uppercase ml-4">
-            Send me anonymous messages!
-          </span>
-          <button 
-            onClick={handleReport}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors group"
-            title="Report Message"
-          >
-            <ShieldAlert size={20} className="text-white/70 group-hover:text-white" />
-          </button>
-        </div>
+        <X size={24} className="text-gray-600 group-hover:text-red-500 transition-colors" />
+      </motion.button>
 
-        {/* Message Body - Optimized for 1000 characters */}
-        <div className="p-10 flex flex-col items-center justify-center min-h-[300px] max-h-[500px]">
-          <div className="w-full overflow-y-auto custom-scrollbar px-2">
-            <p className="text-center text-2xl md:text-3xl font-semibold text-gray-800 leading-snug break-words">
+      {/* Main Content */}
+      <div className="w-full max-w-md px-6 z-10 flex flex-col items-center gap-6">
+        
+        {/* THE CARD: Reference starts at these borders */}
+        <motion.div
+          ref={cardRef} 
+          initial={{ scale: 0.5, opacity: 0, y: 50 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          className="w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/50 flex flex-col"
+        >
+          {/* Header with Report Icon */}
+          <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 p-6 text-center relative">
+             <div className="flex justify-between items-center relative z-10">
+               <div className="w-8" /> {/* Spacer */}
+               <h2 className="text-white font-black text-lg uppercase tracking-widest opacity-90">
+                 Anonymous
+               </h2>
+               <button className="p-1 hover:bg-white/20 rounded-lg transition-colors">
+                 <AlertTriangle size={20} className="text-white/80" />
+               </button>
+             </div>
+          </div>
+
+          {/* Message Body: 1000 char stability */}
+          <div className="px-8 py-10 min-h-[200px] max-h-[400px] flex items-center justify-center bg-white overflow-y-auto">
+            <p className={cn(
+              "text-center font-bold text-gray-800 leading-tight break-words",
+              finalMessage.length > 150 ? "text-xl" : "text-3xl"
+            )}>
               {finalMessage}
             </p>
           </div>
+
+          <div className="pb-6 flex justify-center opacity-30">
+            <div className="flex gap-2 text-2xl grayscale">
+               <span>📸</span><span>💬</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Action Buttons */}
+        <div className="w-full space-y-3">
+          <button
+            onClick={handleReply}
+            className="w-full group relative overflow-hidden bg-black text-white font-bold text-xl py-5 rounded-full shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
+          >
+            <span className="relative z-10 flex items-center gap-2">
+              {copied ? 'Link Copied! ✅' : 'Reply on Story'} 
+              {!copied && <Share2 size={22} />}
+            </span>
+          </button>
+
+          {/* New Screenshot Button */}
+          <button
+            onClick={exportAsPng}
+            disabled={isExporting}
+            className="w-full bg-white border-2 border-gray-200 text-gray-700 font-bold text-lg py-4 rounded-full flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+          >
+            <Camera size={20} />
+            {isExporting ? 'Generating...' : 'Save as Image'}
+          </button>
         </div>
 
-        {/* Card Footer Branding */}
-        <div className="pb-8 flex justify-center items-center gap-2 opacity-20">
-          <div className="h-[1px] w-8 bg-black" />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Secret Message</span>
-          <div className="h-[1px] w-8 bg-black" />
-        </div>
-      </motion.div>
-
-      {/* 3. Action Area - Stable bottom positioning */}
-      <div className="w-full max-w-md space-y-4">
-        <button
-          onClick={handleReply}
-          className="w-full bg-black text-white py-5 rounded-3xl font-bold text-lg shadow-xl hover:bg-gray-900 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
-        >
-          {copied ? 'Link Copied!' : 'Reply on Story'}
-          <Share2 size={20} />
-        </button>
-        
-        <p className="text-center text-gray-400 text-xs font-medium uppercase tracking-widest">
-          Step 1: Copy Link • Step 2: Share to Story
-        </p>
       </div>
-
-      {/* Background Decor - Visual only */}
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full -z-10 opacity-40 pointer-events-none">
-        <div className="absolute top-0 left-0 w-64 h-64 bg-rose-200 rounded-full blur-[100px]" />
-        <div className="absolute bottom-0 right-0 w-64 h-64 bg-orange-200 rounded-full blur-[100px]" />
-      </div>
-
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #e5e7eb;
-          border-radius: 10px;
-        }
-      `}</style>
     </div>
   )
-            }
-          
+        }
+      
