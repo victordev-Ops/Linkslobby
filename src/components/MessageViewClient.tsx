@@ -90,7 +90,7 @@ export default function MessageViewClient({ confession, username }: Props) {
       {/* Top Bar */}
       <div className="px-6 pt-12 pb-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-           <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center text-white text-xs font-bold">@</div>
+           
            
         </div>
         <button 
