@@ -2,6 +2,7 @@
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 
 export async function setupProfile(username: string) {
   const supabase = await createSupabaseServerClient()
@@ -12,7 +13,7 @@ export async function setupProfile(username: string) {
     throw new Error('Auth session missing')
   }
 
-  // Generate slug
+  // 1. Generate slug logic
   let baseSlug = username
     .toLowerCase()
     .trim()
@@ -24,6 +25,7 @@ export async function setupProfile(username: string) {
   let slug = baseSlug
   let i = 0
 
+  // 2. Conflict resolution for slugs
   while (i < 10) {
     const { data } = await supabase
       .from('profiles')
@@ -36,6 +38,7 @@ export async function setupProfile(username: string) {
     slug = `${baseSlug}-${i}`
   }
 
+  // 3. Insert the profile
   const { error } = await supabase
     .from('profiles')
     .insert({
@@ -45,5 +48,13 @@ export async function setupProfile(username: string) {
       slug,
     })
 
-  if (error) throw error
+  if (error) {
+    console.error('Error creating profile:', error.message)
+    throw new Error('Could not create profile. Try a different username.')
+  }
+
+  // 4. Redirect to home page
+  // This must be called outside of a try/catch if you add one later
+  redirect('/')
     }
+              
