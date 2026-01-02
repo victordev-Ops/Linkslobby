@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { setupProfile, checkUsernameAvailability } from '@/actions/setup-profile'
-import { useDebounce } from '@/hooks/use-debounce.ts'
+import { useDebounce } from '@/hooks/use-debounce'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function SetupUsername() {
