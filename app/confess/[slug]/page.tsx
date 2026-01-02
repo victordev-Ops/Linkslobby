@@ -11,7 +11,6 @@ interface PageProps {
   searchParams: Promise<{ status?: string; error?: string }>
 }
 
-// Server Action – defined here in the Server Component
 async function sendConfession(profileId: string, slug: string, formData: FormData) {
   'use server'
 
@@ -58,33 +57,33 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
   const { id: profileId, username } = profile
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-violet-50 to-purple-100 py-12 px-4">
-      <div className="max-w-lg mx-auto">
-        <div className="animate-fade-in-up bg-white/80 backdrop-blur-lg rounded-3xl shadow-2xl overflow-hidden border border-purple-200">
-          <div className="bg-gradient-to-r from-purple-600 via-purple-700 to-violet-700 p-12 text-white text-center">
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight animate-fade-in">
-              Send an Anonymous Confession
-            </h1>
-            <p className="text-3xl md:text-4xl mt-6 font-semibold animate-fade-in-delay">
-              to @{username}
-            </p>
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:py-12">
+      <div className="max-w-md mx-auto">
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-8 py-10 text-center text-white">
+            <h1 className="text-2xl sm:text-3xl font-bold">Send Anonymous Confession</h1>
+            <p className="mt-3 text-xl sm:text-2xl font-medium">to @{username}</p>
           </div>
 
-          <div className="p-8 md:p-12">
+          {/* Body */}
+          <div className="p-6 sm:p-8">
+            {/* Success Message */}
             {status === 'success' && (
-              <div className="mb-10 p-8 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300 rounded-3xl text-center animate-slide-in-up">
-                <p className="text-2xl text-green-800 font-bold">Confession sent successfully! ✨</p>
-                <p className="text-lg text-green-700 mt-3">@{username} will see it soon.</p>
+              <div className="mb-8 p-5 bg-green-50 border border-green-200 rounded-xl text-center">
+                <p className="text-green-800 font-semibold text-lg">Sent successfully! ✨</p>
+                <p className="text-green-700 mt-1">@{username} will see it soon.</p>
               </div>
             )}
 
+            {/* Error Message */}
             {urlError && (
-              <div className="mb-10 p-8 bg-gradient-to-r from-red-50 to-rose-50 border border-red-300 rounded-3xl text-center animate-shake">
-                <p className="text-xl text-red-800 font-bold">Error: {urlError}</p>
+              <div className="mb-8 p-5 bg-red-50 border border-red-200 rounded-xl text-center">
+                <p className="text-red-800 font-semibold">Error: {urlError}</p>
               </div>
             )}
 
-            {/* Pass the server action as a prop */}
+            {/* Form + CTA Buttons */}
             <ConfessionForm
               sendConfession={sendConfession}
               profileId={profileId}
@@ -93,23 +92,14 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
               username={username}
             />
 
-            <div className="mt-12 text-center">
-              <p className="text-base text-purple-800 leading-relaxed">
-                This message is <span className="font-bold text-purple-900">completely anonymous</span>.
-                <br />
-                The recipient will never know who sent it.
-              </p>
-
-              <p className="mt-10 text-purple-700">
-                Want your own confession link?{' '}
-                <Link href="/" className="font-bold underline hover:text-purple-900 transition-colors">
-                  Create an account
-                </Link>
-              </p>
-            </div>
+            {/* Anonymity Note */}
+            <p className="mt-10 text-center text-sm text-gray-600">
+              This message is <span className="font-semibold text-gray-800">100% anonymous</span>.<br />
+              They will never know it was you.
+            </p>
           </div>
         </div>
       </div>
     </div>
   )
-            }
+    }
