@@ -1,7 +1,7 @@
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { redirect } from 'ice/navigation'
+import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache' // optional, for cache busting
 
 export async function setupProfile(username: string) {
