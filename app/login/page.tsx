@@ -55,7 +55,7 @@ export default function Login() {
             className="w-full bg-black text-white py-2.5 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 transition-all"
             disabled={status === 'loading' || status === 'success'}
           >
-            {status === 'loading' ? 'Sending Link...' : 'Send Magic Link'}
+            {status === 'loading' ? 'Sending Link...' : 'Send Login Link'}
           </button>
         </form>
 
