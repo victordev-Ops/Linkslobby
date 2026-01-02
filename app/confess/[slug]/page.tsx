@@ -1,6 +1,6 @@
 // app/confess/[slug]/page.tsx
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import ConfessionForm from './ConfessionForm'
 
@@ -11,15 +11,39 @@ interface PageProps {
   searchParams: Promise<{ status?: string; error?: string }>
 }
 
+// Server Action – defined here in the Server Component
+async function sendConfession(profileId: string, slug: string, formData: FormData) {
+  'use server'
+
+  const supabase = await createSupabaseServerClient()
+
+  const message = (formData.get('message') as string)?.trim()
+
+  if (!message || message.length < 1 || message.length > 1000) {
+    redirect(`/confess/${slug}?error=Message must be 1–1000 characters`)
+  }
+
+  const { error: insertError } = await supabase
+    .from('confessions')
+    .insert({
+      profile_id: profileId,
+      message,
+    })
+
+  if (insertError) {
+    redirect(`/confess/${slug}?error=Failed to send confession`)
+  }
+
+  redirect(`/confess/${slug}?status=success`)
+}
+
 export default async function ConfessPage({ params, searchParams }: PageProps) {
   const { slug: rawSlug } = await params
   const { status, error: urlError } = await searchParams
 
   const slug = rawSlug?.trim().toLowerCase()
 
-  if (!slug) {
-    notFound()
-  }
+  if (!slug) notFound()
 
   const supabase = await createSupabaseServerClient()
 
@@ -29,9 +53,7 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
     .eq('slug', slug)
     .single()
 
-  if (profileError || !profile) {
-    notFound()
-  }
+  if (profileError || !profile) notFound()
 
   const { id: profileId, username } = profile
 
@@ -62,8 +84,14 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
               </div>
             )}
 
-            {/* Client-side form with character counter */}
-            <ConfessionForm profileId={profileId} slug={slug} status={status} username={username} />
+            {/* Pass the server action as a prop */}
+            <ConfessionForm
+              sendConfession={sendConfession}
+              profileId={profileId}
+              slug={slug}
+              status={status}
+              username={username}
+            />
 
             <div className="mt-12 text-center">
               <p className="text-base text-purple-800 leading-relaxed">
@@ -74,7 +102,7 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
 
               <p className="mt-10 text-purple-700">
                 Want your own confession link?{' '}
-                <Link href="/sign-up" className="font-bold underline hover:text-purple-900 transition-colors">
+                <Link href="/" className="font-bold underline hover:text-purple-900 transition-colors">
                   Create an account
                 </Link>
               </p>
@@ -84,4 +112,4 @@ export default async function ConfessPage({ params, searchParams }: PageProps) {
       </div>
     </div>
   )
-          }
+            }
