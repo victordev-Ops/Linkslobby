@@ -1,53 +1,113 @@
 // app/confess/[slug]/ConfessionForm.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition, useRef } from 'react'
 
-type SendConfessionAction = (profileId: string, slug: string, formData: FormData) => Promise<void>
+type ActionResponse = { error?: string; success?: boolean }
 
 interface ConfessionFormProps {
-  sendConfession: SendConfessionAction
   profileId: string
-  slug: string
-  status?: string
+  action: (profileId: string, formData: FormData) => Promise<ActionResponse>
 }
 
-export default function ConfessionForm({
-  sendConfession,
-  profileId,
-  slug,
-  status,
-}: ConfessionFormProps) {
-  const [characterCount, setCharacterCount] = useState(0)
+export default function ConfessionForm({ profileId, action }: ConfessionFormProps) {
+  const [isPending, startTransition] = useTransition()
+  const [feedback, setFeedback] = useState<ActionResponse | null>(null)
+  const [charCount, setCharCount] = useState(0)
+  const formRef = useRef<HTMLFormElement>(null)
+
+  const handleSubmit = (formData: FormData) => {
+    setFeedback(null) // Reset errors
+
+    startTransition(async () => {
+      const result = await action(profileId, formData)
+      
+      if (result.success) {
+        setFeedback({ success: true })
+        formRef.current?.reset()
+        setCharCount(0)
+      } else {
+        setFeedback({ error: result.error })
+      }
+    })
+  }
+
+  // If success, show success view with a "Send Another" button
+  if (feedback?.success) {
+    return (
+      <div className="text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="mb-4 text-5xl">✨</div>
+        <h3 className="text-xl font-medium text-white mb-2">Sent Successfully!</h3>
+        <p className="text-neutral-400 mb-8">Your secret is safe with us.</p>
+        
+        <button
+          onClick={() => setFeedback(null)}
+          className="w-full py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-all duration-200 text-sm font-medium"
+        >
+          Send Another
+        </button>
+      </div>
+    )
+  }
 
   return (
-    <form action={sendConfession.bind(null, profileId, slug)} className="space-y-5">
-      <textarea
-        name="message"
-        rows={6}
-        placeholder="Send me anonymous messages..."
-        className="w-full px-6 py-5 text-lg text-gray-800 placeholder-gray-500 bg-white border-4 border-gray-300 rounded-3xl focus:outline-none focus:border-purple-500 resize-none transition-all"
-        required
-        minLength={1}
-        maxLength={1000}
-        defaultValue={status === 'success' ? '' : undefined}
-        onChange={(e) => setCharacterCount(e.target.value.length)}
-      />
+    <form 
+      ref={formRef} 
+      action={handleSubmit} 
+      className="space-y-4"
+    >
+      {/* Error Message */}
+      {feedback?.error && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm text-center">
+          {feedback.error}
+        </div>
+      )}
 
-      <div className="flex justify-between items-center px-2">
-        <p className="text-sm text-gray-600">100% anonymous</p>
-        <p className={`text-sm font-bold ${characterCount > 900 ? 'text-red-600' : 'text-gray-600'}`}>
-          {characterCount}/1000
-        </p>
+      {/* Text Area Container */}
+      <div className="relative group">
+        <textarea
+          name="message"
+          rows={5}
+          placeholder="Type your confession here..."
+          className="w-full bg-neutral-900/50 text-neutral-200 placeholder-neutral-600 rounded-2xl p-4 border border-white/5 focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all resize-none text-base leading-relaxed"
+          required
+          minLength={1}
+          maxLength={1000}
+          disabled={isPending}
+          onChange={(e) => setCharCount(e.target.value.length)}
+        />
+        
+        {/* Character Count */}
+        <div className="absolute bottom-3 right-4 text-xs font-mono transition-colors duration-200">
+          <span className={charCount > 900 ? 'text-red-400' : 'text-neutral-600'}>
+            {charCount}
+          </span>
+          <span className="text-neutral-700">/1000</span>
+        </div>
       </div>
 
+      {/* Submit Button */}
       <button
         type="submit"
-        disabled={characterCount === 0}
-        className="w-full py-5 bg-black text-white font-bold text-xl rounded-full shadow-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        disabled={isPending || charCount === 0}
+        className="relative w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium shadow-lg shadow-purple-900/20 hover:shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all duration-300 overflow-hidden"
       >
-        Send!
+        <span className={`flex items-center justify-center gap-2 ${isPending ? 'opacity-0' : 'opacity-100'}`}>
+          Send anonymously
+        </span>
+        
+        {/* Loading Spinner overlay */}
+        {isPending && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          </div>
+        )}
       </button>
+
+      <p className="text-center text-xs text-neutral-600 pt-2">
+        IP addresses are never stored.
+      </p>
     </form>
   )
-}
+          }
+        
