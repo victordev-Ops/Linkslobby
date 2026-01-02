@@ -1,59 +1,64 @@
-// middleware.ts
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
-  // Create a response we can mutate
-  const response = NextResponse.next()
+  // 1. Create an unmodified response first
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet) =>
-          cookiesToSet.forEach(({ name, value, options }) =>
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
             response.cookies.set(name, value, options)
-          ),
+          })
+        },
       },
     }
   )
 
-  // Check current session
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // 2. Refresh session if expired
+  const { data: { user } } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
 
-  // If user is authenticated
+  // 3. Auth Guard Logic
   if (user) {
-    // Redirect away from login/signup pages
     if (pathname === '/login' || pathname === '/signup') {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
-  } 
-  // If user is not authenticated
-  else {
-    // Protect dashboard
+  } else {
     if (pathname.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      const loginUrl = new URL('/login', request.url)
+      // UX: Add the intended return URL so they go back after login
+      loginUrl.searchParams.set('next', pathname) 
+      return NextResponse.redirect(loginUrl)
     }
   }
 
-  // Continue to the requested page
   return response
 }
 
-// Run middleware only on relevant routes (better performance)
 export const config = {
   matcher: [
-    '/login',
-    '/signup',
-    '/dashboard/:path*',
-    // Optional: include auth callbacks if needed
-    '/auth/:path*',
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public files (images, etc)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-}
+         }
+        
