@@ -1,34 +1,40 @@
+// actions/setup-profile.ts
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
+export async function checkUsernameAvailability(username: string) {
+  const supabase = await createSupabaseServerClient()
+  
+  const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  if (slug.length < 3) return { available: false, suggestions: [] }
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('slug')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (!data) return { available: true, slug, suggestions: [] }
+
+  // Generate simple suggestions if taken
+  const suggestions = [
+    `${slug}${Math.floor(Math.random() * 99)}`,
+    `${slug}-studio`,
+    `its-${slug}`
+  ]
+
+  return { available: false, slug, suggestions }
+}
+
 export async function setupProfile(username: string) {
   const supabase = await createSupabaseServerClient()
-
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Auth session missing' }
 
-  let slug = username
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-
-  if (!slug) return { error: 'Username invalid. Please use letters or numbers.' }
-
-  // Check Availability
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('slug', slug)
-    .neq('id', user.id)
-    .maybeSingle()
-
-  if (existingProfile) {
-    return { error: 'This username is already taken. Please choose another.' }
-  }
+  const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
   const { error } = await supabase
     .from('profiles')
@@ -39,11 +45,9 @@ export async function setupProfile(username: string) {
       slug,
     }, { onConflict: 'id' })
 
-  if (error) {
-    if (error.code === '23505') return { error: 'This username is already taken.' }
-    return { error: 'Could not create profile. Please try again.' }
-  }
+  if (error) return { error: 'Could not create profile.' }
 
   revalidatePath('/')
-  redirect('/') // Redirect stays as is, Next.js handles this specifically
+  redirect('/')
 }
+  
