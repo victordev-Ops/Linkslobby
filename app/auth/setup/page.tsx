@@ -1,14 +1,15 @@
+// app/auth/setup/page.tsx
 'use client'
+
 export const dynamic = 'force-dynamic'
+
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { setupProfile } from '@/actions/setup-profile'
 
 export default function SetupUsername() {
   const [username, setUsername] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -16,14 +17,23 @@ export default function SetupUsername() {
     setMessage('')
 
     try {
+      // The server action now handles:
+      // 1. Session check
+      // 2. Slug generation
+      // 3. Database insertion
+      // 4. Redirect to '/'
       await setupProfile(username)
-      router.push('/dashboard')
-      router.refresh()
     } catch (err: any) {
-      console.error(err)
-      setMessage(err.message || 'Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
+      /**
+       * Note: In Next.js, redirect() throws an error to stop execution.
+       * We check if the error is a redirect to avoid showing an error
+       * message when the operation actually succeeded.
+       */
+      if (err.message !== 'NEXT_REDIRECT') {
+        console.error('Profile setup failed:', err)
+        setMessage(err.message || 'Something went wrong. Please try again.')
+        setLoading(false)
+      }
     }
   }
 
@@ -102,4 +112,4 @@ export default function SetupUsername() {
       </div>
     </div>
   )
-            }
+}
