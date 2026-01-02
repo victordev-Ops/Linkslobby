@@ -1,10 +1,10 @@
-// app/auth/setup/page.tsx
 'use client'
 
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
 import { setupProfile } from '@/actions/setup-profile'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function SetupUsername() {
   const [username, setUsername] = useState('')
@@ -17,18 +17,8 @@ export default function SetupUsername() {
     setMessage('')
 
     try {
-      // The server action now handles:
-      // 1. Session check
-      // 2. Slug generation
-      // 3. Database insertion
-      // 4. Redirect to '/'
       await setupProfile(username)
     } catch (err: any) {
-      /**
-       * Note: In Next.js, redirect() throws an error to stop execution.
-       * We check if the error is a redirect to avoid showing an error
-       * message when the operation actually succeeded.
-       */
       if (err.message !== 'NEXT_REDIRECT') {
         console.error('Profile setup failed:', err)
         setMessage(err.message || 'Something went wrong. Please try again.')
@@ -38,24 +28,34 @@ export default function SetupUsername() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
-        <h1 className="text-2xl font-bold mb-2">Choose a username</h1>
-        <p className="text-gray-600 mb-6 text-sm">
-          This will be your unique handle on the platform.
-        </p>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      {/* Entry Animation for the Card */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8"
+      >
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            Choose a <span className="text-purple-600">username</span>
+          </h1>
+          <p className="text-slate-500 mt-2 text-sm leading-relaxed">
+            This will be your unique handle on the platform. You can change this later.
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label htmlFor="username" className="sr-only">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div className="space-y-1">
+            <label htmlFor="username" className="text-sm font-semibold text-slate-700 ml-1">
               Username
             </label>
             <input
               id="username"
-              placeholder="Username"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg
-                         focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                         outline-none transition"
+              placeholder="e.g. tech_enthusiast"
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl
+                         focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                         outline-none transition-all bg-slate-50 focus:bg-white"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -65,51 +65,51 @@ export default function SetupUsername() {
             />
           </div>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             type="submit"
-            className="w-full bg-black text-white py-2.5 rounded-lg font-medium
-                       hover:bg-gray-800 disabled:opacity-50
-                       disabled:cursor-not-allowed transition-all
-                       flex items-center justify-center"
+            className="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold
+                       hover:bg-purple-700 disabled:opacity-50
+                       disabled:cursor-not-allowed shadow-md shadow-purple-200
+                       transition-colors flex items-center justify-center"
             disabled={loading}
           >
             {loading ? (
               <span className="flex items-center gap-2">
                 <svg
-                  className="animate-spin h-4 w-4 text-white"
+                  className="animate-spin h-5 w-5 text-white"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
                 >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0
-                       C5.373 0 0 5.373 0 12h4z"
-                  />
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Creating Profile...
+                Setting up...
               </span>
             ) : (
-              'Continue'
+              'Create Profile'
             )}
-          </button>
+          </motion.button>
         </form>
 
-        {message && (
-          <div className="mt-4 p-3 rounded-lg text-sm text-center bg-red-50 text-red-600">
-            {message}
-          </div>
-        )}
-      </div>
+        {/* Animated Error Message */}
+        <AnimatePresence>
+          {message && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-6 p-4 rounded-xl text-sm font-medium text-center bg-red-50 text-red-600 border border-red-100">
+                {message}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
     </div>
   )
 }
