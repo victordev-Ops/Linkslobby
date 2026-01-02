@@ -15,13 +15,17 @@ export function NotificationProvider({
   profileId 
 }: { 
   children: React.ReactNode
-  profileId: string | null 
+  profileId?: string | null   // ← Made optional
 }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const supabase = createClient()
 
   useEffect(() => {
-    if (!profileId) return
+    if (!profileId) {
+      // No user → reset count and skip subscription
+      setUnreadCount(0)
+      return
+    }
 
     // Initial fetch
     const fetchInitialCount = async () => {
@@ -30,6 +34,7 @@ export function NotificationProvider({
         .select('*', { count: 'exact', head: true })
         .eq('profile_id', profileId)
         .eq('is_read', false)
+      
       setUnreadCount(count || 0)
     }
 
@@ -44,7 +49,9 @@ export function NotificationProvider({
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
       }, (payload) => {
-        if (payload.eventType === 'INSERT') setUnreadCount(prev => prev + 1)
+        if (payload.eventType === 'INSERT') {
+          setUnreadCount(prev => prev + 1)
+        }
         if (payload.eventType === 'UPDATE') {
           if (payload.new.is_read && !payload.old.is_read) {
             setUnreadCount(prev => Math.max(0, prev - 1))
@@ -53,7 +60,9 @@ export function NotificationProvider({
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeAllChannels() // or specifically remove channel
+    }
   }, [profileId, supabase])
 
   return (
@@ -63,10 +72,10 @@ export function NotificationProvider({
   )
 }
 
-// Custom hook for easy access
 export const useNotifications = () => {
   const context = useContext(NotificationContext)
-  if (!context) throw new Error('useNotifications must be used within NotificationProvider')
-  return context
+  if (!context) {
+    throw new Error('useNotifications must be used within NotificationProvider')
   }
-    
+  return context
+        }
