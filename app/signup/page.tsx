@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 import { signUp } from '@/actions/auth'
 import AuthForm from '@/components/AuthForm'
-import { Loader2, Mail, CheckCircle2, AlertCircle } from 'lucide-react' // Assuming Lucide-react for icons
+import { Loader2, Mail, CheckCircle2, AlertCircle } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import Link from 'next/link'
 
 export default function Signup() {
   const [email, setEmail] = useState('')
@@ -26,7 +28,7 @@ export default function Signup() {
     try {
       await signUp(email)
       setStatus('success')
-      setMessage('Check your inbox! We sent Sign up link to ' + email)
+      setMessage('Check your inbox! We sent a link to ' + email)
       setEmail('') 
     } catch (err: any) {
       setStatus('error')
@@ -35,24 +37,33 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 flex flex-col justify-center">
-      <div className="max-w-md w-full mx-auto">
+    <div className="min-h-screen bg-slate-50 py-12 px-4 flex flex-col justify-center">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="max-w-md w-full mx-auto"
+      >
         <AuthForm>
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">Create account</h1>
-            <p className="text-sm text-gray-600 mt-2">
-              No password needed. We'll email you a login link.
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Create account</h1>
+            <p className="text-sm text-slate-500 mt-2">
+              No password needed. We'll email you a secure link.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <div className="relative group">
+              <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors duration-200 
+                ${status === 'error' ? 'text-rose-400' : 'text-slate-400 group-focus-within:text-violet-500'}`} 
+              />
               <input
                 type="email"
                 placeholder="name@company.com"
-                className={`w-full pl-10 pr-4 py-2 border rounded-lg outline-none transition-all
-                  ${status === 'error' ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300 focus:ring-2 focus:ring-blue-500'}`}
+                className={`w-full pl-11 pr-4 py-3 border rounded-xl outline-none transition-all duration-200
+                  ${status === 'error' 
+                    ? 'border-rose-300 bg-rose-50 ring-1 ring-rose-500' 
+                    : 'border-slate-200 focus:ring-2 focus:ring-violet-500 focus:border-transparent'}`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -60,50 +71,62 @@ export default function Signup() {
               />
             </div>
 
-            <button
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               type="submit"
               disabled={status === 'loading'}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg 
-                         transition-colors disabled:opacity-70 disabled:cursor-not-allowed
+              className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded-xl 
+                         shadow-lg shadow-violet-200 transition-all disabled:opacity-70 disabled:cursor-not-allowed
                          flex items-center justify-center gap-2"
             >
               {status === 'loading' ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Sending link...
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Processing...
                 </>
               ) : (
                 'Sign Up'
               )}
-            </button>
+            </motion.button>
           </form>
 
-          {/* Status Messages */}
+          {/* Animated Status Messages */}
           <div aria-live="polite" className="mt-6">
-            {status === 'success' && (
-              <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-100 rounded-xl text-green-800">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
-                <p className="text-sm font-medium">{message}</p>
-              </div>
-            )}
+            <AnimatePresence mode="wait">
+              {status === 'success' && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800"
+                >
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium">{message}</p>
+                </motion.div>
+              )}
 
-            {status === 'error' && (
-              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-100 rounded-xl text-red-800">
-                <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-                <p className="text-sm font-medium">{message}</p>
-              </div>
-            )}
+              {status === 'error' && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-800"
+                >
+                  <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium">{message}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </AuthForm>
 
-        <p className="mt-8 text-center text-sm text-gray-600">
+        <p className="mt-8 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <a href="/login" className="text-blue-600 hover:underline font-semibold transition-all">
+          <Link href="/login" className="text-violet-600 hover:text-violet-700 font-bold transition-colors">
             Log in
-          </a>
+          </Link>
         </p>
-      </div>
+      </motion.div>
     </div>
   )
-        }
+              }
         
