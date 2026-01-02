@@ -16,7 +16,7 @@ export default function NotificationRegister() {
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       // Replace with your actual Public VAPID Key
-      applicationServerKey: 'YOUR_PUBLIC_VAPID_KEY' 
+      applicationServerKey: 'BK1hA4tirxSR5qWYmkikKbl4QxHHwg-nGU1zIhThqA4wSAy3Fi65xR4DV-_CyYHyOqxDEviOQPtO3c0HuClqzm0' 
     })
 
     // SEND THIS 'subscription' OBJECT TO YOUR SUPABASE DATABASE
