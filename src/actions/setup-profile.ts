@@ -2,76 +2,67 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache' // optional, for cache busting
+import { revalidatePath } from 'next/cache'
 
 export async function setupProfile(username: string) {
   const supabase = await createSupabaseServerClient()
 
+  // 1. Check Auth Session
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) {
     throw new Error('Auth session missing')
   }
 
-  // Generate slug (same logic as before)
-  let baseSlug = username
+  // 2. Sanitize and generate the Slug
+  let slug = username
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
+    .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+    .replace(/(^-|-$)/g, '')     // Remove leading/trailing hyphens
 
-  if (!baseSlug) baseSlug = `user-${user.id.slice(0, 8)}`
-
-  let slug = baseSlug
-  let i = 0
-
-  // Check for slug conflicts
-  while (i < 20) { // increased limit just in case
-    const { data } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('slug', slug)
-      .maybeSingle()
-
-    if (!data) break
-    i++
-    slug = `\( {baseSlug}- \){i}`
+  // Fallback if the sanitization removes everything (e.g. username was just emojis)
+  if (!slug) {
+    throw new Error('Username invalid. Please use letters or numbers.')
   }
 
-  if (i >= 20) {
-    throw new Error('Too many users with similar usernames. Please try a more unique one.')
+  // 3. CHECK AVAILABILITY: Check if this slug is already taken
+  // We exclude the current user's ID to allow them to "claim" it if they are re-submitting their own form.
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('slug', slug)
+    .neq('id', user.id) // Don't block if the conflict is the user themselves
+    .maybeSingle()
+
+  if (existingProfile) {
+    throw new Error('This username is already taken. Please choose another.')
   }
 
-  // CHANGE: Use upsert (or update) instead of insert
+  // 4. Upsert Profile
   const { error } = await supabase
     .from('profiles')
     .upsert(
       {
         id: user.id,
         email: user.email!,
-        username,
-        slug,
-        // Add any other fields you want to set
-        // updated_at: new Date().toISOString(), // if you have this column
+        username, // The display name
+        slug,     // The unique handle
+        updated_at: new Date().toISOString(),
       },
       {
-        onConflict: 'id', // This tells Supabase to update if id exists
+        onConflict: 'id',
       }
     )
 
   if (error) {
     console.error('Error updating profile:', error)
-    
-    // Better error handling
-    if (error.code === '23505' && error.message.includes('username')) {
+    // Fallback for race conditions (if two people submit exact same time)
+    if (error.code === '23505') { 
       throw new Error('This username is already taken. Please choose another.')
     }
-    
     throw new Error('Could not create profile. Please try again.')
   }
 
-  // Optional: Revalidate paths if needed
   revalidatePath('/')
-
   redirect('/')
-    }
+          }
