@@ -1,6 +1,8 @@
 // app/confess/[slug]/page.tsx
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
+import Link from 'next/link'
+import { useState } from 'react' // We need client-side state for the counter
 
 export const dynamic = 'force-dynamic'
 
@@ -9,139 +11,147 @@ interface PageProps {
   searchParams: Promise<{ status?: string; error?: string }>
 }
 
+// Client component for the form with character counter
+function ConfessionForm({ username, profileId, slug, status }: { username: string; profileId: string; slug: string; status?: string }) {
+  const [characterCount, setCharacterCount] = useState(0)
+
+  return (
+    <form action={sendConfession.bind(null, profileId, slug)} className="space-y-8">
+      <div>
+        <label htmlFor="message" className="block text-lg font-semibold text-purple-900 mb-4">
+          Your confession (100% anonymous)
+        </label>
+        <textarea
+          id="message"
+          name="message"
+          rows={8}
+          placeholder="Say anything... they'll never know it's you ❤️"
+          className="w-full px-6 py-5 border-2 border-purple-300 rounded-3xl focus:ring-4 focus:ring-purple-400 focus:border-purple-600 resize-none transition-all duration-300 shadow-inner text-gray-900 placeholder-gray-500"
+          required
+          minLength={1}
+          maxLength={1000}
+          defaultValue={status === 'success' ? '' : undefined}
+          onChange={(e) => setCharacterCount(e.target.value.length)}
+        />
+        <div className="mt-3 flex justify-between items-center">
+          <p className="text-sm text-purple-600 font-medium">
+            Max 1000 characters
+          </p>
+          <p className={`text-sm font-bold transition-colors ${
+            characterCount > 900 ? 'text-red-600' :
+            characterCount > 700 ? 'text-orange-600' :
+            'text-purple-600'
+          }`}>
+            {characterCount}/1000
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={characterCount === 0}
+        className="relative w-full py-6 overflow-hidden bg-gradient-to-r from-purple-600 to-violet-600 text-white font-bold text-xl rounded-3xl hover:from-purple-700 hover:to-violet-700 transform hover:scale-105 hover:shadow-2xl transition-all duration-500 group disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+      >
+        <span className="relative z-10">Send Anonymously</span>
+        <span className="absolute inset-0 bg-white/20 scale-0 group-hover:scale-150 transition-transform duration-700 rounded-full"></span>
+      </button>
+    </form>
+  )
+}
+
+// Server Action (now accepts parameters)
+async function sendConfession(profileId: string, slug: string, formData: FormData) {
+  'use server'
+
+  const supabaseAction = await createSupabaseServerClient()
+
+  const message = (formData.get('message') as string)?.trim()
+
+  if (!message || message.length < 1 || message.length > 1000) {
+    redirect(`/confess/${slug}?error=Message must be 1–1000 characters`)
+  }
+
+  const { error: insertError } = await supabaseAction
+    .from('confessions')
+    .insert({
+      profile_id: profileId,
+      message,
+    })
+
+  if (insertError) {
+    redirect(`/confess/${slug}?error=Failed to send confession`)
+  }
+
+  redirect(`/confess/${slug}?status=success`)
+}
+
 export default async function ConfessPage({ params, searchParams }: PageProps) {
-  // Await params and searchParams
   const { slug: rawSlug } = await params
   const { status, error: urlError } = await searchParams
 
   const slug = rawSlug?.trim().toLowerCase()
 
-  // 🔎 Debug logs
-  console.log('[ConfessPage] Incoming request:', {
-    rawSlug,
-    normalizedSlug: slug,
-    status,
-    urlError,
-  })
-
-  if (!slug) {
-    console.warn('[ConfessPage] No slug provided, returning 404')
-    notFound()
-  }
+  if (!slug) notFound()
 
   const supabase = await createSupabaseServerClient()
 
-  // Fetch profile
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('id, username, slug')
     .eq('slug', slug)
     .single()
 
-  console.log('[ConfessPage] Supabase profile query result:', {
-    profile,
-    profileError,
-  })
-
-  if (profileError || !profile) {
-    console.error('[ConfessPage] Profile fetch error:', profileError)
-    notFound()
-  }
+  if (profileError || !profile) notFound()
 
   const { id: profileId, username } = profile
 
-  // Server Action – create a fresh Supabase client inside the action
-  async function sendConfession(formData: FormData) {
-    'use server'
-
-    // Create a new isolated Supabase client for this action
-    const supabaseAction = await createSupabaseServerClient()
-
-    const message = (formData.get('message') as string)?.trim()
-
-    console.log('[sendConfession] Attempting insert:', {
-      slug,
-      profileId,
-      messageLength: message?.length,
-    })
-
-    if (!message || message.length < 1 || message.length > 1000) {
-      console.warn('[sendConfession] Invalid message length')
-      redirect(`/confess/${slug}?error=Message must be 1–1000 characters`)
-    }
-
-    const { error: insertError } = await supabaseAction
-      .from('confessions')
-      .insert({
-        profile_id: profileId,
-        message,
-      })
-
-    if (insertError) {
-      console.error('[sendConfession] Insert failed:', insertError)
-      redirect(`/confess/${slug}?error=Failed to send confession`)
-    }
-
-    console.log('[sendConfession] Insert success for profile:', profileId)
-    redirect(`/confess/${slug}?status=success`)
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 py-12 px-4">
-      <div className="max-w-lg mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-10 text-white text-center">
-          <h1 className="text-3xl md:text-4xl font-bold">Send an Anonymous Confession</h1>
-          <p className="text-2xl md:text-3xl mt-4">to @{username}</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-violet-50 to-purple-100 py-12 px-4">
+      <div className="max-w-lg mx-auto">
+        <div className="animate-fade-in-up bg-white/80 backdrop-blur-lg rounded-3xl shadow-2xl overflow-hidden border border-purple-200">
+          <div className="bg-gradient-to-r from-purple-600 via-purple-700 to-violet-700 p-12 text-white text-center">
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight animate-fade-in">
+              Send an Anonymous Confession
+            </h1>
+            <p className="text-3xl md:text-4xl mt-6 font-semibold animate-fade-in-delay">
+              to @{username}
+            </p>
+          </div>
 
-        <div className="p-8">
-          {status === 'success' && (
-            <div className="mb-8 p-6 bg-green-50 border border-green-300 rounded-2xl text-center">
-              <p className="text-green-800 font-bold text-lg">Confession sent successfully! ✨</p>
-              <p className="text-green-700 mt-2">@{username} will see it soon.</p>
+          <div className="p-8 md:p-12">
+            {status === 'success' && (
+              <div className="mb-10 p-8 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300 rounded-3xl text-center animate-slide-in-up">
+                <p className="text-2xl text-green-800 font-bold">Confession sent successfully! ✨</p>
+                <p className="text-lg text-green-700 mt-3">@{username} will see it soon.</p>
+              </div>
+            )}
+
+            {urlError && (
+              <div className="mb-10 p-8 bg-gradient-to-r from-red-50 to-rose-50 border border-red-300 rounded-3xl text-center animate-shake">
+                <p className="text-xl text-red-800 font-bold">Error: {urlError}</p>
+              </div>
+            )}
+
+            {/* Client-side form with character counter */}
+            <ConfessionForm username={username} profileId={profileId} slug={slug} status={status} />
+
+            <div className="mt-12 text-center">
+              <p className="text-base text-purple-800 leading-relaxed">
+                This message is <span className="font-bold text-purple-900">completely anonymous</span>.
+                <br />
+                The recipient will never know who sent it.
+              </p>
+
+              <p className="mt-10 text-purple-700">
+                Want your own confession link?{' '}
+                <Link href="/" className="font-bold underline hover:text-purple-900 transition-colors">
+                  Create an account
+                </Link>
+              </p>
             </div>
-          )}
-
-          {urlError && (
-            <div className="mb-8 p-6 bg-red-50 border border-red-300 rounded-2xl text-center">
-              <p className="text-red-800 font-bold">Error: {urlError}</p>
-            </div>
-          )}
-
-          <form action={sendConfession} className="space-y-6">
-            <div>
-              <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-3">
-                Your confession (100% anonymous)
-              </label>
-              <textarea
-                id="message"
-                name="message"
-                rows={8}
-                placeholder="Say anything... they'll never know it's you ❤️"
-                className="w-full px-5 py-4 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-purple-300 focus:border-purple-500 resize-none transition-shadow text-gray-900"
-                required
-                minLength={1}
-                maxLength={1000}
-                defaultValue={status === 'success' ? '' : undefined}
-              />
-              <p className="mt-2 text-xs text-gray-500 text-right">Max 1000 characters</p>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg rounded-2xl hover:from-purple-700 hover:to-pink-700 transform hover:scale-105 transition-all shadow-lg"
-            >
-              Send Anonymously
-            </button>
-          </form>
-
-          <p className="mt-10 text-center text-sm text-gray-600 leading-relaxed">
-            This message is <span className="font-semibold">completely anonymous</span>.
-            <br />
-            The recipient will never know who sent it.
-          </p>
+          </div>
         </div>
       </div>
     </div>
   )
-}
+                }
