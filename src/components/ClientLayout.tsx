@@ -17,13 +17,13 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
     "/signup",
     "/onboarding",
     "/welcome",
-    "auth/setup",
+    "/auth/setup",
     "/auth",
     "/fullscreen",
   ];
 
   const shouldHideNavbar =
-    hideNavbarPaths.includes(pathname) || pathname.startsWith("/confess/");
+    hideNavbarPaths.includes(pathname) || pathname.startsWith("/confess/") || pathname.startsWith("/auth/");;
 
   const bodyPadding = shouldHideNavbar ? "pb-0" : "pb-24";
 
