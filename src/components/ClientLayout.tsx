@@ -17,6 +17,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
     "/signup",
     "/onboarding",
     "/welcome",
+    "auth/setup",
     "/auth",
     "/fullscreen",
   ];
