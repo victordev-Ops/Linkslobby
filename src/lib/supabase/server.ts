@@ -2,17 +2,18 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// DO NOT mark async if not needed
+// Correct pattern for Next.js 16 Server Components
 export function createSupabaseServerClient() {
-  const cookieStore = cookies() // ✅ no await here
+  // 1️⃣ DO NOT await cookies() here
+  const cookieStore = cookies() // returns ReadonlyRequestCookies
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        // getAll and setAll must use cookieStore
-        getAll: () => cookieStore.getAll(),
+        // 2️⃣ Use cookieStore methods directly
+        getAll: () => cookieStore.getAll(), 
         setAll: (cookiesToSet) => {
           cookiesToSet.forEach(({ name, value, options }) => {
             cookieStore.set(name, value, options)
