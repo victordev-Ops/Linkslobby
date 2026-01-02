@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-
+import { setupProfile } from '@/actions/setup-profile'
 const supabase = createClient()
 
 export default function SetupUsername() {
@@ -12,7 +12,7 @@ export default function SetupUsername() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+/*  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setMessage('')
@@ -86,7 +86,22 @@ export default function SetupUsername() {
       setLoading(false)
     }
   }
+*/
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setLoading(true)
+  setMessage('')
 
+  try {
+    await setupProfile(username)
+    router.push('/dashboard')
+    router.refresh()
+  } catch (err: any) {
+    setMessage(err.message || 'Something went wrong')
+  } finally {
+    setLoading(false)
+  }
+}
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
