@@ -3,40 +3,22 @@
 
 import { useState } from 'react'
 
+type SendConfessionAction = (profileId: string, slug: string, formData: FormData) => Promise<void>
+
 interface ConfessionFormProps {
+  sendConfession: SendConfessionAction
   profileId: string
   slug: string
   status?: string
   username: string
 }
 
-// Server Action (re-defined here or imported if you move it)
-async function sendConfession(profileId: string, slug: string, formData: FormData) {
-  'use server'
-
-  const supabaseAction = (await import('@/lib/supabase/server')).createSupabaseServerClient()
-
-  const message = (formData.get('message') as string)?.trim()
-
-  if (!message || message.length < 1 || message.length > 1000) {
-    redirect(`/confess/${slug}?error=Message must be 1–1000 characters`)
-  }
-
-  const { error: insertError } = await supabaseAction
-    .from('confessions')
-    .insert({
-      profile_id: profileId,
-      message,
-    })
-
-  if (insertError) {
-    redirect(`/confess/${slug}?error=Failed to send confession`)
-  }
-
-  redirect(`/confess/${slug}?status=success`)
-}
-
-export default function ConfessionForm({ profileId, slug, status, username }: ConfessionFormProps) {
+export default function ConfessionForm({
+  sendConfession,
+  profileId,
+  slug,
+  status,
+}: ConfessionFormProps) {
   const [characterCount, setCharacterCount] = useState(0)
 
   return (
@@ -58,14 +40,16 @@ export default function ConfessionForm({ profileId, slug, status, username }: Co
           onChange={(e) => setCharacterCount(e.target.value.length)}
         />
         <div className="mt-3 flex justify-between items-center">
-          <p className="text-sm text-purple-600 font-medium">
-            Max 1000 characters
-          </p>
-          <p className={`text-sm font-bold transition-colors ${
-            characterCount > 900 ? 'text-red-600' :
-            characterCount > 700 ? 'text-orange-600' :
-            'text-purple-600'
-          }`}>
+          <p className="text-sm text-purple-600 font-medium">Max 1000 characters</p>
+          <p
+            className={`text-sm font-bold transition-colors ${
+              characterCount > 900
+                ? 'text-red-600'
+                : characterCount > 700
+                ? 'text-orange-600'
+                : 'text-purple-600'
+            }`}
+          >
             {characterCount}/1000
           </p>
         </div>
