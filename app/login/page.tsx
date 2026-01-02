@@ -1,61 +1,79 @@
-// app/login/page.tsx
 'use client'
 
 import { useState } from 'react'
 import { signUp } from '@/actions/auth'
 import AuthForm from '@/components/AuthForm'
+import Link from 'next/link'
 
 export default function Login() {
   const [email, setEmail] = useState('')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setStatus('loading')
     setMessage('')
 
     try {
-      await signUp(email.trim())
-      setMessage('Magic link sent! Check your email.')
-      setEmail('')
-    } catch (err: any) {
-      setMessage(err.message || 'Something went wrong')
+      const result = await signUp(email)
+      
+      if (result.success) {
+        setStatus('success')
+        setMessage(result.message)
+        setEmail('')
+      } else {
+        setStatus('error')
+        setMessage(result.message)
+      }
+    } catch (err) {
+      setStatus('error')
+      setMessage('An unexpected error occurred.')
     }
   }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-md mx-auto">
-        <AuthForm>
-          <h1 className="text-2xl font-bold mb-4 text-center">Log in</h1>
-          <p className="text-sm text-gray-600 mb-6 text-center">
-            Enter your email and we'll send you a magic link.
-          </p>
+      <AuthForm>
+        <h1 className="text-2xl font-bold mb-2 text-center">Welcome back</h1>
+        <p className="text-sm text-gray-600 mb-8 text-center">
+          Enter your email to receive a secure login link.
+        </p>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <input
-              type="email"
-              placeholder="Your email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <button type="submit" className="btn-primary mt-2">
-              Send magic link
-            </button>
-          </form>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <input
+            type="email"
+            placeholder="name@example.com"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={status === 'loading' || status === 'success'}
+          />
+          <button 
+            type="submit" 
+            className="w-full bg-black text-white py-2.5 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 transition-all"
+            disabled={status === 'loading' || status === 'success'}
+          >
+            {status === 'loading' ? 'Sending Link...' : 'Send Magic Link'}
+          </button>
+        </form>
 
-          {message && (
-            <p className={`mt-4 text-center text-sm ${message.includes('sent') ? 'text-green-600' : 'text-red-600'}`}>
-              {message}
-            </p>
-          )}
-        </AuthForm>
+        {message && (
+          <div className={`mt-6 p-3 rounded-md text-sm text-center ${status === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+            {message}
+          </div>
+        )}
 
         <p className="mt-8 text-center text-sm text-gray-600">
-          New here? We'll create an account automatically on first login.
+          New here?{' '}
+           {/* Use Next.js Link for client-side navigation */}
+          <Link href="/signup" className="text-blue-600 hover:underline font-medium">
+            Create an account
+          </Link>
         </p>
-      </div>
+      </AuthForm>
     </div>
   )
-}
+        }
+          
