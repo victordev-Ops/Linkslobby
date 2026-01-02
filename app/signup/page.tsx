@@ -26,7 +26,7 @@ export default function Signup() {
     try {
       await signUp(email)
       setStatus('success')
-      setMessage('Check your inbox! We sent a magic link to ' + email)
+      setMessage('Check your inbox! We sent Sign up link to ' + email)
       setEmail('') 
     } catch (err: any) {
       setStatus('error')
@@ -73,7 +73,7 @@ export default function Signup() {
                   Sending link...
                 </>
               ) : (
-                'Send magic link'
+                'Sign Up'
               )}
             </button>
           </form>
