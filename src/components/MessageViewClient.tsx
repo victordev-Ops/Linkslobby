@@ -31,7 +31,6 @@ const GRADIENTS = [
 
 export default function MessageViewClient({ confession, username }: Props) {
   const router = useRouter()
-  const supabase = createClient()
   const cardRef = useRef<HTMLDivElement>(null)
   
   const [colorIndex, setColorIndex] = useState(0)
@@ -43,32 +42,23 @@ export default function MessageViewClient({ confession, username }: Props) {
     router.push('/inbox')
   }
 
-  // --- UPDATED SAVE FUNCTION ---
   const handleSaveImage = async () => {
     if (!cardRef.current || isSaving) return
     setIsSaving(true)
     
     try {
       const node = cardRef.current
-      
-      // 1. Get the full dimensions of the content, including what is scrolled out of view
-      const contentHeight = node.scrollHeight
-      const contentWidth = node.scrollWidth
-
-      // 2. Capture with explicit dimensions and style overrides
+      // Capture the full scroll height of the card content
       const dataUrl = await toPng(node, { 
         cacheBust: true, 
-        pixelRatio: 3, // High resolution for social media
-        width: contentWidth,
-        height: contentHeight,
-        backgroundColor: 'transparent', // Ensures rounded corners look real
+        pixelRatio: 3,
+        backgroundColor: 'transparent',
         style: { 
-          transform: 'scale(1)', 
-          height: 'auto',      // Force the div to expand to fit text
-          maxHeight: 'none',   // Remove any CSS constraints
-          overflow: 'visible', // Ensure nothing is clipped
-          margin: '0'          // Reset margins during capture
-        } 
+            transform: 'scale(1)',
+            height: 'auto',       // Force auto height during capture
+            maxHeight: 'none',    // Ensure no limits during capture
+            boxShadow: 'none'     // Optional: remove shadow for cleaner cutout if desired
+        }
       })
       
       const link = document.createElement('a')
@@ -77,61 +67,58 @@ export default function MessageViewClient({ confession, username }: Props) {
       link.click()
     } catch (err) {
       console.error("Capture failed", err)
-      alert("Failed to save image. Please try again.")
     } finally {
       setIsSaving(false)
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col relative overflow-x-hidden font-sans">
-      {/* Background layer */}
-      <div className="absolute inset-x-0 top-0 h-96 bg-gradient-to-b from-pink-100/50 to-transparent pointer-events-none" />
+  // Adjust font size based on message length so 1000 chars fits nicer
+  const isLongMessage = confession.message.length > 150
+  const textSizeClass = isLongMessage ? "text-xl leading-relaxed" : "text-2xl leading-tight"
 
-      {/* Top Bar */}
-      <div className="px-6 pt-12 pb-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
-           {/* Placeholder for branding if needed */}
-        </div>
+  return (
+    // 1. Changed layout to min-h-screen with padding. 
+    // removed 'overflow-hidden' on Y axis so the page can scroll.
+    <div className="min-h-screen bg-gray-50 font-sans overflow-x-hidden">
+      
+      {/* Background layer - Fixed position so it stays while scrolling */}
+      <div className="fixed inset-x-0 top-0 h-96 bg-gradient-to-b from-pink-100/50 to-transparent pointer-events-none" />
+
+      {/* Top Bar - Sticky so it's always accessible */}
+      <div className="sticky top-0 px-6 pt-6 pb-4 flex items-center justify-end z-50 pointer-events-none">
         <button 
           onClick={handleClose} 
-          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 active:scale-90 transition-all"
+          className="pointer-events-auto p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md hover:bg-white active:scale-90 transition-all"
           aria-label="Close"
         >
-          <X size={20} className="text-gray-400" />
+          <X size={20} className="text-gray-500" />
         </button>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 -mt-10">
+      {/* Main Content Container */}
+      <div className="flex flex-col items-center px-6 pb-24 z-10 relative">
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", damping: 25 }}
           className="w-full max-w-sm"
         >
-          {/* Ref is attached here. 
-            We use 'h-full' logic internally to ensure it expands with text 
-          */}
-          <div 
-            ref={cardRef} 
-            className="rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border border-gray-100 relative"
-          >
-            {/* Header Gradient */}
+          {/* THE CARD */}
+          <div ref={cardRef} className="rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border border-gray-100">
+            {/* Card Header */}
             <div className={`${GRADIENTS[colorIndex]} px-8 py-10 text-center transition-colors duration-500`}>
               <h1 className="text-white text-lg font-black tracking-tighter uppercase italic">
                 Anonymous Message
               </h1>
             </div>
 
-            {/* Message Body */}
-            <div className="px-8 pt-14 pb-8 min-h-[220px] flex flex-col items-center justify-between bg-white">
-              {/* Added break-words and whitespace-pre-wrap to handle long text and newlines correctly */}
-              <p className="text-center text-gray-800 font-bold text-2xl leading-tight break-words whitespace-pre-wrap w-full">
+            {/* Card Body - Grows with text */}
+            <div className="px-8 pt-12 pb-10 min-h-[220px] flex flex-col items-center bg-white">
+              <p className={`text-center text-gray-800 font-bold break-words whitespace-pre-wrap w-full ${textSizeClass}`}>
                 {confession.message}
               </p>
 
-              <div className="mt-8 flex items-center gap-1.5 opacity-30">
+              <div className="mt-10 flex items-center gap-1.5 opacity-30">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                   say-app/confess/{username}
                 </span>
@@ -150,29 +137,27 @@ export default function MessageViewClient({ confession, username }: Props) {
             </ControlBtn>
           </div>
         </motion.div>
-      </div>
 
-      {/* Footer Actions */}
-      <div className="px-6 pb-10 space-y-3 z-10 max-w-sm mx-auto w-full">
-        <button className="w-full bg-purple-50 text-purple-500 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-purple-100 transition-colors">
-          <Lock size={16} />
-          <span>Reveal Sender</span>
-        </button>
+        {/* Footer Actions */}
+        <div className="mt-12 space-y-3 w-full max-w-sm">
+            <button className="w-full bg-purple-50 text-purple-500 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-purple-100 transition-colors">
+            <Lock size={16} />
+            <span>Reveal Sender</span>
+            </button>
 
-        <button 
-          // You might want to link this to the same handleSave logic or the native navigator.share API
-          onClick={handleSaveImage}
-          className="w-full bg-black text-white font-bold text-lg py-5 rounded-3xl shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
-        >
-          <Share2 size={20} />
-          <span>Share to Story</span>
-        </button>
+            <button 
+            onClick={handleSaveImage}
+            className="w-full bg-black text-white font-bold text-lg py-5 rounded-3xl shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
+            >
+            <Share2 size={20} />
+            <span>Share to Story</span>
+            </button>
+        </div>
       </div>
     </div>
   )
 }
 
-// Helper component
 function ControlBtn({ children, onClick, label, disabled = false }: any) {
   return (
     <button onClick={onClick} disabled={disabled} className="flex flex-col items-center gap-2 group">
@@ -182,5 +167,5 @@ function ControlBtn({ children, onClick, label, disabled = false }: any) {
       <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{label}</span>
     </button>
   )
-    }
-      
+        }
+        
