@@ -47,7 +47,7 @@ export async function setupProfile(username: string) {
         email: user.email!,
         username, // The display name
         slug,     // The unique handle
-        updated_at: new Date().toISOString(),
+        //updated_at: new Date().toISOString(),
       },
       {
         onConflict: 'id',
