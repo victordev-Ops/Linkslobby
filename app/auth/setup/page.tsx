@@ -19,6 +19,7 @@ export default function SetupUsername() {
     try {
       await setupProfile(username)
     } catch (err: any) {
+      // Ignore the Next.js redirect error behavior
       if (err.message !== 'NEXT_REDIRECT') {
         console.error('Profile setup failed:', err)
         setMessage(err.message || 'Something went wrong. Please try again.')
@@ -27,9 +28,14 @@ export default function SetupUsername() {
     }
   }
 
+  // UX Improvement: Clear error when user types
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUsername(e.target.value)
+    if (message) setMessage('')
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      {/* Entry Animation for the Card */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -41,7 +47,7 @@ export default function SetupUsername() {
             Choose a <span className="text-purple-600">username</span>
           </h1>
           <p className="text-slate-500 mt-2 text-sm leading-relaxed">
-            This will be your unique handle on the platform. You can change this later.
+            This will be your unique handle on the platform.
           </p>
         </div>
 
@@ -53,11 +59,15 @@ export default function SetupUsername() {
             <input
               id="username"
               placeholder="e.g. tech_enthusiast"
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl
-                         focus:ring-2 focus:ring-purple-500 focus:border-transparent
-                         outline-none transition-all bg-slate-50 focus:bg-white"
+              // Dynamically change border color on error
+              className={`w-full px-4 py-3 border rounded-xl outline-none transition-all
+                         bg-slate-50 focus:bg-white
+                         ${message 
+                           ? 'border-red-300 focus:ring-2 focus:ring-red-200' 
+                           : 'border-slate-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+                         }`}
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={handleInputChange}
               required
               minLength={3}
               disabled={loading}
@@ -86,7 +96,7 @@ export default function SetupUsername() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Setting up...
+                Checking availability...
               </span>
             ) : (
               'Create Profile'
@@ -94,7 +104,6 @@ export default function SetupUsername() {
           </motion.button>
         </form>
 
-        {/* Animated Error Message */}
         <AnimatePresence>
           {message && (
             <motion.div 
@@ -103,7 +112,11 @@ export default function SetupUsername() {
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-6 p-4 rounded-xl text-sm font-medium text-center bg-red-50 text-red-600 border border-red-100">
+              <div className="mt-6 p-4 rounded-xl text-sm font-medium text-center bg-red-50 text-red-600 border border-red-100 flex items-center justify-center gap-2">
+                 {/* Optional Warning Icon */}
+                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                 </svg>
                 {message}
               </div>
             </motion.div>
@@ -112,4 +125,5 @@ export default function SetupUsername() {
       </motion.div>
     </div>
   )
-}
+                  }
+                  
