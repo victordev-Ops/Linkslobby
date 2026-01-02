@@ -17,18 +17,27 @@ export default function SetupUsername() {
     setMessage('')
 
     try {
-      await setupProfile(username)
-    } catch (err: any) {
-      // Ignore the Next.js redirect error behavior
-      if (err.message !== 'NEXT_REDIRECT') {
-        console.error('Profile setup failed:', err)
-        setMessage(err.message || 'Something went wrong. Please try again.')
+      // Capture the result from the action
+      const result = await setupProfile(username)
+
+      // If the action returned an error object, display it
+      if (result?.error) {
+        setMessage(result.error)
         setLoading(false)
       }
+      // On success, Next.js will redirect (throwing NEXT_REDIRECT), which we let propagate
+    } catch (err: any) {
+      // Only unexpected errors reach here (redirects are intentionally not handled)
+      if (err.message !== 'NEXT_REDIRECT') {
+        console.error('Unexpected profile setup error:', err)
+        setMessage('An unexpected error occurred.')
+        setLoading(false)
+      }
+      // NEXT_REDIRECT errors are ignored so the redirect can happen naturally
     }
   }
 
-  // UX Improvement: Clear error when user types
+  // Clear error message when user starts typing again
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUsername(e.target.value)
     if (message) setMessage('')
@@ -36,7 +45,7 @@ export default function SetupUsername() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -59,7 +68,6 @@ export default function SetupUsername() {
             <input
               id="username"
               placeholder="e.g. tech_enthusiast"
-              // Dynamically change border color on error
               className={`w-full px-4 py-3 border rounded-xl outline-none transition-all
                          bg-slate-50 focus:bg-white
                          ${message 
@@ -106,17 +114,16 @@ export default function SetupUsername() {
 
         <AnimatePresence>
           {message && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
               <div className="mt-6 p-4 rounded-xl text-sm font-medium text-center bg-red-50 text-red-600 border border-red-100 flex items-center justify-center gap-2">
-                 {/* Optional Warning Icon */}
-                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                 </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
                 {message}
               </div>
             </motion.div>
@@ -126,4 +133,3 @@ export default function SetupUsername() {
     </div>
   )
                   }
-                  
