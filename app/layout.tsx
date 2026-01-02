@@ -1,24 +1,31 @@
 // app/layout.tsx
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { GeistSans, GeistMono } from "geist/font";
 import "./globals.css";
 import BottomNavbar from "@/components/BottomNavbar";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { Toaster } from "sonner";
-
-// This inner component will be a Client Component
-import ClientLayout from "@/components/ClientLayout";  // We'll create this next
+import ClientLayout from "@/components/ClientLayout";
 
 const geistSans = GeistSans;
 const geistMono = GeistMono;
 
 export const metadata: Metadata = {
-  title: "say",
+  title: "say", // Or "Ghost Message" if you prefer the example name
   description: "Receive anonymous confessions from anyone.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "say",
+  },
 };
 
-// RootLayout remains a Server Component (no "use client")
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -26,8 +33,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`\( {geistSans.variable} \){geistMono.variable}`}>
-      {/* All client-side logic moved here */}
-      <ClientLayout>{children}</ClientLayout>
+      <body>
+        {/* All client-side logic (including providers, navbar, toaster, etc.) stays in ClientLayout */}
+        <ClientLayout>
+          <NotificationProvider>
+            <BottomNavbar />
+            {children}
+            <Toaster />
+          </NotificationProvider>
+        </ClientLayout>
+      </body>
     </html>
   );
 }
