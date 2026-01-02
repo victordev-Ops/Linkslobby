@@ -35,7 +35,7 @@ export default function ConfessionForm({ profileId, action }: ConfessionFormProp
   // If success, show success view with a "Send Another" button
   if (feedback?.success) {
     return (
-      <div className="text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="text-center animate-fade-in-up">
         <div className="mb-4 text-5xl">✨</div>
         <h3 className="text-xl font-medium text-white mb-2">Sent Successfully!</h3>
         <p className="text-neutral-400 mb-8">Your secret is safe with us.</p>
