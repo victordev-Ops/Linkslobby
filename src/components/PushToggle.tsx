@@ -1,148 +1,150 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Bell, BellOff, Loader2, AlertCircle } from "lucide-react";
-import { usePushSubscription } from "@/hooks/use-push";
 import { createClient } from "@/lib/supabase/client";
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { toast } from "sonner";
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+const supabase = createClient();
 
-export default function PushToggle({ userId }: { userId: string }) {
-  const { subscribe, unsubscribe } = usePushSubscription();
-  const [isEnabled, setIsEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [isSupported, setIsSupported] = useState(true);
-  const supabase = createClient();
-
-  // Check current subscription status
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        // 1. Check browser support
-        if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-          setIsSupported(false);
-          setLoading(false);
-          return;
-        }
-
-        // 2. Check permission
-        const hasPermission = Notification.permission === "granted";
-
-        // 3. Check database subscription
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("push_subscription")
-          .eq("id", userId)
-          .single();
-
-        if (error) {
-          console.error("Error checking subscription:", error);
-        }
-
-        const hasSubscription = !!data?.push_subscription;
-
-        // Only enabled if BOTH permission granted AND subscription exists
-        setIsEnabled(hasPermission && hasSubscription);
-      } catch (err) {
-        console.error("Status check error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkStatus();
-  }, [userId, supabase]);
-
-  const handleToggle = async () => {
-    if (loading) return;
-    setLoading(true);
-    
+export function usePushSubscription() {
+  const subscribe = async (userId: string) => {
     try {
-      let success = false;
+      // 1. Check browser support
+      if (!("Notification" in window)) {
+        toast.error("Push notifications not supported in this browser");
+        return false;
+      }
+
+      if (!("serviceWorker" in navigator)) {
+        toast.error("Service workers not supported");
+        return false;
+      }
+
+      // 2. Check VAPID key
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        console.error("❌ VAPID key missing in environment variables");
+        toast.error("Push notifications not configured. Contact support.");
+        return false;
+      }
+
+      // 3. Request permission
+      let permission = Notification.permission;
       
-      if (isEnabled) {
-        // Turn OFF
-        success = await unsubscribe(userId);
-        if (success) {
-          setIsEnabled(false);
-        }
+      if (permission === "default") {
+        permission = await Notification.requestPermission();
+      }
+      
+      if (permission === "denied") {
+        toast.error("Notification permission denied. Enable in browser settings.");
+        return false;
+      }
+
+      if (permission !== "granted") {
+        toast.info("Notification permission required");
+        return false;
+      }
+
+      // 4. Wait for service worker
+      const registration = await navigator.serviceWorker.ready;
+      console.log("✅ Service Worker ready");
+
+      // 5. Check existing subscription
+      let subscription = await registration.pushManager.getSubscription();
+
+      if (subscription) {
+        console.log("📱 Already subscribed, updating database...");
       } else {
-        // Turn ON
-        success = await subscribe(userId);
-        if (success) {
-          setIsEnabled(true);
+        // 6. Create new subscription
+        try {
+          // FIX: Convert VAPID key with explicit type assertion
+          const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+          
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: applicationServerKey as any // Type assertion to bypass TS error
+          });
+          console.log("✅ New subscription created");
+        } catch (subError) {
+          console.error("❌ Subscription error:", subError);
+          toast.error("Failed to subscribe to notifications");
+          return false;
         }
       }
-    } finally {
-      setLoading(false);
+
+      // 7. Save to database
+      const { error } = await supabase
+        .from("profiles")
+        .update({ push_subscription: subscription.toJSON() })
+        .eq("id", userId);
+
+      if (error) {
+        console.error("❌ Database error:", error);
+        toast.error("Failed to save subscription");
+        return false;
+      }
+
+      console.log("✅ Subscription saved to database");
+      toast.success("Push notifications enabled!");
+      return true;
+    } catch (err) {
+      console.error("❌ Subscribe error:", err);
+      toast.error("Failed to enable notifications");
+      return false;
     }
   };
 
-  if (!isSupported) {
-    return (
-      <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-2xl border border-yellow-200">
-        <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
-        <div>
-          <p className="text-sm font-medium text-yellow-900">
-            Push notifications not supported
-          </p>
-          <p className="text-xs text-yellow-700 mt-1">
-            Try using Chrome on Android or Safari on iOS 16.4+
-          </p>
-        </div>
-      </div>
-    );
+  const unsubscribe = async (userId: string) => {
+    try {
+      // 1. Get service worker
+      if (!("serviceWorker" in navigator)) {
+        return false;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+
+      // 2. Unsubscribe from push
+      if (subscription) {
+        const successful = await subscription.unsubscribe();
+        console.log(successful ? "✅ Unsubscribed from push" : "⚠️ Unsubscribe failed");
+      }
+
+      // 3. Clear from database
+      const { error } = await supabase
+        .from("profiles")
+        .update({ push_subscription: null })
+        .eq("id", userId);
+
+      if (error) {
+        console.error("❌ Database clear error:", error);
+        toast.error("Failed to disable notifications");
+        return false;
+      }
+
+      console.log("✅ Subscription removed from database");
+      toast.success("Push notifications disabled");
+      return true;
+    } catch (err) {
+      console.error("❌ Unsubscribe error:", err);
+      toast.error("Failed to disable notifications");
+      return false;
+    }
+  };
+
+  return { subscribe, unsubscribe };
+}
+
+// FIX: Explicit return type that matches what PushManager expects
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
   }
-
-  return (
-    <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-200 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className={cn(
-          "p-2 rounded-lg transition-colors",
-          isEnabled ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
-        )}>
-          {isEnabled ? <Bell size={20} /> : <BellOff size={20} />}
-        </div>
-        <div>
-          <p className="text-sm font-medium text-gray-900">Push Notifications</p>
-          <p className="text-xs text-gray-600">
-            {loading 
-              ? "Checking..." 
-              : isEnabled 
-                ? "You'll receive notifications" 
-                : "Get notified of new confessions"
-            }
-          </p>
-        </div>
-      </div>
-
-      <button
-        onClick={handleToggle}
-        disabled={loading}
-        className="relative h-7 w-12 cursor-pointer outline-none disabled:cursor-not-allowed"
-        aria-label="Toggle push notifications"
-      >
-        {/* Toggle Background */}
-        <div className={cn(
-          "h-full w-full rounded-full transition-colors duration-300",
-          isEnabled ? "bg-green-600" : "bg-gray-300",
-          loading && "opacity-50"
-        )} />
-        
-        {/* Toggle Knob */}
-        <motion.div
-          className="absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-md"
-          animate={{ x: isEnabled ? 20 : 0 }}
-          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-        >
-          {loading && <Loader2 size={12} className="animate-spin text-gray-600" />}
-        </motion.div>
-      </button>
-    </div>
-  );
-          }
+  
+  return outputArray;
+        }
