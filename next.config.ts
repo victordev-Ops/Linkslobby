@@ -1,14 +1,17 @@
 // next.config.ts
-import type { NextConfig } from 'next'
-import withPWA from 'next-pwa'
+import withSerwistInit from "@serwist/next";
+import type { NextConfig } from "next";
 
+const withSerwist = withSerwistInit({
+  swSrc: "src/sw.ts",        // Your service worker source
+  swDest: "public/sw.js",    // Compiled service worker output
+  disable: process.env.NODE_ENV === "development",
+});
+
+/** @type {NextConfig} */
 const nextConfig: NextConfig = {
-  // your existing Next.js config here
-}
+  // ✅ Put your existing Next.js config here
+  reactStrictMode: true,
+};
 
-export default withPWA({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
-})(nextConfig)
+export default withSerwist(nextConfig);
