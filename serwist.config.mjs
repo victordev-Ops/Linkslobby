@@ -3,8 +3,9 @@ export default {
   swSrc: "src/sw.ts",
   swDest: "public/sw.js",
   globDirectory: "public",
-  // Only precache files that actually exist in public (like icons/manifest)
-  // This prevents the "no files matched" error
-  globPatterns: ["**/*.{png,json,ico,svg}"],
+  // Precaching only what you actually have
+  globPatterns: ["**/*.{svg,ico}"], 
   injectionPoint: "self.__SW_MANIFEST",
+  // Add this to prevent crashing if a pattern matches nothing
+  globFollow: true,
 };
