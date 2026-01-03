@@ -2,12 +2,16 @@ import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
 import { Serwist } from "serwist";
 
-// 1. Explicitly define the Global Scope to satisfy the Next.js compiler
-interface ServiceWorkerGlobalScope extends WorkerGlobalScope, SerwistGlobalConfig {
+// 1. Define a local interface that doesn't rely on global Worker types
+// This satisfies the Next.js compiler without needing to change tsconfig.json
+interface SerwistWorkerScope extends SerwistGlobalConfig {
   __SW_MANIFEST: (PrecacheEntry | string)[] | undefined;
+  addEventListener: (type: string, listener: (event: any) => void) => void;
+  registration: ServiceWorkerRegistration;
+  clients: Clients;
 }
 
-declare const self: ServiceWorkerGlobalScope;
+declare const self: SerwistWorkerScope;
 
 // 2. Initialize Serwist
 const serwist = new Serwist({
@@ -17,7 +21,7 @@ const serwist = new Serwist({
   navigationPreload: true,
   runtimeCaching: [
     {
-      // Prioritize Supabase Network-Only rule
+      // Supabase rule first
       urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/,
       handler: "NetworkOnly",
     },
@@ -25,8 +29,9 @@ const serwist = new Serwist({
   ],
 });
 
-// 3. Robust Push Listener
-self.addEventListener("push", (event) => {
+// 3. Push Listener
+
+self.addEventListener("push", (event: any) => {
   if (!event.data) return;
 
   let data;
@@ -36,7 +41,7 @@ self.addEventListener("push", (event) => {
     data = { title: "New Message", body: event.data.text() };
   }
 
-  const options: NotificationOptions = {
+  const options = {
     body: data.body || "Someone left a new confession!",
     icon: "/icon-192x192.png",
     badge: "/icon-192x192.png",
@@ -44,9 +49,6 @@ self.addEventListener("push", (event) => {
     data: {
       url: data.url || "/",
     },
-    actions: [
-      { action: "open", title: "View Confession" }
-    ]
   };
 
   event.waitUntil(
@@ -54,22 +56,19 @@ self.addEventListener("push", (event) => {
   );
 });
 
-// 4. Tab-aware Notification Click Handling
-
-self.addEventListener("notificationclick", (event) => {
+// 4. Notification Click Handling
+self.addEventListener("notificationclick", (event: any) => {
   event.notification.close();
 
   const targetUrl = event.notification.data?.url || "/";
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      // Focus existing tab if available
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList: any[]) => {
       for (const client of clientList) {
         if ("focus" in client && "navigate" in client) {
           return client.focus().then(() => client.navigate(targetUrl));
         }
       }
-      // Otherwise open new tab
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
@@ -78,3 +77,4 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 serwist.addEventListeners();
+    
