@@ -1,4 +1,3 @@
-// app/settings/SettingsClient.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -6,6 +5,7 @@ import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import { User, Mail, ArrowLeft, LogIn } from "lucide-react"
+import PushToggle from "@/components/PushToggle"
 
 interface SettingsClientProps {
   initialUser: any
@@ -78,6 +78,17 @@ export default function SettingsClient({
               </div>
             </div>
 
+            {/* Notifications Card - NEW */}
+            {user && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-gray-600" />
+                  Notifications
+                </h2>
+                <PushToggle userId={user.id} />
+              </div>
+            )}
+
             {/* Account Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -115,7 +126,7 @@ export default function SettingsClient({
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold mb-3">More coming soon</h2>
               <p className="text-sm text-gray-600">
-                We're working on adding preferences for notifications, appearance (dark mode), privacy controls, and more.
+                We're working on adding preferences for appearance (dark mode), privacy controls, and more.
               </p>
             </div>
           </div>
@@ -130,7 +141,6 @@ export default function SettingsClient({
                     Dashboard
                   </Link>
                 </li>
-                <li className="text-gray-500">Notifications (soon)</li>
                 <li className="text-gray-500">Appearance (soon)</li>
                 <li className="text-gray-500">Privacy (soon)</li>
               </ul>
