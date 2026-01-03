@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "serwist-cli build && next build",
+    "build": "serwist build && next build",
     "start": "next start",
     "lint": "eslint"
   },
