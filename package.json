@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev ",
-    "build": "next build",
+    "dev": "next dev --turbo",
+    "build": "serwist-cli build && next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -26,6 +26,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@serwist/cli": "^9.4.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
