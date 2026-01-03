@@ -1,19 +1,12 @@
 import { defaultCache } from "@serwist/next/worker";
-import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
+import type { PrecacheEntry } from "serwist";
 import { Serwist } from "serwist";
 
-// 1. Define a local interface that doesn't rely on global Worker types
-// This satisfies the Next.js compiler without needing to change tsconfig.json
-interface SerwistWorkerScope extends SerwistGlobalConfig {
-  __SW_MANIFEST: (PrecacheEntry | string)[] | undefined;
-  addEventListener: (type: string, listener: (event: any) => void) => void;
-  registration: ServiceWorkerRegistration;
-  clients: Clients;
-}
+// We use 'any' here to prevent the Next.js build from failing due to missing 
+// Service Worker type libraries (like Clients, ServiceWorkerRegistration, etc.)
+declare const self: any;
 
-declare const self: SerwistWorkerScope;
-
-// 2. Initialize Serwist
+// 1. Initialize Serwist
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,
@@ -21,7 +14,6 @@ const serwist = new Serwist({
   navigationPreload: true,
   runtimeCaching: [
     {
-      // Supabase rule first
       urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/,
       handler: "NetworkOnly",
     },
@@ -29,8 +21,7 @@ const serwist = new Serwist({
   ],
 });
 
-// 3. Push Listener
-
+// 2. Push Listener
 self.addEventListener("push", (event: any) => {
   if (!event.data) return;
 
@@ -56,7 +47,7 @@ self.addEventListener("push", (event: any) => {
   );
 });
 
-// 4. Notification Click Handling
+// 3. Notification Click Handling
 self.addEventListener("notificationclick", (event: any) => {
   event.notification.close();
 
@@ -65,8 +56,8 @@ self.addEventListener("notificationclick", (event: any) => {
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList: any[]) => {
       for (const client of clientList) {
-        if ("focus" in client && "navigate" in client) {
-          return client.focus().then(() => client.navigate(targetUrl));
+        if (client.url === targetUrl && "focus" in client) {
+          return client.focus();
         }
       }
       if (self.clients.openWindow) {
@@ -77,4 +68,3 @@ self.addEventListener("notificationclick", (event: any) => {
 });
 
 serwist.addEventListeners();
-    
