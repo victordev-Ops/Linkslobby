@@ -15,25 +15,29 @@ export function NotificationProvider({
   profileId 
 }: { 
   children: React.ReactNode
-  profileId?: string | null   // ← Made optional
+  profileId?: string | null
 }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const supabase = createClient()
 
   useEffect(() => {
     if (!profileId) {
-      // No user → reset count and skip subscription
       setUnreadCount(0)
       return
     }
 
     // Initial fetch
     const fetchInitialCount = async () => {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('confessions')
         .select('*', { count: 'exact', head: true })
         .eq('profile_id', profileId)
         .eq('is_read', false)
+      
+      if (error) {
+        console.error('Error fetching unread count:', error)
+        return
+      }
       
       setUnreadCount(count || 0)
     }
@@ -42,26 +46,29 @@ export function NotificationProvider({
 
     // Real-time subscription
     const channel = supabase
-      .channel(`global-notifications-${profileId}`)
+      .channel(`notifications-${profileId}`)
       .on('postgres_changes', {
-        event: '*',
+        event: 'INSERT',
+        schema: 'public',
+        table: 'confessions',
+        filter: `profile_id=eq.${profileId}`
+      }, () => {
+        setUnreadCount(prev => prev + 1)
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
         schema: 'public',
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
       }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setUnreadCount(prev => prev + 1)
-        }
-        if (payload.eventType === 'UPDATE') {
-          if (payload.new.is_read && !payload.old.is_read) {
-            setUnreadCount(prev => Math.max(0, prev - 1))
-          }
+        if (payload.new.is_read && !payload.old.is_read) {
+          setUnreadCount(prev => Math.max(0, prev - 1))
         }
       })
       .subscribe()
 
     return () => {
-      supabase.removeAllChannels() // or specifically remove channel
+      channel.unsubscribe()
     }
   }, [profileId, supabase])
 
@@ -78,4 +85,4 @@ export const useNotifications = () => {
     throw new Error('useNotifications must be used within NotificationProvider')
   }
   return context
-        }
+      }
