@@ -1,6 +1,6 @@
 import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry } from "serwist";
-import { Serwist, NetworkOnly } from "serwist"; // <--- 1. Add NetworkOnly to imports
+import { Serwist, NetworkOnly } from "serwist";
 
 // Use 'any' to bypass Next.js missing Service Worker global types
 declare const self: any;
@@ -12,8 +12,9 @@ const serwist = new Serwist({
   navigationPreload: true,
   runtimeCaching: [
     {
-      urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/,
-      handler: new NetworkOnly(), // <--- 2. Use the class instance, not a string
+      // CHANGE: Use 'matcher' instead of 'urlPattern'
+      matcher: /^https:\/\/.*\.supabase\.co\/.*$/,
+      handler: new NetworkOnly(),
     },
     ...defaultCache,
   ],
