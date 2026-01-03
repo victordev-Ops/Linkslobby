@@ -7,21 +7,24 @@ import { usePushSubscription } from "@/hooks/use-push";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-// Helper for Tailwind classes (already in your package.json)
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export default function PushToggle({ userId }: { userId: string }) {
-  const { subscribe } = usePushSubscription();
+  const { subscribe, unsubscribe } = usePushSubscription();
   const [isEnabled, setIsEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isSupported, setIsSupported] = useState(true);
 
-  // Check current permission on mount
+  // Check current permission and browser support on mount
   useEffect(() => {
-    if ("Notification" in window) {
-      setIsEnabled(Notification.permission === "granted");
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      setIsSupported(false);
+      return;
     }
+    
+    setIsEnabled(Notification.permission === "granted");
   }, []);
 
   const handleToggle = async () => {
@@ -29,25 +32,47 @@ export default function PushToggle({ userId }: { userId: string }) {
     setLoading(true);
     
     try {
-      await subscribe(userId);
+      if (isEnabled) {
+        await unsubscribe(userId);
+      } else {
+        await subscribe(userId);
+      }
       setIsEnabled(Notification.permission === "granted");
     } finally {
       setLoading(false);
     }
   };
 
+  if (!isSupported) {
+    return (
+      <div className="flex items-center justify-between p-4 bg-gray-100 rounded-2xl border border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gray-200 text-gray-500">
+            <BellOff size={20} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-700">Push Notifications</p>
+            <p className="text-xs text-gray-500">Not supported on this browser</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-2xl border border-zinc-800 backdrop-blur-sm">
+    <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-200 shadow-sm">
       <div className="flex items-center gap-3">
         <div className={cn(
           "p-2 rounded-lg transition-colors",
-          isEnabled ? "bg-green-500/10 text-green-500" : "bg-zinc-800 text-zinc-400"
+          isEnabled ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
         )}>
           {isEnabled ? <Bell size={20} /> : <BellOff size={20} />}
         </div>
         <div>
-          <p className="text-sm font-medium text-white">Push Notifications</p>
-          <p className="text-xs text-zinc-400">Get notified of new confessions</p>
+          <p className="text-sm font-medium text-gray-900">Push Notifications</p>
+          <p className="text-xs text-gray-600">
+            {isEnabled ? "You'll receive notifications" : "Get notified of new confessions"}
+          </p>
         </div>
       </div>
 
@@ -55,11 +80,12 @@ export default function PushToggle({ userId }: { userId: string }) {
         onClick={handleToggle}
         disabled={loading}
         className="relative h-7 w-12 cursor-pointer outline-none"
+        aria-label="Toggle push notifications"
       >
         {/* Toggle Background */}
         <div className={cn(
           "h-full w-full rounded-full transition-colors duration-300",
-          isEnabled ? "bg-green-600" : "bg-zinc-700",
+          isEnabled ? "bg-green-600" : "bg-gray-300",
           loading && "opacity-50"
         )} />
         
@@ -69,9 +95,9 @@ export default function PushToggle({ userId }: { userId: string }) {
           animate={{ x: isEnabled ? 20 : 0 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         >
-          {loading && <Loader2 size={12} className="animate-spin text-zinc-600" />}
+          {loading && <Loader2 size={12} className="animate-spin text-gray-600" />}
         </motion.div>
       </button>
     </div>
   );
-}
+            }
