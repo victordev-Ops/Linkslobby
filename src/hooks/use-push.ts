@@ -6,104 +6,139 @@ const supabase = createClient();
 export function usePushSubscription() {
   const subscribe = async (userId: string) => {
     try {
-      // Check browser support
+      // 1. Check browser support
       if (!("Notification" in window)) {
         toast.error("Push notifications not supported in this browser");
-        return;
+        return false;
       }
 
       if (!("serviceWorker" in navigator)) {
         toast.error("Service workers not supported");
-        return;
+        return false;
       }
 
-      // Request permission
-      const permission = await Notification.requestPermission();
+      // 2. Check VAPID key
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        console.error("❌ VAPID key missing in environment variables");
+        toast.error("Push notifications not configured. Contact support.");
+        return false;
+      }
+
+      // 3. Request permission
+      let permission = Notification.permission;
+      
+      if (permission === "default") {
+        permission = await Notification.requestPermission();
+      }
       
       if (permission === "denied") {
         toast.error("Notification permission denied. Enable in browser settings.");
-        return;
+        return false;
       }
 
       if (permission !== "granted") {
-        toast.info("Notification permission is required");
-        return;
+        toast.info("Notification permission required");
+        return false;
       }
 
-      // Wait for SW to be ready
+      // 4. Wait for service worker
       const registration = await navigator.serviceWorker.ready;
+      console.log("✅ Service Worker ready");
 
-      // Check if already subscribed
+      // 5. Check existing subscription
       let subscription = await registration.pushManager.getSubscription();
 
-      // Subscribe if not already subscribed
-      if (!subscription) {
-        const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-        if (!vapidKey) {
-          console.error("VAPID key missing");
-          toast.error("Push notifications not configured");
-          return;
+      if (subscription) {
+        console.log("📱 Already subscribed, updating database...");
+      } else {
+        // 6. Create new subscription
+        try {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidKey)
+          });
+          console.log("✅ New subscription created");
+        } catch (subError) {
+          console.error("❌ Subscription error:", subError);
+          toast.error("Failed to subscribe to notifications");
+          return false;
         }
-
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey)
-        });
       }
 
-      // Save to Supabase
+      // 7. Save to database
       const { error } = await supabase
         .from("profiles")
         .update({ push_subscription: subscription.toJSON() })
         .eq("id", userId);
 
       if (error) {
-        console.error("Supabase error:", error);
+        console.error("❌ Database error:", error);
         toast.error("Failed to save subscription");
-        return;
+        return false;
       }
 
+      console.log("✅ Subscription saved to database");
       toast.success("Push notifications enabled!");
-      console.log("✅ Push subscription saved");
+      return true;
     } catch (err) {
-      console.error("Push subscription error:", err);
+      console.error("❌ Subscribe error:", err);
       toast.error("Failed to enable notifications");
+      return false;
     }
   };
 
   const unsubscribe = async (userId: string) => {
     try {
+      // 1. Get service worker
+      if (!("serviceWorker" in navigator)) {
+        return false;
+      }
+
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
 
+      // 2. Unsubscribe from push
       if (subscription) {
-        await subscription.unsubscribe();
+        const successful = await subscription.unsubscribe();
+        console.log(successful ? "✅ Unsubscribed from push" : "⚠️ Unsubscribe failed");
       }
 
-      // Clear from database
-      await supabase
+      // 3. Clear from database
+      const { error } = await supabase
         .from("profiles")
         .update({ push_subscription: null })
         .eq("id", userId);
 
+      if (error) {
+        console.error("❌ Database clear error:", error);
+        toast.error("Failed to disable notifications");
+        return false;
+      }
+
+      console.log("✅ Subscription removed from database");
       toast.success("Push notifications disabled");
+      return true;
     } catch (err) {
-      console.error("Unsubscribe error:", err);
+      console.error("❌ Unsubscribe error:", err);
       toast.error("Failed to disable notifications");
+      return false;
     }
   };
 
   return { subscribe, unsubscribe };
 }
 
-// ✅ FIXED: Explicitly type the return as BufferSource (not Uint8Array<ArrayBufferLike>)
-function urlBase64ToUint8Array(base64String: string): BufferSource {
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
+  const buffer = new ArrayBuffer(rawData.length);
+  const view = new Uint8Array(buffer);
+  
   for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
+    view[i] = rawData.charCodeAt(i);
   }
-  return outputArray as BufferSource; // Explicit cast
-    }
+  
+  return view;
+        }
