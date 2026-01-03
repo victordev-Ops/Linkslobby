@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Bell, BellOff, Loader2 } from "lucide-react";
+import { Bell, BellOff, Loader2, AlertCircle } from "lucide-react";
 import { usePushSubscription } from "@/hooks/use-push";
+import { createClient } from "@/lib/supabase/client";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -14,30 +15,69 @@ function cn(...inputs: ClassValue[]) {
 export default function PushToggle({ userId }: { userId: string }) {
   const { subscribe, unsubscribe } = usePushSubscription();
   const [isEnabled, setIsEnabled] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isSupported, setIsSupported] = useState(true);
+  const supabase = createClient();
 
-  // Check current permission and browser support on mount
+  // Check current subscription status
   useEffect(() => {
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setIsSupported(false);
-      return;
-    }
-    
-    setIsEnabled(Notification.permission === "granted");
-  }, []);
+    const checkStatus = async () => {
+      try {
+        // 1. Check browser support
+        if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+          setIsSupported(false);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Check permission
+        const hasPermission = Notification.permission === "granted";
+
+        // 3. Check database subscription
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("push_subscription")
+          .eq("id", userId)
+          .single();
+
+        if (error) {
+          console.error("Error checking subscription:", error);
+        }
+
+        const hasSubscription = !!data?.push_subscription;
+
+        // Only enabled if BOTH permission granted AND subscription exists
+        setIsEnabled(hasPermission && hasSubscription);
+      } catch (err) {
+        console.error("Status check error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkStatus();
+  }, [userId, supabase]);
 
   const handleToggle = async () => {
     if (loading) return;
     setLoading(true);
     
     try {
+      let success = false;
+      
       if (isEnabled) {
-        await unsubscribe(userId);
+        // Turn OFF
+        success = await unsubscribe(userId);
+        if (success) {
+          setIsEnabled(false);
+        }
       } else {
-        await subscribe(userId);
+        // Turn ON
+        success = await subscribe(userId);
+        if (success) {
+          setIsEnabled(true);
+        }
       }
-      setIsEnabled(Notification.permission === "granted");
     } finally {
       setLoading(false);
     }
@@ -45,15 +85,15 @@ export default function PushToggle({ userId }: { userId: string }) {
 
   if (!isSupported) {
     return (
-      <div className="flex items-center justify-between p-4 bg-gray-100 rounded-2xl border border-gray-200">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gray-200 text-gray-500">
-            <BellOff size={20} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-700">Push Notifications</p>
-            <p className="text-xs text-gray-500">Not supported on this browser</p>
-          </div>
+      <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-2xl border border-yellow-200">
+        <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-medium text-yellow-900">
+            Push notifications not supported
+          </p>
+          <p className="text-xs text-yellow-700 mt-1">
+            Try using Chrome on Android or Safari on iOS 16.4+
+          </p>
         </div>
       </div>
     );
@@ -71,7 +111,12 @@ export default function PushToggle({ userId }: { userId: string }) {
         <div>
           <p className="text-sm font-medium text-gray-900">Push Notifications</p>
           <p className="text-xs text-gray-600">
-            {isEnabled ? "You'll receive notifications" : "Get notified of new confessions"}
+            {loading 
+              ? "Checking..." 
+              : isEnabled 
+                ? "You'll receive notifications" 
+                : "Get notified of new confessions"
+            }
           </p>
         </div>
       </div>
@@ -79,7 +124,7 @@ export default function PushToggle({ userId }: { userId: string }) {
       <button
         onClick={handleToggle}
         disabled={loading}
-        className="relative h-7 w-12 cursor-pointer outline-none"
+        className="relative h-7 w-12 cursor-pointer outline-none disabled:cursor-not-allowed"
         aria-label="Toggle push notifications"
       >
         {/* Toggle Background */}
@@ -100,4 +145,4 @@ export default function PushToggle({ userId }: { userId: string }) {
       </button>
     </div>
   );
-            }
+          }
