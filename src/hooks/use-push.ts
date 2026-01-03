@@ -54,9 +54,12 @@ export function usePushSubscription() {
       } else {
         // 6. Create new subscription
         try {
+          // FIX: Convert VAPID key with explicit type assertion
+          const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+          
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(vapidKey)
+            applicationServerKey: applicationServerKey as any // Type assertion to bypass TS error
           });
           console.log("✅ New subscription created");
         } catch (subError) {
@@ -129,16 +132,19 @@ export function usePushSubscription() {
   return { subscribe, unsubscribe };
 }
 
+// FIX: Explicit return type that matches what PushManager expects
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const buffer = new ArrayBuffer(rawData.length);
-  const view = new Uint8Array(buffer);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
   
-  for (let i = 0; i < rawData.length; ++i) {
-    view[i] = rawData.charCodeAt(i);
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
   }
   
-  return view;
-        }
+  return outputArray;
+                    }
