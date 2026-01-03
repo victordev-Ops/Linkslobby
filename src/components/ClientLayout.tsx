@@ -1,30 +1,53 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BottomNavbar from "./BottomNavbar";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { Toaster } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const supabase = createClient();
 
-  // 1. Service Worker Registration
+  // Fetch current user's profile ID
   useEffect(() => {
-    // Only register in production to avoid caching issues during development
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+    const fetchProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setProfileId(user?.id || null);
+    };
+
+    fetchProfile();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setProfileId(session?.user?.id || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  // Service Worker Registration
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
       const handleRegister = async () => {
         try {
+          // CRITICAL FIX: Use the correct path based on your build output
           const reg = await navigator.serviceWorker.register("/sw.js", {
             scope: "/",
+            updateViaCache: "none", // Prevent aggressive caching
           });
-          console.log("Service Worker registered with scope:", reg.scope);
+          console.log("✅ Service Worker registered:", reg.scope);
+
+          // Force update check
+          reg.update();
         } catch (error) {
-          console.error("Service Worker registration failed:", error);
+          console.error("❌ Service Worker registration failed:", error);
         }
       };
 
-      // Register after page load to ensure smooth initial performance
       if (document.readyState === "complete") {
         handleRegister();
       } else {
@@ -34,7 +57,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // 2. Navbar Visibility Logic
+  // Navbar Visibility Logic
   const shouldHideNavbar = useMemo(() => {
     const hideNavbarPaths = [
       "/login",
@@ -55,13 +78,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <body className={`font-sans antialiased min-h-screen bg-gray-50 ${shouldHideNavbar ? "pb-0" : "pb-24"}`}>
-      <NotificationProvider>
+      <NotificationProvider profileId={profileId}>
         <main>{children}</main>
-
         {!shouldHideNavbar && <BottomNavbar />}
-
         <Toaster position="top-center" richColors />
       </NotificationProvider>
     </body>
   );
-}
+            }
