@@ -16,60 +16,100 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: Request) {
   try {
-    const { record } = await req.json();
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      console.error("❌ Failed to parse request body:", parseError);
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const { record } = body;
     
     if (!record?.profile_id) {
+      console.error("❌ Invalid payload - missing profile_id:", body);
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    // CRITICAL FIX: Use 'profile_id', not 'recipient_id'
-    const { data: profile, error } = await supabaseAdmin
+    console.log("📩 Processing confession for user:", record.profile_id);
+
+    // Get the recipient's profile and subscription
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
-      .select("push_subscription")
+      .select("push_subscription, username")
       .eq("id", record.profile_id)
       .single();
 
-    if (error) {
-      console.error("Profile fetch error:", error);
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    if (profileError) {
+      console.error("❌ Profile fetch error:", profileError);
+      return NextResponse.json({ 
+        error: "Profile not found",
+        details: profileError.message 
+      }, { status: 404 });
     }
 
     if (!profile?.push_subscription) {
-      console.log("No push subscription for user:", record.profile_id);
-      return NextResponse.json({ ok: true, message: "No subscription" });
+      console.log("⚠️ No push subscription for user:", record.profile_id);
+      return NextResponse.json({ 
+        ok: true, 
+        message: "No subscription found" 
+      });
     }
+
+    console.log("📱 Found push subscription for:", profile.username || record.profile_id);
 
     // Send push notification
     try {
+      const payload = JSON.stringify({
+        title: "New Confession! 🎭",
+        body: record.message?.substring(0, 80) + "..." || "Someone sent you a confession",
+        url: "/confessions",
+        icon: "/icon-192x192.png",
+        badge: "/icon-192x192.png"
+      });
+
       await webPush.sendNotification(
         profile.push_subscription as any,
-        JSON.stringify({
-          title: "New Confession! 🎭",
-          body: record.message?.substring(0, 80) + "..." || "Someone sent you a confession",
-          url: "/confessions",
-          icon: "/icon-192x192.png",
-          badge: "/icon-192x192.png"
-        })
+        payload
       );
 
       console.log("✅ Push notification sent to:", record.profile_id);
+      
+      return NextResponse.json({ 
+        ok: true, 
+        message: "Notification sent successfully" 
+      });
     } catch (pushError: any) {
-      console.error("Push send error:", pushError);
+      console.error("❌ Push send error:", pushError);
 
-      // Clean up expired subscriptions
+      // Clean up expired/invalid subscriptions
       if (pushError.statusCode === 410 || pushError.statusCode === 404) {
+        console.log("🧹 Removing expired subscription for:", record.profile_id);
+        
         await supabaseAdmin
           .from("profiles")
           .update({ push_subscription: null })
           .eq("id", record.profile_id);
         
-        console.log("Removed expired subscription for:", record.profile_id);
+        return NextResponse.json({ 
+          ok: true, 
+          message: "Expired subscription removed" 
+        });
       }
-    }
 
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("Webhook error:", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+      // Return error but don't fail the webhook
+      return NextResponse.json({ 
+        ok: false, 
+        error: "Failed to send notification",
+        details: pushError.message 
+      }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error("❌ Webhook error:", error);
+    return NextResponse.json({ 
+      error: "Internal server error",
+      details: error.message 
+    }, { status: 500 });
   }
-      }
+                    }
