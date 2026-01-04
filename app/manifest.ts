@@ -24,12 +24,6 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/png",
         purpose: "any",
       },
-      {
-        src: "/logo.png",
-        sizes: "192x192 512x512",
-        type: "image/png",
-        purpose: "any maskable",
-      },
     ],
     categories: ["social", "entertainment", "lifestyle"],
     shortcuts: [
@@ -73,28 +67,7 @@ export default function manifest(): MetadataRoute.Manifest {
         ],
       },
     ],
-    screenshots: [
-      {
-        src: "/screenshot-wide.png",
-        sizes: "1280x720",
-        type: "image/png",
-        form_factor: "wide",
-        label: "Say app home screen",
-      },
-      {
-        src: "/screenshot-mobile.png",
-        sizes: "750x1334",
-        type: "image/png",
-        form_factor: "narrow",
-        label: "Send anonymous confessions",
-      },
-    ],
     related_applications: [],
     prefer_related_applications: false,
-    display_override: ["standalone", "minimal-ui"],
-    protocol_handlers: [],
-    launch_handler: {
-      client_mode: "focus-existing",
-    },
   };
-        }
+            }
