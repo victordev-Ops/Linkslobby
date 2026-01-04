@@ -73,30 +73,36 @@ export async function POST(req) {
     const payload = {
       title: "🎭 New Secret Confession!",
       body: messagePreview + (messagePreview.length >= 100 ? "..." : ""),
-      icon: "/icon-192x192.png",
-      badge: "/icon-192x192.png",
-      image: "/icon-512x512.png", // Large image for rich notifications
-      tag: "confession-notification", // Groups similar notifications
-      renotify: true, // Always alert even if notification exists
-      requireInteraction: false, // Auto-dismiss after timeout
-      vibrate: [200, 100, 200, 100, 200], // Custom vibration pattern
-      silent: false, // ENABLE SOUND
-      sound: "/notification-sound.mp3", // Custom sound (we'll add this)
+      icon: "/logo.png",
+      badge: "/logo.png",
+      image: "/logo.png",
+      tag: "confession-notification",
+      renotify: true,
+      requireInteraction: true, // Keep notification visible until user interacts
+      vibrate: [200, 100, 200, 100, 200],
+      silent: false,
       data: {
         url: "/inbox",
         confessionId: record.id,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        username: profile.username,
+        messagePreview: messagePreview
       },
       actions: [
         {
           action: "view",
-          title: "View Now 👀",
-          icon: "/icon-192x192.png"
+          title: "👀 Read Now",
+          icon: "/logo.png"
         },
         {
-          action: "dismiss",
-          title: "Later",
-          icon: "/icon-192x192.png"
+          action: "reply",
+          title: "💬 Quick Reply",
+          icon: "/logo.png"
+        },
+        {
+          action: "mark-read",
+          title: "✓ Mark Read",
+          icon: "/logo.png"
         }
       ]
     };
@@ -104,8 +110,12 @@ export async function POST(req) {
     // Add personalized message based on confession count
     if (confessionCount === 1) {
       payload.title = "🎉 Your First Confession!";
+      payload.body = "Someone just shared their secret with you! " + messagePreview;
     } else if (confessionCount > 10) {
       payload.title = `🔥 Confession #${confessionCount}!`;
+      payload.body = `You're popular! New confession: ${messagePreview}`;
+    } else if (confessionCount > 5) {
+      payload.title = "✨ Another Confession!";
     }
 
     await webPush.sendNotification(subscription, JSON.stringify(payload));
@@ -148,4 +158,3 @@ export async function GET() {
     status: "Webhook endpoint is working",
     timestamp: new Date().toISOString()
   });
-        }
