@@ -15,6 +15,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "say",
   },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -27,9 +31,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      {/* Remove <body> from here - ClientLayout handles it */}
-      <ClientLayout>{children}</ClientLayout>
+    <html lang="en" className={`\( {geistSans.variable} \){geistMono.variable}`}>
+      <head />
+      <body>
+        <ClientLayout>{children}</ClientLayout>
+      </body>
     </html>
   );
-      }
+}
