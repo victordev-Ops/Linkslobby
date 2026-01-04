@@ -3,6 +3,7 @@ import { GeistSans, GeistMono } from "geist/font";
 import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import Script from "next/script";
 
 const geistSans = GeistSans;
 const geistMono = GeistMono;
@@ -10,7 +11,7 @@ const geistMono = GeistMono;
 export const metadata: Metadata = {
   title: "say",
   description: "Receive anonymous confessions from anyone.",
-  manifest: "/manifest.js",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -18,18 +19,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.ico" },
-      { url: "/logo.png", sizes: "any" },
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
     ],
     apple: [
-      { url: "/logo.png" },
-      { url: "/logo.png", sizes: "180x180", type: "image/png" },
-    ],
-    other: [
-      {
-        rel: "mask-icon",
-        url: "/logo.png",
-      },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
   },
 };
@@ -57,10 +52,24 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="say" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body>
+      <body className="loading">
+        <Script
+          id="remove-loading"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('load', function() {
+                document.body.classList.remove('loading');
+              });
+              setTimeout(function() {
+                document.body.classList.remove('loading');
+              }, 2000);
+            `,
+          }}
+        />
         <ClientLayout>{children}</ClientLayout>
         <PWAInstallPrompt />
       </body>
     </html>
   );
-  }
+}
