@@ -9,14 +9,12 @@ export async function POST(req) {
   console.log("🔔 Webhook received");
 
   try {
-    // Initialize inside the function (not at module level)
     const vapidSubject = process.env.VAPID_SUBJECT;
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // Validate environment variables
     if (!vapidSubject || !vapidPublicKey || !vapidPrivateKey) {
       console.error("❌ Missing VAPID configuration");
       return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
@@ -27,13 +25,9 @@ export async function POST(req) {
       return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
     }
 
-    // Configure VAPID
     webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-
-    // Initialize Supabase client
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Parse request body
     const body = await req.json();
     const { record } = body;
     
@@ -44,7 +38,6 @@ export async function POST(req) {
 
     console.log("👤 Processing for user:", record.profile_id);
 
-    // Get profile with subscription
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("push_subscription, username")
@@ -61,24 +54,61 @@ export async function POST(req) {
       return NextResponse.json({ ok: true, message: "No subscription" });
     }
 
-    // Parse the subscription (stored as JSON string in DB)
     const subscription = typeof profile.push_subscription === 'string'
       ? JSON.parse(profile.push_subscription)
       : profile.push_subscription;
 
     console.log("📱 Sending push to:", profile.username);
 
-    // Send push notification
-    await webPush.sendNotification(
-      subscription,
-      JSON.stringify({
-        title: "New Confession! 🎭",
-        body: record.message?.substring(0, 80) + "..." || "Someone sent you a confession",
+    // Get confession count for personalization
+    const { count } = await supabaseAdmin
+      .from("confessions")
+      .select("*", { count: 'exact', head: true })
+      .eq("profile_id", record.profile_id);
+
+    // Create personalized notification
+    const messagePreview = record.message?.substring(0, 100) || "Someone sent you a confession";
+    const confessionCount = count || 0;
+
+    const payload = {
+      title: "🎭 New Secret Confession!",
+      body: messagePreview + (messagePreview.length >= 100 ? "..." : ""),
+      icon: "/icon-192x192.png",
+      badge: "/icon-192x192.png",
+      image: "/icon-512x512.png", // Large image for rich notifications
+      tag: "confession-notification", // Groups similar notifications
+      renotify: true, // Always alert even if notification exists
+      requireInteraction: false, // Auto-dismiss after timeout
+      vibrate: [200, 100, 200, 100, 200], // Custom vibration pattern
+      silent: false, // ENABLE SOUND
+      sound: "/notification-sound.mp3", // Custom sound (we'll add this)
+      data: {
         url: "/inbox",
-        icon: "/icon-192x192.png",
-        badge: "/icon-192x192.png"
-      })
-    );
+        confessionId: record.id,
+        timestamp: new Date().toISOString()
+      },
+      actions: [
+        {
+          action: "view",
+          title: "View Now 👀",
+          icon: "/icon-192x192.png"
+        },
+        {
+          action: "dismiss",
+          title: "Later",
+          icon: "/icon-192x192.png"
+        }
+      ]
+    };
+
+    // Add personalized message based on confession count
+    if (confessionCount === 1) {
+      payload.title = "🎉 Your First Confession!";
+    } else if (confessionCount > 10) {
+      payload.title = `🔥 Confession #${confessionCount}!`;
+    }
+
+    await webPush.sendNotification(subscription, JSON.stringify(payload));
 
     console.log("✅ Push notification sent successfully");
     return NextResponse.json({ ok: true, message: "Notification sent" });
@@ -86,7 +116,6 @@ export async function POST(req) {
   } catch (error) {
     console.error("❌ Webhook error:", error);
     
-    // Handle expired/invalid subscriptions
     if (error.statusCode === 410 || error.statusCode === 404) {
       console.log("🧹 Removing expired subscription");
       
@@ -99,7 +128,7 @@ export async function POST(req) {
         await supabaseAdmin
           .from("profiles")
           .update({ push_subscription: null })
-          .eq("id", req.body?.record?.profile_id);
+          .eq("id", body.record?.profile_id);
       } catch (cleanupError) {
         console.error("Failed to clean up subscription:", cleanupError);
       }
@@ -119,4 +148,4 @@ export async function GET() {
     status: "Webhook endpoint is working",
     timestamp: new Date().toISOString()
   });
-                  }
+        }
