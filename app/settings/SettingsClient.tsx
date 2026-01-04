@@ -4,8 +4,9 @@ import { useState, useEffect } from "react"
 import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { User, Mail, ArrowLeft, LogIn } from "lucide-react"
+import { User, Mail, ArrowLeft, LogIn, Bug } from "lucide-react"
 import PushToggle from "@/components/PushToggle"
+import { createClient } from "@/lib/supabase/client"
 
 interface SettingsClientProps {
   initialUser: any
@@ -17,8 +18,10 @@ export default function SettingsClient({
   initialUsername,
 }: SettingsClientProps) {
   const [justLoggedOut, setJustLoggedOut] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
   const searchParams = useSearchParams()
   const router = useRouter()
+  const supabase = createClient()
 
   const user = initialUser
   const username = initialUsername
@@ -29,6 +32,91 @@ export default function SettingsClient({
       router.replace('/settings', { scroll: false })
     }
   }, [searchParams, router])
+
+  // Debug function
+  const runDiagnostics = async () => {
+    const info: any = {
+      timestamp: new Date().toISOString(),
+      browser: {
+        hasNotification: "Notification" in window,
+        hasServiceWorker: "serviceWorker" in navigator,
+        notificationPermission: "Notification" in window ? Notification.permission : "N/A"
+      },
+      environment: {
+        hasVapidKey: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+        vapidKeyLength: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.length || 0
+      }
+    }
+
+    // Check service worker
+    if ("serviceWorker" in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready
+        info.serviceWorker = {
+          active: !!registration.active,
+          scope: registration.scope,
+          hasPushManager: "pushManager" in registration
+        }
+
+        // Check push subscription
+        const subscription = await registration.pushManager.getSubscription()
+        info.pushSubscription = {
+          exists: !!subscription,
+          endpoint: subscription?.endpoint?.substring(0, 50) + "..." || "N/A"
+        }
+      } catch (err: any) {
+        info.serviceWorkerError = err.message
+      }
+    }
+
+    // Check database
+    if (user) {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("push_subscription")
+          .eq("id", user.id)
+          .single()
+
+        info.database = {
+          hasSubscription: !!data?.push_subscription,
+          subscriptionLength: data?.push_subscription ? JSON.stringify(data.push_subscription).length : 0,
+          error: error?.message || null
+        }
+      } catch (err: any) {
+        info.databaseError = err.message
+      }
+    }
+
+    setDebugInfo(info)
+  }
+
+  // Test notification function
+  const testNotification = async () => {
+    if (!user) {
+      alert("You must be logged in to test notifications")
+      return
+    }
+
+    try {
+      const res = await fetch('/api/webhooks/confession', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          record: {
+            profile_id: user.id,
+            message: 'Test notification from settings! 🔔',
+            created_at: new Date().toISOString()
+          }
+        })
+      })
+
+      const data = await res.json()
+      alert(`Response: ${JSON.stringify(data, null, 2)}`)
+    } catch (err: any) {
+      alert(`Error: ${err.message}`)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -78,7 +166,7 @@ export default function SettingsClient({
               </div>
             </div>
 
-            {/* Notifications Card - NEW */}
+            {/* Notifications Card */}
             {user && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -86,6 +174,40 @@ export default function SettingsClient({
                   Notifications
                 </h2>
                 <PushToggle userId={user.id} />
+              </div>
+            )}
+
+            {/* Debug Panel - NEW */}
+            {user && (
+              <div className="bg-blue-50 rounded-2xl shadow-sm border border-blue-200 p-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-blue-900">
+                  <Bug className="h-5 w-5" />
+                  Debug Tools
+                </h2>
+                
+                <div className="space-y-3">
+                  <button
+                    onClick={runDiagnostics}
+                    className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-blue-700 transition"
+                  >
+                    Run Diagnostics
+                  </button>
+
+                  <button
+                    onClick={testNotification}
+                    className="w-full bg-green-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-green-700 transition"
+                  >
+                    🧪 Test Push Notification
+                  </button>
+
+                  {debugInfo && (
+                    <div className="mt-4 p-4 bg-white rounded-lg border border-blue-200">
+                      <pre className="text-xs overflow-auto max-h-96">
+                        {JSON.stringify(debugInfo, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -161,4 +283,4 @@ export default function SettingsClient({
       </div>
     </div>
   )
-      }
+          }
