@@ -73,7 +73,7 @@ export async function POST(req) {
     const payload = {
       title: "🎭 New Secret Confession!",
       body: messagePreview + (messagePreview.length >= 100 ? "..." : ""),
-      icon: "/logo.png",
+      icon: "/favicon.ico",
       badge: "/logo.png",
       image: "/logo.png",
       tag: "confession-notification",
