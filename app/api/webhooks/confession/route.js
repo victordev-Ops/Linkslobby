@@ -78,7 +78,7 @@ export async function POST(req) {
       image: "/logo.png",
       tag: "confession-notification",
       renotify: true,
-      requireInteraction: true, // Keep notification visible until user interacts
+      requireInteraction: true,
       vibrate: [200, 100, 200, 100, 200],
       silent: false,
       data: {
@@ -158,3 +158,4 @@ export async function GET() {
     status: "Webhook endpoint is working",
     timestamp: new Date().toISOString()
   });
+        }
