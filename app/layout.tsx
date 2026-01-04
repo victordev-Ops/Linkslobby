@@ -11,7 +11,7 @@ const geistMono = GeistMono;
 export const metadata: Metadata = {
   title: "say",
   description: "Receive anonymous confessions from anyone.",
-  manifest: "/manifest.js",
+  manifest: "./manifest.js",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
