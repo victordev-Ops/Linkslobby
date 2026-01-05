@@ -4,7 +4,7 @@ import { toast } from "sonner";
 const supabase = createClient();
 
 // Helper to convert VAPID key
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): BufferSource {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
@@ -114,4 +114,4 @@ export function usePushSubscription() {
   };
 
   return { subscribe, unsubscribe, syncSubscription };
-                                             }
+                  }
