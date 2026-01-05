@@ -51,7 +51,7 @@ self.addEventListener("push", (event: any) => {
     // 'badge' is the small monochrome icon in the Android status bar
     // IMPORTANT: Use a transparent PNG with only white pixels for this!
     // If you use a colored image here, Android may render it as a white square.
-    badge: "/icons/badge-monochrome.png", 
+    badge: "/logo-removebg-preview.png", 
     
     vibrate: [100, 50, 100],
     data: { 
