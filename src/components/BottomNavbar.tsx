@@ -8,8 +8,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 export default function BottomNavbar() {
   const pathname = usePathname()
-  // Now we just consume the global state. 
-  // No useEffect, No supabase client, No fetching here!
   const { unreadCount } = useNotifications()
 
   const navItems = [
@@ -58,4 +56,4 @@ export default function BottomNavbar() {
       </div>
     </nav>
   )
-}
+              }
