@@ -28,7 +28,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     return () => subscription.unsubscribe();
   }, [supabase]);
-
+  
+// inside src/components/ClientLayout.tsx
+useEffect(() => {
+  if ('clearAppBadge' in navigator) {
+    (navigator as any).clearAppBadge();
+  }
+}, []);
+      
   // Service Worker Registration
   useEffect(() => {
     if ("serviceWorker" in navigator) {
