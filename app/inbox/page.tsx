@@ -34,7 +34,7 @@ async function ConfessionsLoader({
 }) {
   const { data: confessions, error } = await supabase
     .from('confessions')
-    .select('id, message, created_at, is_read')
+    .select('id, message, created_at, is_read, profile_id')
     .eq('profile_id', userId)
     .order('created_at', { ascending: false })
     .limit(50)
