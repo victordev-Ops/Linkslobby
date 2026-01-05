@@ -1,11 +1,12 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type NotificationContextType = {
   unreadCount: number
   setUnreadCount: React.Dispatch<React.SetStateAction<number>>
+  refreshUnreadCount: () => Promise<void>
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
@@ -20,6 +21,27 @@ export function NotificationProvider({
   const [unreadCount, setUnreadCount] = useState(0)
   const supabase = createClient()
 
+  // Memoized refresh function
+  const refreshUnreadCount = useCallback(async () => {
+    if (!profileId) {
+      setUnreadCount(0)
+      return
+    }
+
+    const { count, error } = await supabase
+      .from('confessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('profile_id', profileId)
+      .eq('is_read', false)
+    
+    if (error) {
+      console.error('Error fetching unread count:', error)
+      return
+    }
+    
+    setUnreadCount(count || 0)
+  }, [profileId, supabase])
+
   useEffect(() => {
     if (!profileId) {
       setUnreadCount(0)
@@ -27,22 +49,7 @@ export function NotificationProvider({
     }
 
     // Initial fetch
-    const fetchInitialCount = async () => {
-      const { count, error } = await supabase
-        .from('confessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('profile_id', profileId)
-        .eq('is_read', false)
-      
-      if (error) {
-        console.error('Error fetching unread count:', error)
-        return
-      }
-      
-      setUnreadCount(count || 0)
-    }
-
-    fetchInitialCount()
+    refreshUnreadCount()
 
     // Real-time subscription
     const channel = supabase
@@ -61,7 +68,24 @@ export function NotificationProvider({
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
       }, (payload) => {
-        if (payload.new.is_read && !payload.old.is_read) {
+        // Type guard to ensure payload has the expected structure
+        const newData = payload.new as { is_read?: boolean }
+        const oldData = payload.old as { is_read?: boolean }
+        
+        if (newData.is_read && !oldData.is_read) {
+          setUnreadCount(prev => Math.max(0, prev - 1))
+        }
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'confessions',
+        filter: `profile_id=eq.${profileId}`
+      }, (payload) => {
+        // Type guard for delete event
+        const oldData = payload.old as { is_read?: boolean }
+        
+        if (!oldData.is_read) {
           setUnreadCount(prev => Math.max(0, prev - 1))
         }
       })
@@ -70,10 +94,10 @@ export function NotificationProvider({
     return () => {
       channel.unsubscribe()
     }
-  }, [profileId, supabase])
+  }, [profileId, supabase, refreshUnreadCount])
 
   return (
-    <NotificationContext.Provider value={{ unreadCount, setUnreadCount }}>
+    <NotificationContext.Provider value={{ unreadCount, setUnreadCount, refreshUnreadCount }}>
       {children}
     </NotificationContext.Provider>
   )
@@ -85,4 +109,4 @@ export const useNotifications = () => {
     throw new Error('useNotifications must be used within NotificationProvider')
   }
   return context
-      }
+}
