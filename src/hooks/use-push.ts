@@ -3,89 +3,92 @@ import { toast } from "sonner";
 
 const supabase = createClient();
 
+// Helper to convert VAPID key
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export function usePushSubscription() {
-  const subscribe = async (userId: string) => {
+  // This function syncs the browser's current subscription with the database
+  const syncSubscription = async (userId: string) => {
+    if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
+    
+    // Only proceed if permission is ALREADY granted
+    if (Notification.permission !== "granted") return;
+
     try {
-      // 1. Check browser support
-      if (!("Notification" in window)) {
-        toast.error("Push notifications not supported in this browser");
-        return false;
-      }
-
-      if (!("serviceWorker" in navigator)) {
-        toast.error("Service workers not supported");
-        return false;
-      }
-
-      // 2. Check VAPID key
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidKey) {
-        console.error("❌ VAPID key missing in environment variables");
-        toast.error("Push notifications not configured. Contact support.");
-        return false;
-      }
-
-      // 3. Request permission
-      let permission = Notification.permission;
-      
-      if (permission === "default") {
-        permission = await Notification.requestPermission();
-      }
-      
-      if (permission === "denied") {
-        toast.error("Notification permission denied. Enable in browser settings.");
-        return false;
-      }
-
-      if (permission !== "granted") {
-        toast.info("Notification permission required");
-        return false;
-      }
-
-      // 4. Wait for service worker
       const registration = await navigator.serviceWorker.ready;
-      console.log("✅ Service Worker ready");
-
-      // 5. Check existing subscription
       let subscription = await registration.pushManager.getSubscription();
 
-      if (subscription) {
-        console.log("📱 Already subscribed, updating database...");
-      } else {
-        // 6. Create new subscription
-        try {
-          // FIX: Convert VAPID key with explicit type assertion
-          const applicationServerKey = urlBase64ToUint8Array(vapidKey);
-          
+      // If permission is granted but no subscription exists in browser, try to renew it
+      if (!subscription) {
+        const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (vapidKey) {
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: applicationServerKey as any // Type assertion to bypass TS error
+            applicationServerKey: urlBase64ToUint8Array(vapidKey),
           });
-          console.log("✅ New subscription created");
-        } catch (subError) {
-          console.error("❌ Subscription error:", subError);
-          toast.error("Failed to subscribe to notifications");
-          return false;
         }
       }
 
-      // 7. Save to database
+      // If we have a valid subscription, force update the DB to ensure they match
+      if (subscription) {
+        await supabase
+          .from("profiles")
+          .update({ push_subscription: subscription.toJSON() })
+          .eq("id", userId);
+        console.log("🔄 Push subscription synced in background");
+      }
+    } catch (error) {
+      console.error("Background sync failed:", error);
+    }
+  };
+
+  const subscribe = async (userId: string) => {
+    try {
+      if (!("Notification" in window)) {
+        toast.error("Not supported in this browser");
+        return false;
+      }
+
+      // 1. Request Permission
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        toast.info("Permission required for notifications");
+        return false;
+      }
+
+      // 2. Get Service Worker
+      const registration = await navigator.serviceWorker.ready;
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      
+      if (!vapidKey) return false;
+
+      // 3. Subscribe
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+
+      // 4. Save to DB
       const { error } = await supabase
         .from("profiles")
         .update({ push_subscription: subscription.toJSON() })
         .eq("id", userId);
 
-      if (error) {
-        console.error("❌ Database error:", error);
-        toast.error("Failed to save subscription");
-        return false;
-      }
-
-      console.log("✅ Subscription saved to database");
-      toast.success("Push notifications enabled!");
+      if (error) throw error;
+      
+      toast.success("Notifications enabled!");
       return true;
     } catch (err) {
-      console.error("❌ Subscribe error:", err);
+      console.error(err);
       toast.error("Failed to enable notifications");
       return false;
     }
@@ -93,58 +96,22 @@ export function usePushSubscription() {
 
   const unsubscribe = async (userId: string) => {
     try {
-      // 1. Get service worker
-      if (!("serviceWorker" in navigator)) {
-        return false;
-      }
-
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
+      if (subscription) await subscription.unsubscribe();
 
-      // 2. Unsubscribe from push
-      if (subscription) {
-        const successful = await subscription.unsubscribe();
-        console.log(successful ? "✅ Unsubscribed from push" : "⚠️ Unsubscribe failed");
-      }
-
-      // 3. Clear from database
-      const { error } = await supabase
+      await supabase
         .from("profiles")
         .update({ push_subscription: null })
         .eq("id", userId);
-
-      if (error) {
-        console.error("❌ Database clear error:", error);
-        toast.error("Failed to disable notifications");
-        return false;
-      }
-
-      console.log("✅ Subscription removed from database");
-      toast.success("Push notifications disabled");
+        
+      toast.success("Notifications disabled");
       return true;
     } catch (err) {
-      console.error("❌ Unsubscribe error:", err);
-      toast.error("Failed to disable notifications");
+      console.error(err);
       return false;
     }
   };
 
-  return { subscribe, unsubscribe };
-}
-
-// FIX: Explicit return type that matches what PushManager expects
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding)
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-  
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  
-  for (let i = 0; i < rawData.length; i++) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  
-  return outputArray;
-                    }
+  return { subscribe, unsubscribe, syncSubscription };
+                                             }
