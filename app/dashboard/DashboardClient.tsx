@@ -84,7 +84,38 @@ export default function DashboardClient({
                   </p>
                 )}
               </div>
+// Add this import
+import { MessageCircleQuestion, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
 
+// ... inside your DashboardClient component return ...
+
+{/* ... previous Share Link Section ... */}
+
+{/* Add this NEW SECTION below the Share Link box */}
+<div className="mt-8 mb-4">
+  <div className="flex items-center justify-between mb-4">
+    <h2 className="text-lg font-bold text-gray-900">Features</h2>
+  </div>
+
+  <Link href="/ama" className="block">
+    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 flex items-center justify-between group active:scale-[0.98] transition-all">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+          <MessageCircleQuestion size={24} />
+        </div>
+        <div className="text-left">
+          <h3 className="font-bold text-gray-800">Create AMA Sticker</h3>
+          <p className="text-sm text-gray-500">Get a question sticker for your story</p>
+        </div>
+      </div>
+      <ChevronRight className="text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" size={20} />
+    </div>
+  </Link>
+</div>
+
+{/* ... rest of your code ... */}
+  
               {/* Friendly Note */}
               <div className="bg-purple-50 rounded-2xl p-6 border border-purple-200">
                 <p className="text-sm text-purple-800 leading-relaxed">
