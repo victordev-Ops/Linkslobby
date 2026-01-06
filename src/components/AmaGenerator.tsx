@@ -35,7 +35,7 @@ export default function AmaGenerator({ username }: { username: string }) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const shareUrl = `https://say-app.com/confess/${username}`
+  const shareUrl = `https://say-app.vercel.app/ama/${username}`
 
   const handleShuffle = () => {
     const random = PROMPTS[Math.floor(Math.random() * PROMPTS.length)]
