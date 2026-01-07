@@ -1,153 +1,48 @@
 /* src/app/globals.css */
 
-/* Prevent "pull-to-refresh" rubber banding on the whole page, 
-   but allow scrolling inside containers */
+/* 1. Correct the Root behavior */
 html, body {
-  overscroll-behavior-y: none;
+  /* Allow the body to handle the scroll, but stop the "bounce" effect at the top */
+  overscroll-behavior-y: none; 
   -webkit-tap-highlight-color: transparent;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* Prevent users from selecting text on UI elements (buttons, navs) 
-   making it feel like an app, not a website */
-button, a, nav, .no-select {
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none; /* Prevent iOS long-press menu */
-}
-
-/* Smooth scrolling for iOS */
-* {
-  -webkit-overflow-scrolling: touch;
-}
-
-@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-/* Base Body Styles */
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  position: fixed;
-  width: 100%;
-  height: 100%;
+  /* Use min-height instead of fixed height to allow content to push the page down */
+  min-height: 100%;
   margin: 0;
   padding: 0;
 }
 
-/* Main app container should be scrollable */
-#__next, main {
-  height: 100%;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* REMOVED: position: fixed and overflow: hidden */
+  /* ADDED: */
+  overflow-x: hidden; 
+  width: 100%;
 }
 
-/* PWA Splash Screen - Only shows when body has 'loading' class */
-body.loading::before {
-  content: '🎭';
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 80px;
-  animation: pulse 1.5s ease-in-out infinite;
-  z-index: 10000;
-  pointer-events: none;
+/* 2. Target the Next.js wrapper correctly */
+/* Next.js App Router uses a div inside body. We ensure the layout fills the screen */
+body > div {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-body.loading::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
-  z-index: 9999;
-  pointer-events: none;
+/* 3. Ensure Main is the scrollable area if the body isn't */
+main {
+  flex: 1;
+  width: 100%;
+  /* This ensures that content can expand and scroll naturally */
 }
 
-@keyframes pulse {
-  0%, 100% { 
-    opacity: 1; 
-    transform: translate(-50%, -50%) scale(1); 
-  }
-  50% { 
-    opacity: 0.5; 
-    transform: translate(-50%, -50%) scale(1.1); 
-  }
+/* 4. Keep your App-like touch behaviors */
+button, a, nav, .no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
-/* Utility Classes */
-.input { 
-  width: 100%; 
-  padding: 12px; 
-  border-radius: 12px; 
-  border: 1px solid #ddd;
-  font-size: 16px; /* Prevents iOS zoom on focus */
-  -webkit-appearance: none; /* Remove iOS styling */
-}
-
-.input:focus {
-  outline: none;
-  border-color: #8B5CF6;
-}
-
-.btn-primary { 
-  background: black; 
-  color: white; 
-  padding: 12px; 
-  border-radius: 12px; 
-  cursor: pointer;
-  transition: opacity 0.2s;
-  border: none;
-  font-size: 16px;
-  font-weight: 500;
-  -webkit-appearance: none; /* Remove iOS styling */
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-}
-
-.btn-primary:active {
-  opacity: 0.8;
-  transform: scale(0.98);
-}
-
-/* Prevent iOS Safari bottom bar from covering content */
-@supports (-webkit-touch-callout: none) {
-  body {
-    min-height: -webkit-fill-available;
-  }
-}
-
-/* Dark mode adjustments */
-@media (prefers-color-scheme: dark) {
-  .input {
-    background: #1a1a1a;
-    color: #ededed;
-    border-color: #333;
-  }
-  
-  .input:focus {
-    border-color: #8B5CF6;
-  }
-  }
+/* Rest of your Tailwind and Animation code... */
+@import "tailwindcss";
+/* ... */
