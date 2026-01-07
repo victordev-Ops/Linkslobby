@@ -1,23 +1,29 @@
 "use client"
 
 import { useState } from "react"
-// Moved all lucide-react imports to the top
-import { Copy, Check, MessageCircleQuestion, ChevronRight } from "lucide-react"
+import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import Link from 'next/link' // Moved Link import to the top
+import Link from 'next/link'
+import { useAuth } from "@/context/AuthContext" // Import the hook
 
-interface DashboardClientProps {
-  user: any
-  profile: { username: string; slug: string } | null
-  confessUrl: string
-}
-
-export default function DashboardClient({
-  user,
-  profile,
-  confessUrl,
-}: DashboardClientProps) {
+export default function DashboardClient() {
+  const { profile, loading } = useAuth() // Get data from context
   const [copied, setCopied] = useState(false)
+
+  // 1. Loading State
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+      </div>
+    )
+  }
+
+  // 2. Safety Check (if profile failed to load)
+  if (!profile) return null
+
+  // 3. Construct URL dynamically
+  const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
 
   const handleCopy = async () => {
     try {
@@ -26,35 +32,27 @@ export default function DashboardClient({
       toast.success("Link copied to clipboard!")
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      const textArea = document.createElement("textarea")
-      textArea.value = confessUrl
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand("copy")
-      document.body.removeChild(textArea)
-      setCopied(true)
-      toast.success("Link copied to clipboard!")
-      setTimeout(() => setCopied(false), 2000)
+      toast.error("Failed to copy")
     }
   }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-2xl mx-auto">
-        {/* Main Card */}
         <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-8 md:p-10">
           <div className="text-center space-y-10">
-            {/* Welcome Header */}
+            
+            {/* Header */}
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-                Welcome back! 👋
+                Welcome, {profile.username}! 👋
               </h1>
               <p className="text-lg text-gray-600">
                 Share your link and start receiving anonymous confessions
               </p>
             </div>
 
-            {/* Share Link Section */}
+            {/* Link Section */}
             <div className="space-y-6">
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-3">
@@ -69,13 +67,8 @@ export default function DashboardClient({
                   <button
                     onClick={handleCopy}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all hover:scale-105"
-                    aria-label="Copy link to clipboard"
                   >
-                    {copied ? (
-                      <Check className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <Copy className="h-5 w-5 text-gray-600" />
-                    )}
+                    {copied ? <Check className="h-5 w-5 text-green-600" /> : <Copy className="h-5 w-5 text-gray-600" />}
                   </button>
                 </div>
               </div>
@@ -102,24 +95,17 @@ export default function DashboardClient({
                 </Link>
               </div>
 
-              {/* Friendly Note */}
               <div className="bg-purple-50 rounded-2xl p-6 border border-purple-200">
                 <p className="text-sm text-purple-800 leading-relaxed text-left">
                   Anyone with this link can send you anonymous messages. 
-                  Share it with friends, post it on social media, or add it to your bio!
+                  Share it with friends or add it to your bio!
                 </p>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Subtle tip */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-gray-500">
-            Messages appear instantly • No sign-up required for senders
-          </p>
-        </div>
       </div>
     </div>
   )
-}
+                    }
+              
