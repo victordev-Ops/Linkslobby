@@ -1,9 +1,11 @@
+// src/components/ClientLayout.tsx
 "use client";
 
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import BottomNavbar from "./BottomNavbar";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { AuthProvider } from "@/context/AuthContext"; // <--- IMPORT THIS
 import { Toaster } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 
@@ -12,7 +14,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [profileId, setProfileId] = useState<string | null>(null);
   const supabase = createClient();
 
-  // Fetch current user's profile ID
+  // 1. Fetch current user's profile ID for notifications
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -21,7 +23,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     fetchProfile();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setProfileId(session?.user?.id || null);
     });
@@ -29,26 +30,22 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => subscription.unsubscribe();
   }, [supabase]);
   
-// inside src/components/ClientLayout.tsx
-useEffect(() => {
-  if ('clearAppBadge' in navigator) {
-    (navigator as any).clearAppBadge();
-  }
-}, []);
+  // 2. Clear Badges
+  useEffect(() => {
+    if ('clearAppBadge' in navigator) {
+      (navigator as any).clearAppBadge();
+    }
+  }, []);
       
-  // Service Worker Registration
+  // 3. Service Worker Registration
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       const handleRegister = async () => {
         try {
-          // CRITICAL FIX: Use the correct path based on your build output
           const reg = await navigator.serviceWorker.register("/sw.js", {
             scope: "/",
-            updateViaCache: "none", // Prevent aggressive caching
+            updateViaCache: "none",
           });
-          console.log("✅ Service Worker registered:", reg.scope);
-
-          // Force update check
           reg.update();
         } catch (error) {
           console.error("❌ Service Worker registration failed:", error);
@@ -64,7 +61,7 @@ useEffect(() => {
     }
   }, []);
 
-  // Navbar Visibility Logic
+  // 4. Navbar Visibility Logic
   const shouldHideNavbar = useMemo(() => {
     const hideNavbarPaths = [
       "/login",
@@ -83,13 +80,17 @@ useEffect(() => {
     );
   }, [pathname]);
 
+  // REMOVED <body className...>. Styles should be moved to a wrapper div or Fragment
+  // Added <AuthProvider> wrapping everything
   return (
-    <body className={`font-sans antialiased min-h-screen bg-gray-50 ${shouldHideNavbar ? "pb-0" : "pb-24"}`}>
+    <AuthProvider> 
       <NotificationProvider profileId={profileId}>
-        <main>{children}</main>
-        {!shouldHideNavbar && <BottomNavbar />}
-        <Toaster position="top-center" richColors />
+        <div className={`min-h-screen ${shouldHideNavbar ? "pb-0" : "pb-24"}`}>
+          <main>{children}</main>
+          {!shouldHideNavbar && <BottomNavbar />}
+          <Toaster position="top-center" richColors />
+        </div>
       </NotificationProvider>
-    </body>
+    </AuthProvider>
   );
-            }
+}
