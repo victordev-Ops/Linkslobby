@@ -1,4 +1,3 @@
-// app/dashboard/layout.tsx
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ReactNode } from 'react'
@@ -7,17 +6,19 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const supabase = await createSupabaseServerClient()
   
   // 1. Get User (Soft Check)
-  // We do NOT redirect if user is null here. We trust the Middleware.
+  // We utilize the Middleware to protect the route. 
+  // We do NOT redirect here if 'user' is null, because it might be a cookie sync delay.
   const { data: { user } } = await supabase.auth.getUser()
 
-  // 2. Handle Edge Case: Middleware passed, but something is wrong
+  // If there is really no user, the Client Component (DashboardClient) 
+  // or the Middleware will handle the kick. 
+  // We just render the children to prevent a redirect loop.
   if (!user) {
-    // Ideally, middleware catches this. If we are here, it's a sync issue.
-    // We render the children (Client Component) which handles the final "kick" if needed.
-    return <>{children}</> 
+    return <>{children}</>
   }
 
-  // 3. Verify Profile Completeness
+  // 2. Verify Profile Completeness
+  // We only redirect if we are SURE we have a user but they have no profile.
   const { data: profile } = await supabase
     .from('profiles')
     .select('username')
@@ -25,7 +26,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     .single()
 
   // If user exists but has no username, send to setup
-  if (user && (!profile || !profile.username)) {
+  if (profile && !profile.username) {
     redirect('/auth/setup')
   }
 
