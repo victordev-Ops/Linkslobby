@@ -1,30 +1,40 @@
+// app/dashboard/DashboardClient.tsx
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from 'next/link'
-import { useAuth } from "@/context/AuthContext" // Import the hook
+import { useRouter } from "next/navigation" // Import router
+import { useAuth } from "@/context/AuthContext"
 
 export default function DashboardClient() {
-  const { profile, loading } = useAuth() // Get data from context
+  const { profile, loading } = useAuth()
   const [copied, setCopied] = useState(false)
+  const router = useRouter()
 
-  // 1. Loading State
-  if (loading) {
+  // Handle Missing Profile Side Effect
+  useEffect(() => {
+    if (!loading && !profile) {
+      // If done loading but no profile, send them to setup
+      router.push('/auth/setup')
+    }
+  }, [loading, profile, router])
+
+  // 1. Loading State (Keep showing this if loading OR if redirecting)
+  if (loading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        <span className="sr-only">Loading dashboard...</span>
       </div>
     )
   }
 
-  // 2. Safety Check (if profile failed to load)
-  if (!profile) return null
-
   // 3. Construct URL dynamically
   const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
 
+  // ... rest of your existing component code ...
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(confessUrl)
@@ -38,7 +48,8 @@ export default function DashboardClient() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-2xl mx-auto">
+       {/* ... existing JSX ... */}
+       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-8 md:p-10">
           <div className="text-center space-y-10">
             
@@ -107,5 +118,4 @@ export default function DashboardClient() {
       </div>
     </div>
   )
-                    }
-              
+}
