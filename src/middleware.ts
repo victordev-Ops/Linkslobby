@@ -1,13 +1,6 @@
+// src/middleware.ts
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-
-const PUBLIC_ROUTES = [
-  '/login',
-  '/signup',
-  '/auth/confirm',
-  '/auth/setup', // Setup must be public-ish (accessible without full profile)
-  '/', // Landing page
-]
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -30,26 +23,30 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // IMPORTANT: This refreshes the session if it's expired
   const { data: { user } } = await supabase.auth.getUser()
   const pathname = request.nextUrl.pathname
 
   // 1. Static Asset Pass-through
-  if (pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js)$/)) {
+  if (pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js)$/) || pathname.startsWith('/_next')) {
     return response
   }
 
-  // 2. Auth Route Handling (Redirect logged-in users away from Login/Signup)
+  // 2. Define Public Routes carefully
+  // We check for exact matches or specific prefixes, but NOT just "/" startsWith
+  const publicPaths = ['/login', '/signup', '/auth/confirm', '/auth/setup']
+  const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
+  const isAuthCallback = pathname.startsWith('/auth/')
+
+  // 3. Logic: Redirect logged-in users away from Login/Signup
   if (user && (pathname === '/login' || pathname === '/signup')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // 3. Protected Route Handling
-  // If user is NOT logged in and tries to access non-public route -> Login
-  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route))
-  
-  if (!user && !isPublicRoute) {
+  // 4. Logic: Protect Dashboard
+  // If no user and trying to access dashboard or other internal pages
+  if (!user && !isExactPublic && !isAuthCallback) {
     const loginUrl = new URL('/login', request.url)
-    // Optional: Add ?next= param to redirect back after login
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
   }
@@ -59,6 +56,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 }
