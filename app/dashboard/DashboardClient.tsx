@@ -5,23 +5,28 @@ import { useState, useEffect } from "react"
 import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from 'next/link'
-import { useRouter } from "next/navigation" // Import router
-import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation" 
+import { useAuth } from "@/context/AuthContext" // Ensure this is imported
 
 export default function DashboardClient() {
-  const { profile, loading } = useAuth()
+  const { user, profile, loading } = useAuth() // Get user, profile, and loading
   const [copied, setCopied] = useState(false)
   const router = useRouter()
 
-  // Handle Missing Profile Side Effect
+  // 1. Safety Redirect: Handle authentication and profile setup on the client
   useEffect(() => {
-    if (!loading && !profile) {
-      // If done loading but no profile, send them to setup
-      router.push('/auth/setup')
+    if (!loading) {
+      if (!user) {
+        // If loading is done and there's no user, redirect to login
+        router.push('/login')
+      } else if (!profile) {
+        // If user exists but profile row is missing, redirect to setup
+        router.push('/auth/setup')
+      }
     }
-  }, [loading, profile, router])
+  }, [user, profile, loading, router])
 
-  // 1. Loading State (Keep showing this if loading OR if redirecting)
+  // 2. Loading State (Keep showing this if loading OR while waiting for redirect condition)
   if (loading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -31,10 +36,9 @@ export default function DashboardClient() {
     )
   }
 
-  // 3. Construct URL dynamically
+  // If we reach here, profile is guaranteed to exist
   const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
 
-  // ... rest of your existing component code ...
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(confessUrl)
@@ -48,7 +52,6 @@ export default function DashboardClient() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
-       {/* ... existing JSX ... */}
        <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-8 md:p-10">
           <div className="text-center space-y-10">
