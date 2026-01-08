@@ -5,7 +5,7 @@ import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
 import { User, Mail, ArrowLeft, LogIn, Bell } from "lucide-react"
 // Removed: useSearchParams, useRouter, useState, useEffect imports
-
+import PushToggle from "@/components/PushToggle" 
 interface SettingsClientProps {
   initialUser: any
   initialUsername: string
