@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 export async function checkUsernameAvailability(username: string) {
   const supabase = await createSupabaseServerClient()
   
+  // Create a URL-friendly slug
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
   if (slug.length < 3) return { available: false, suggestions: [] }
 
@@ -18,10 +19,11 @@ export async function checkUsernameAvailability(username: string) {
 
   if (!data) return { available: true, slug, suggestions: [] }
 
+  // Generate alternatives if taken
   const suggestions = [
     `${slug}${Math.floor(Math.random() * 99)}`,
-    `${slug}-studio`,
-    `its-${slug}`
+    `${slug}-say`,
+    `the-${slug}`
   ]
 
   return { available: false, slug, suggestions }
@@ -31,26 +33,25 @@ export async function setupProfile(username: string) {
   const supabase = await createSupabaseServerClient()
   
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return { error: 'Auth session missing. Please log in again.' }
+  if (authError || !user) return { error: 'Session expired. Please sign in again.' }
 
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
-  // We utilize the row created by the Postgres Trigger.
-  // We only need to UPDATE, not UPSERT.
+  // Update the row created by your DB trigger
   const { error } = await supabase
     .from('profiles')
     .update({
       username,
       slug,
-      updated_at: new Date().toISOString(),
     })
     .eq('id', user.id)
 
   if (error) {
-    console.error("Profile update error:", error)
-    return { error: 'Could not update profile. Please try again.' }
+    console.error("Update error:", error)
+    return { error: 'This username might be taken. Try another.' }
   }
 
-  revalidatePath('/dashboard', 'layout') 
+  revalidatePath('/', 'layout') 
   redirect('/dashboard')       
-}
+    }
+    
