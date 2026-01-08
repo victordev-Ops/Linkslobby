@@ -5,7 +5,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { User } from "@supabase/supabase-js"; // Import Supabase User type for better typing
+import { User } from "@supabase/supabase-js"; // Import Supabase User type
 
 // --- Types ---
 type Profile = {
@@ -16,7 +16,7 @@ type Profile = {
 };
 
 type AuthContextType = {
-  user: User | null; // Use Supabase's User type
+  user: User | null;
   profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, slug, email") // Specify columns for Profile type
+        .select("id, username, slug, email")
         .eq("id", userId)
         .maybeSingle();
 
@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Error fetching profile:", error.message);
         return null;
       }
-      return data as Profile; // Cast data to Profile type
+      return data as Profile;
     } catch (err) {
       console.error("Unexpected profile fetch error:", err);
       return null;
@@ -55,8 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- Core State Management (useEffect) ---
   useEffect(() => {
-    // 1. Listen for auth changes (Login, Logout, Token Refresh, Initial Load)
-    // The onAuthStateChange listener is the most reliable source of truth
+    // Rely solely on the onAuthStateChange listener for initial load and subsequent changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
       
@@ -68,36 +67,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profileData = await fetchProfile(currentUser.id);
         setProfile(profileData);
         
-        // --- Added Redirect Check ---
-        // If the user is logged in but has no profile, redirect them to setup
-        // This makes sure the user is never stuck on a page that needs a profile (e.g., /dashboard)
+        // Safety Redirect: User logged in, but profile row is missing -> Send to setup
         if (!profileData && event !== 'SIGNED_OUT') {
             router.push('/auth/setup');
         }
 
       } else {
         setProfile(null);
-        // If logged out, redirect to login page only if not already there
-        if (event === 'SIGNED_OUT') {
-            router.push('/login');
+        
+        // Safety Redirect: If explicitly logged out, ensure they go to the login page
+        if (event === 'SIGNED_OUT' && window.location.pathname !== '/login') {
+             // Change '/login' to your correct login route if different
+             router.push('/login'); 
         }
       }
       
-      // Crucial: Set loading to false ONLY after the initial state is processed
-      // This is safe because onAuthStateChange fires immediately with the current session.
+      // Crucial: Set loading to false only after the initial state is processed
       setLoading(false);
     });
 
     // Cleanup subscription on component unmount
     return () => subscription.unsubscribe();
-    // Removed dependency on router since it's stable and causes issues in some Next.js environments
-  }, [supabase]); // Depend only on supabase client
+  }, [supabase, router]); // Dependency on router is necessary for the push calls
 
   // --- Action Handlers ---
 
   const signOut = async () => {
     try {
-      // The listener handles the state clearing and redirect.
+      // Calling this triggers the onAuthStateChange listener, 
+      // which handles state clearing and redirect automatically.
       await supabase.auth.signOut();
     } catch (err) {
       console.error("Sign out error:", err);
@@ -127,3 +125,4 @@ export const useAuth = () => {
   }
   return context;
 };
+  
