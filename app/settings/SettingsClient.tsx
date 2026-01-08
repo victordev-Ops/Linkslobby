@@ -1,11 +1,10 @@
+// app/settings/SettingsClient.tsx
 "use client"
 
-import { useState, useEffect } from "react"
 import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
-import { useSearchParams, useRouter } from "next/navigation"
 import { User, Mail, ArrowLeft, LogIn, Bell } from "lucide-react"
-import PushToggle from "@/components/PushToggle"
+// Removed: useSearchParams, useRouter, useState, useEffect imports
 
 interface SettingsClientProps {
   initialUser: any
@@ -16,30 +15,14 @@ export default function SettingsClient({
   initialUser,
   initialUsername,
 }: SettingsClientProps) {
-  const [justLoggedOut, setJustLoggedOut] = useState(false)
-  const searchParams = useSearchParams()
-  const router = useRouter()
+  // Removed: justLoggedOut state and logic
 
   const user = initialUser
   const username = initialUsername
 
-  useEffect(() => {
-    if (searchParams.get("loggedOut") === "true") {
-      setJustLoggedOut(true)
-      router.replace('/settings', { scroll: false })
-    }
-  }, [searchParams, router])
-
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Success Message after Logout */}
-      {justLoggedOut && (
-        <div className="max-w-4xl mx-auto px-6 pt-8">
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-800 rounded-xl text-center font-medium">
-            You have been successfully logged out.
-          </div>
-        </div>
-      )}
+      {/* Removed: Success Message after Logout JSX */}
 
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-10">
@@ -173,4 +156,5 @@ export default function SettingsClient({
       </div>
     </div>
   )
-      }
+          }
+              
