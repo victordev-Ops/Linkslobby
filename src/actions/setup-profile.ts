@@ -1,4 +1,3 @@
-// actions/setup-profile.ts
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
@@ -19,7 +18,6 @@ export async function checkUsernameAvailability(username: string) {
 
   if (!data) return { available: true, slug, suggestions: [] }
 
-  // Generate simple suggestions if taken
   const suggestions = [
     `${slug}${Math.floor(Math.random() * 99)}`,
     `${slug}-studio`,
@@ -31,23 +29,28 @@ export async function checkUsernameAvailability(username: string) {
 
 export async function setupProfile(username: string) {
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Auth session missing' }
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Auth session missing. Please log in again.' }
 
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
+  // We utilize the row created by the Postgres Trigger.
+  // We only need to UPDATE, not UPSERT.
   const { error } = await supabase
     .from('profiles')
-    .upsert({
-      id: user.id,
-      email: user.email!,
+    .update({
       username,
       slug,
-    }, { onConflict: 'id' })
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', user.id)
 
-  if (error) return { error: 'Could not create profile.' }
+  if (error) {
+    console.error("Profile update error:", error)
+    return { error: 'Could not update profile. Please try again.' }
+  }
 
-  revalidatePath('/dashboard') // Revalidate dashboard
-  redirect('/dashboard')       // Send straight to dashboard
+  revalidatePath('/dashboard', 'layout') 
+  redirect('/dashboard')       
 }
-  
