@@ -1,31 +1,25 @@
+// src/components/LogoutButton.tsx
 'use client'
 
-import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { LogOut } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext' // Import useAuth
 
 export default function LogoutButton() {
-  const router = useRouter()
+  const { signOut } = useAuth() // Use the centralized signOut function
   const [isLoading, setIsLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
   const handleLogout = async () => {
     setIsLoading(true)
-    const supabase = createClient()
+    
+    // Call the context's signOut function, which handles the Supabase call, 
+    // state clear, and redirect automatically via the listener.
+    await signOut()
 
-    const { error } = await supabase.auth.signOut()
-
-    if (error) {
-      console.error('Logout error:', error)
-      setIsLoading(false)
-      setShowConfirm(false)
-      return
-    }
-
-    // Immediate redirect to login/home page without full reload
-    router.push('/')           // Change '/' to your login route if different (e.g., '/login')
-    router.refresh()           // Optional: ensures server components revalidate auth state
+    // Safety fallback state reset
+    setIsLoading(false)
+    setShowConfirm(false)
   }
 
   const initiateLogout = () => {
@@ -78,4 +72,5 @@ export default function LogoutButton() {
       )}
     </>
   )
-      }
+    }
+          
