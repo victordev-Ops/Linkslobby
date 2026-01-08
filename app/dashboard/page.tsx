@@ -1,17 +1,9 @@
-import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+// app/dashboard/page.tsx
 import DashboardClient from './DashboardClient'
 
+// We removed the blocking server-side check (getUser and redirect)
+// to prevent the client-side navigation stall.
+// Middleware protects the route, and DashboardClient handles the rest.
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Gatekeeping: Redirect if not logged in
-  if (!user) {
-    redirect('/login')
-  }
-
-  // No need to pass props anymore!
   return <DashboardClient />
 }
