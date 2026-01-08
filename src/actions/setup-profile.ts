@@ -47,7 +47,7 @@ export async function setupProfile(username: string) {
 
   if (error) return { error: 'Could not create profile.' }
 
-  revalidatePath('/')
-  redirect('/')
+  revalidatePath('/dashboard') // Revalidate dashboard
+  redirect('/dashboard')       // Send straight to dashboard
 }
   
