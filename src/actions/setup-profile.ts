@@ -4,9 +4,6 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
-/**
- * Checks if a username (slug) is taken and provides alternatives.
- */
 export async function checkUsernameAvailability(username: string) {
   const supabase = await createSupabaseServerClient()
   
@@ -30,42 +27,41 @@ export async function checkUsernameAvailability(username: string) {
   return { available: false, slug, suggestions }
 }
 
-/**
- * Creates or updates the user profile with the chosen username.
- */
 export async function setupProfile(username: string) {
   const supabase = await createSupabaseServerClient()
   
-  // 1. Get the current authenticated user
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-  
-  if (authError || !user) {
-    return { error: 'Session expired. Please sign in again.' }
-  }
+  if (authError || !user) return { error: 'Session expired. Please sign in again.' }
 
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
-  // 2. Use UPSERT instead of UPDATE
-  // This handles cases where the profile row wasn't created yet.
+  /**
+   * FIX: Using UPSERT instead of UPDATE.
+   * Even though you have a trigger, UPSERT ensures that if the trigger is slow 
+   * or fails, this action creates the row so the user isn't stuck in a loop.
+   */
   const { error } = await supabase
     .from('profiles')
     .upsert({
-      id: user.id,          // Primary key for matching
-      email: user.email,    // Required by your schema (not null)
-      username: username,   // The display name
-      slug: slug,           // The unique handle
-      created_at: new Date().toISOString(),
+      id: user.id,          // Primary Key
+      email: user.email,    // Required by your schema
+      username: username,
+      slug: slug,
+      updated_at: new Date().toISOString(),
     }, {
-      onConflict: 'id'      // Tells Supabase to update if 'id' exists, insert if not
+      onConflict: 'id'      // Match existing row by ID
     })
 
   if (error) {
     console.error("Profile Setup Error:", error)
-    return { error: 'Could not save profile. That handle might be taken.' }
+    // If the error is a duplicate slug, handle it gracefully
+    if (error.code === '23505') return { error: 'That username is already taken.' }
+    return { error: 'Could not save profile. Please try again.' }
   }
 
-  // 3. Clear the cache and redirect
-  // revalidatePath ensures the middleware/dashboard sees the new 'username' data
+  // 1. Clear the Next.js Cache
   revalidatePath('/', 'layout') 
+  
+  // 2. Redirect to dashboard
   redirect('/dashboard')       
-    }
+}
