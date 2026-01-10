@@ -1,3 +1,4 @@
+//app/auth/setup/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -5,6 +6,8 @@ import { setupProfile, checkUsernameAvailability } from '@/actions/setup-profile
 import { useDebounce } from '@/hooks/use-debounce'
 import { motion, AnimatePresence } from 'framer-motion'
 import AuthForm from '@/components/AuthForm'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/context/AuthContext'
 
 export default function SetupUsername() {
   const [username, setUsername] = useState('')
@@ -15,6 +18,8 @@ export default function SetupUsername() {
   const [suggestions, setSuggestions] = useState<string[]>([])
 
   const debouncedUsername = useDebounce(username, 500)
+  const router = useRouter()
+  const { refreshProfile } = useAuth()
 
   useEffect(() => {
     async function validate() {
@@ -38,10 +43,18 @@ export default function SetupUsername() {
     e.preventDefault()
     if (!isAvailable || loading) return
     setLoading(true)
+    
+    // Call the server action
     const result = await setupProfile(username)
+    
     if (result?.error) {
       setMessage(result.error)
       setLoading(false)
+    } else if (result?.success) {
+      // CRITICAL FIX: Refresh context BEFORE navigating
+      // This ensures the Dashboard Client doesn't bounce us back here
+      await refreshProfile()
+      router.push('/dashboard')
     }
   }
 
@@ -105,4 +118,5 @@ export default function SetupUsername() {
       </AuthForm>
     </div>
   )
-}
+            }
+      
