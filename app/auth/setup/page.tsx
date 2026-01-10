@@ -1,4 +1,3 @@
-//app/auth/setup/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -19,7 +18,15 @@ export default function SetupUsername() {
 
   const debouncedUsername = useDebounce(username, 500)
   const router = useRouter()
-  const { refreshProfile } = useAuth()
+  const { refreshProfile, user } = useAuth() // Get user from context
+
+  // Basic check: If no user, they shouldn't be here
+  useEffect(() => {
+    if (!user && !loading) {
+       // Optional: Redirect to login if session is truly gone
+       // router.replace('/login')
+    }
+  }, [user, loading, router])
 
   useEffect(() => {
     async function validate() {
@@ -43,18 +50,29 @@ export default function SetupUsername() {
     e.preventDefault()
     if (!isAvailable || loading) return
     setLoading(true)
+    setMessage('')
     
-    // Call the server action
-    const result = await setupProfile(username)
-    
-    if (result?.error) {
-      setMessage(result.error)
+    try {
+      const result = await setupProfile(username)
+      
+      if (result?.error) {
+        setMessage(result.error)
+        setLoading(false)
+      } else if (result?.success) {
+        console.log("Profile created. Refreshing context...")
+        
+        // 1. Refresh Context
+        await refreshProfile()
+        
+        // 2. Redirect
+        console.log("Redirecting to dashboard...")
+        router.push('/dashboard')
+        router.refresh() // Force Next.js to refresh server components
+      }
+    } catch (err) {
+      console.error("Unexpected submission error:", err)
+      setMessage("Something went wrong. Please check your connection.")
       setLoading(false)
-    } else if (result?.success) {
-      // CRITICAL FIX: Refresh context BEFORE navigating
-      // This ensures the Dashboard Client doesn't bounce us back here
-      await refreshProfile()
-      router.push('/dashboard')
     }
   }
 
@@ -105,7 +123,7 @@ export default function SetupUsername() {
             )}
           </AnimatePresence>
 
-          {message && !isAvailable && <p className="text-rose-500 text-sm font-medium">{message}</p>}
+          {message && <p className={`text-sm font-medium ${message.includes('Success') ? 'text-emerald-500' : 'text-rose-500'}`}>{message}</p>}
 
           <button
             type="submit"
@@ -118,5 +136,4 @@ export default function SetupUsername() {
       </AuthForm>
     </div>
   )
-            }
-      
+}
