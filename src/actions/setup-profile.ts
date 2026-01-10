@@ -1,8 +1,10 @@
+//src/actions/setup-profile.ts
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+
+// Note: 'redirect' is removed from imports to prevent server-side navigation issues
 
 export async function checkUsernameAvailability(username: string) {
   const supabase = await createSupabaseServerClient()
@@ -35,33 +37,29 @@ export async function setupProfile(username: string) {
 
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
-  /**
-   * FIX: Using UPSERT instead of UPDATE.
-   * Even though you have a trigger, UPSERT ensures that if the trigger is slow 
-   * or fails, this action creates the row so the user isn't stuck in a loop.
-   */
   const { error } = await supabase
     .from('profiles')
     .upsert({
-      id: user.id,          // Primary Key
-      email: user.email,    // Required by your schema
+      id: user.id,          
+      email: user.email,    
       username: username,
       slug: slug,
       updated_at: new Date().toISOString(),
     }, {
-      onConflict: 'id'      // Match existing row by ID
+      onConflict: 'id'      
     })
 
   if (error) {
     console.error("Profile Setup Error:", error)
-    // If the error is a duplicate slug, handle it gracefully
     if (error.code === '23505') return { error: 'That username is already taken.' }
     return { error: 'Could not save profile. Please try again.' }
   }
 
   // 1. Clear the Next.js Cache
   revalidatePath('/', 'layout') 
+  revalidatePath('/dashboard')
   
-  // 2. Redirect to dashboard
-  redirect('/dashboard')       
-}
+  // 2. Return success instead of redirecting
+  // This allows the client to refresh the AuthContext before navigating
+  return { success: true }       
+                                  }
