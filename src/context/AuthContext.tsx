@@ -1,7 +1,7 @@
 // src/context/AuthContext.tsx
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client"; // Ensure this uses createBrowserClient
+import { createClient } from "@/lib/supabase/client"; 
 import { useRouter } from "next/navigation";
 import { User, Session } from "@supabase/supabase-js"; 
 
@@ -27,8 +27,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   
   const router = useRouter();
-  // Create client ONCE outside of render cycle if possible, 
-  // or ensure createClient in lib is a singleton.
   const [supabase] = useState(() => createClient());
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
@@ -62,12 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const profileData = await fetchProfile(currentUser.id);
           if (mounted) setProfile(profileData);
 
-          const currentPath = window.location.pathname;
-          const isSetupPage = currentPath.startsWith('/auth/setup');
-          
-          if (profileData && !profileData.username && !isSetupPage) {
-             router.replace('/auth/setup');
-          }
+          // REMOVED: The automatic redirect logic here caused the loop.
+          // We now rely on Middleware and Layouts to protect routes.
         } else {
           if (mounted) setProfile(null);
         }
@@ -75,12 +69,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // 1. Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       handleSession(session);
     });
 
-    // 2. Listen for changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       handleSession(session);
       
@@ -95,13 +87,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-    // Remove 'supabase' from dependency array to avoid re-subscription loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    // The onAuthStateChange listener will handle the redirect
   };
 
   const refreshProfile = async () => {
@@ -125,3 +115,4 @@ export const useAuth = () => {
   }
   return context;
 };
+    
