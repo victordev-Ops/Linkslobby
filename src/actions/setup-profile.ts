@@ -1,19 +1,60 @@
+// src/actions/setup-profile.ts
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+/**
+ * Checks if a username is taken and generates suggestions if it is.
+ */
+export async function checkUsernameAvailability(username: string) {
+  const supabase = await createSupabaseServerClient()
+  
+  const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  
+  if (slug.length < 3) {
+    return { available: false, slug, suggestions: [] }
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('slug')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (error) {
+    console.error("Check Username Error:", error.message)
+    return { available: false, slug, suggestions: [] }
+  }
+
+  // If no data is returned, the slug is available
+  if (!data) {
+    return { available: true, slug, suggestions: [] }
+  }
+
+  // Generate suggestions if taken
+  const suggestions = [
+    `${slug}${Math.floor(Math.random() * 99)}`,
+    `${slug}-say`,
+    `the-${slug}`
+  ]
+
+  return { available: false, slug, suggestions }
+}
+
+/**
+ * Creates or updates the user profile in the database.
+ */
 export async function setupProfile(username: string) {
   const supabase = await createSupabaseServerClient()
   
-  // 1. Get user with 'getUser' (more secure than 'getSession')
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return { error: 'Session expired. Please sign in.' }
+  if (authError || !user) {
+    return { error: 'Session expired. Please sign in again.' }
+  }
 
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
-  // 2. We use 'upsert' but specifically target the ID
-  // This handles both new users and people changing their username later
   const { error } = await supabase
     .from('profiles')
     .upsert({
@@ -22,16 +63,19 @@ export async function setupProfile(username: string) {
       username: username,
       slug: slug,
       updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'id'      
     })
 
   if (error) {
-    console.error("Database Error:", error.message)
-    return { error: error.message }
+    console.error("Profile Setup Error:", error.message)
+    if (error.code === '23505') return { error: 'That username is already taken.' }
+    return { error: 'Could not save profile. Please try again.' }
   }
 
-  // 3. Clear cache and return success
+  // Clear cache for the dashboard
   revalidatePath('/', 'layout') 
   revalidatePath('/dashboard')
   
   return { success: true }       
-}
+      }
