@@ -1,10 +1,7 @@
-//src/actions/setup-profile.ts
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-
-// Note: 'redirect' is removed from imports to prevent server-side navigation issues
 
 export async function checkUsernameAvailability(username: string) {
   const supabase = await createSupabaseServerClient()
@@ -30,14 +27,23 @@ export async function checkUsernameAvailability(username: string) {
 }
 
 export async function setupProfile(username: string) {
+  console.log("--- SETUP PROFILE START ---")
   const supabase = await createSupabaseServerClient()
   
+  // 1. Check Auth
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return { error: 'Session expired. Please sign in again.' }
+  
+  if (authError || !user) {
+    console.error("Setup Error: No User Found", authError)
+    return { error: 'Session expired. Please sign in again.' }
+  }
+
+  console.log("User found:", user.id)
 
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
-  const { error } = await supabase
+  // 2. Perform Upsert
+  const { error, data } = await supabase
     .from('profiles')
     .upsert({
       id: user.id,          
@@ -48,18 +54,22 @@ export async function setupProfile(username: string) {
     }, {
       onConflict: 'id'      
     })
+    .select() // Add select to ensure we get data back if successful
 
   if (error) {
-    console.error("Profile Setup Error:", error)
+    console.error("SUPABASE WRITE ERROR:", error)
     if (error.code === '23505') return { error: 'That username is already taken.' }
-    return { error: 'Could not save profile. Please try again.' }
+    // 42501 is the code for RLS Permission Denied
+    if (error.code === '42501') return { error: 'Database permission denied. Check RLS policies.' }
+    return { error: `Error saving profile: ${error.message}` }
   }
 
-  // 1. Clear the Next.js Cache
+  console.log("Profile created successfully:", data)
+
+  // 3. Revalidate
   revalidatePath('/', 'layout') 
   revalidatePath('/dashboard')
   
-  // 2. Return success instead of redirecting
-  // This allows the client to refresh the AuthContext before navigating
   return { success: true }       
-                                  }
+    }
+    
