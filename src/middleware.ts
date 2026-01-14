@@ -32,20 +32,24 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // 2. Define Public Routes carefully
-  // We check for exact matches or specific prefixes, but NOT just "/" startsWith
+  // 2. Define Public Routes
   const publicPaths = ['/login', '/signup', '/auth/confirm', '/auth/setup']
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
   const isAuthCallback = pathname.startsWith('/auth/')
+  
+  // ✅ NEW: Allow anonymous access to confession and AMA pages
+  const isConfessPage = pathname.startsWith('/confess/')
+  const isAmaPage = pathname.startsWith('/ama/')
+  const isPublicRoute = isExactPublic || isAuthCallback || isConfessPage || isAmaPage
 
   // 3. Logic: Redirect logged-in users away from Login/Signup
   if (user && (pathname === '/login' || pathname === '/signup')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // 4. Logic: Protect Dashboard
+  // 4. Logic: Protect Dashboard and other authenticated routes
   // If no user and trying to access dashboard or other internal pages
-  if (!user && !isExactPublic && !isAuthCallback) {
+  if (!user && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
