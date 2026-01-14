@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type NotificationContextType = {
@@ -19,9 +19,10 @@ export function NotificationProvider({
   profileId?: string | null
 }) {
   const [unreadCount, setUnreadCount] = useState(0)
-  const supabase = createClient()
+  // ✅ FIX: Create client once
+  const supabaseRef = useRef(createClient())
+  const supabase = supabaseRef.current
 
-  // Memoized refresh function
   const refreshUnreadCount = useCallback(async () => {
     if (!profileId) {
       setUnreadCount(0)
@@ -48,10 +49,8 @@ export function NotificationProvider({
       return
     }
 
-    // Initial fetch
     refreshUnreadCount()
 
-    // Real-time subscription
     const channel = supabase
       .channel(`notifications-${profileId}`)
       .on('postgres_changes', {
@@ -68,7 +67,6 @@ export function NotificationProvider({
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
       }, (payload) => {
-        // Type guard to ensure payload has the expected structure
         const newData = payload.new as { is_read?: boolean }
         const oldData = payload.old as { is_read?: boolean }
         
@@ -82,7 +80,6 @@ export function NotificationProvider({
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
       }, (payload) => {
-        // Type guard for delete event
         const oldData = payload.old as { is_read?: boolean }
         
         if (!oldData.is_read) {
@@ -94,19 +91,5 @@ export function NotificationProvider({
     return () => {
       channel.unsubscribe()
     }
-  }, [profileId, supabase, refreshUnreadCount])
-
-  return (
-    <NotificationContext.Provider value={{ unreadCount, setUnreadCount, refreshUnreadCount }}>
-      {children}
-    </NotificationContext.Provider>
-  )
-}
-
-export const useNotifications = () => {
-  const context = useContext(NotificationContext)
-  if (!context) {
-    throw new Error('useNotifications must be used within NotificationProvider')
-  }
-  return context
-}
+  }, [profileId, refreshUnreadCount]) // ✅ FIX: Remove supabase dependency
+    }
