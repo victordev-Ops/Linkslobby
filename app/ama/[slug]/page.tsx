@@ -1,21 +1,24 @@
+//app/ama/[slug]/page.tsx
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import AmaPublicClient from '@/components/AmaPublicClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PublicAmaPage({ 
-  params 
-}: { 
-  params: { slug: string } 
-}) {
+interface PageProps {
+  params: Promise<{ slug: string }>
+}
+
+export default async function PublicAmaPage({ params }: PageProps) {
+  const { slug } = await params // ✅ FIX: Await the params
+  
   const supabase = await createSupabaseServerClient()
   
   // Fetch profile by slug
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('id, username, slug')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .single()
 
   if (error || !profile) {
