@@ -1,105 +1,97 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
-import { Bell, BellOff, Loader2, AlertCircle } from "lucide-react";
-import { usePushSubscription } from "@/hooks/use-push";
-import { createClient } from "@/lib/supabase/client";
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { useState, useEffect, useRef } from "react"
+import { motion } from "framer-motion"
+import { Bell, BellOff, Loader2, AlertCircle } from "lucide-react"
+import { usePushSubscription } from "@/hooks/use-push"
+import { createClient } from "@/lib/supabase/client"
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
 
 function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return twMerge(clsx(inputs))
 }
 
 export default function PushToggle({ userId }: { userId: string }) {
-  const { subscribe, unsubscribe } = usePushSubscription();
-  const [isEnabled, setIsEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [isSupported, setIsSupported] = useState(true);
+  const { subscribe, unsubscribe } = usePushSubscription()
+  const [isEnabled, setIsEnabled] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [isSupported, setIsSupported] = useState(true)
   
-  // ✅ FIX: Create supabase client once and store in ref
-  const supabaseRef = useRef(createClient());
-  const supabase = supabaseRef.current;
-
-  // ✅ FIX: Add mounted ref to prevent state updates after unmount
-  const mountedRef = useRef(true);
+  const supabaseRef = useRef(createClient())
+  const supabase = supabaseRef.current
+  const mountedRef = useRef(true)
 
   useEffect(() => {
-    mountedRef.current = true;
+    mountedRef.current = true
     
     const checkStatus = async () => {
       try {
-        // 1. Check browser support
         if (!("Notification" in window) || !("serviceWorker" in navigator)) {
           if (mountedRef.current) {
-            setIsSupported(false);
-            setLoading(false);
+            setIsSupported(false)
+            setLoading(false)
           }
-          return;
+          return
         }
 
-        // 2. Check permission
-        const hasPermission = Notification.permission === "granted";
+        const hasPermission = Notification.permission === "granted"
 
-        // 3. Check database subscription
         const { data, error } = await supabase
           .from("profiles")
           .select("push_subscription")
           .eq("id", userId)
-          .single();
+          .single()
 
         if (error) {
-          console.error("Error checking subscription:", error);
+          console.error("Error checking subscription:", error)
         }
 
-        const hasSubscription = !!data?.push_subscription;
+        const hasSubscription = !!data?.push_subscription
 
-        // ✅ FIX: Only update state if still mounted
         if (mountedRef.current) {
-          setIsEnabled(hasPermission && hasSubscription);
-          setLoading(false);
+          setIsEnabled(hasPermission && hasSubscription)
+          setLoading(false)
         }
       } catch (err) {
-        console.error("Status check error:", err);
+        console.error("Status check error:", err)
         if (mountedRef.current) {
-          setLoading(false);
+          setLoading(false)
         }
       }
-    };
+    }
 
-    checkStatus();
+    checkStatus()
 
-    // ✅ FIX: Cleanup function
     return () => {
-      mountedRef.current = false;
-    };
-  }, [userId]); // ✅ FIX: Remove supabase from dependencies
+      mountedRef.current = false
+    }
+  }, [userId, supabase])
 
   const handleToggle = async () => {
-    if (loading) return;
-    setLoading(true);
+    if (loading) return
+    setLoading(true)
     
     try {
-      let success = false;
+      let success = false
       
       if (isEnabled) {
-        success = await unsubscribe(userId);
+        success = await unsubscribe(userId)
         if (success && mountedRef.current) {
-          setIsEnabled(false);
+          setIsEnabled(false)
         }
       } else {
-        success = await subscribe(userId);
+        success = await subscribe(userId)
         if (success && mountedRef.current) {
-          setIsEnabled(true);
+          setIsEnabled(true)
         }
       }
     } finally {
       if (mountedRef.current) {
-        setLoading(false);
+        setLoading(false)
       }
     }
-  };
+  }
 
   if (!isSupported) {
     return (
@@ -114,7 +106,7 @@ export default function PushToggle({ userId }: { userId: string }) {
           </p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -160,3 +152,5 @@ export default function PushToggle({ userId }: { userId: string }) {
         </motion.div>
       </button>
     </div>
+  )
+          }
