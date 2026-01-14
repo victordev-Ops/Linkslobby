@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Bell, BellOff, Loader2, AlertCircle } from "lucide-react";
 import { usePushSubscription } from "@/hooks/use-push";
@@ -17,16 +17,25 @@ export default function PushToggle({ userId }: { userId: string }) {
   const [isEnabled, setIsEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isSupported, setIsSupported] = useState(true);
-  const supabase = createClient();
+  
+  // ✅ FIX: Create supabase client once and store in ref
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
 
-  // Check current subscription status
+  // ✅ FIX: Add mounted ref to prevent state updates after unmount
+  const mountedRef = useRef(true);
+
   useEffect(() => {
+    mountedRef.current = true;
+    
     const checkStatus = async () => {
       try {
         // 1. Check browser support
         if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-          setIsSupported(false);
-          setLoading(false);
+          if (mountedRef.current) {
+            setIsSupported(false);
+            setLoading(false);
+          }
           return;
         }
 
@@ -46,17 +55,26 @@ export default function PushToggle({ userId }: { userId: string }) {
 
         const hasSubscription = !!data?.push_subscription;
 
-        // Only enabled if BOTH permission granted AND subscription exists
-        setIsEnabled(hasPermission && hasSubscription);
+        // ✅ FIX: Only update state if still mounted
+        if (mountedRef.current) {
+          setIsEnabled(hasPermission && hasSubscription);
+          setLoading(false);
+        }
       } catch (err) {
         console.error("Status check error:", err);
-      } finally {
-        setLoading(false);
+        if (mountedRef.current) {
+          setLoading(false);
+        }
       }
     };
 
     checkStatus();
-  }, [userId, supabase]);
+
+    // ✅ FIX: Cleanup function
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [userId]); // ✅ FIX: Remove supabase from dependencies
 
   const handleToggle = async () => {
     if (loading) return;
@@ -66,20 +84,20 @@ export default function PushToggle({ userId }: { userId: string }) {
       let success = false;
       
       if (isEnabled) {
-        // Turn OFF
         success = await unsubscribe(userId);
-        if (success) {
+        if (success && mountedRef.current) {
           setIsEnabled(false);
         }
       } else {
-        // Turn ON
         success = await subscribe(userId);
-        if (success) {
+        if (success && mountedRef.current) {
           setIsEnabled(true);
         }
       }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -127,14 +145,12 @@ export default function PushToggle({ userId }: { userId: string }) {
         className="relative h-7 w-12 cursor-pointer outline-none disabled:cursor-not-allowed"
         aria-label="Toggle push notifications"
       >
-        {/* Toggle Background */}
         <div className={cn(
           "h-full w-full rounded-full transition-colors duration-300",
           isEnabled ? "bg-green-600" : "bg-gray-300",
           loading && "opacity-50"
         )} />
         
-        {/* Toggle Knob */}
         <motion.div
           className="absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-md"
           animate={{ x: isEnabled ? 20 : 0 }}
@@ -144,5 +160,3 @@ export default function PushToggle({ userId }: { userId: string }) {
         </motion.div>
       </button>
     </div>
-  );
-}
