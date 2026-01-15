@@ -1,6 +1,7 @@
+//src/components/InboxClient.tsx
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RefreshCw, MessageSquare, ChevronRight, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
@@ -16,6 +17,20 @@ type Confession = {
   created_at: string
   is_read: boolean
   profile_id: string
+}
+
+/**
+ * HELPER: Debounce function
+ */
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }
 }
 
 /**
@@ -70,6 +85,14 @@ export default function InboxClient({
   const { setUnreadCount, refreshUnreadCount } = useNotifications()
   const router = useRouter()
 
+  // Debounced version of refreshUnreadCount to prevent excessive updates
+  const debouncedRefreshUnreadCount = useMemo(
+    () => debounce(() => {
+      refreshUnreadCount().catch(console.error)
+    }, 300),
+    [refreshUnreadCount]
+  )
+
   // --- 1. CORE FETCH LOGIC ---
   const fetchLatest = useCallback(async (isManual = false) => {
     if (isManual) {
@@ -84,15 +107,17 @@ export default function InboxClient({
         .select('id, message, created_at, is_read, profile_id')
         .eq('profile_id', userId)
         .order('created_at', { ascending: false })
-        .limit(100) // Add reasonable limit
+        .limit(100)
 
       if (supabaseError) throw supabaseError
 
       if (data) {
         setConfessions(prev => mergeConfessions(prev, data))
         
-        // Use the context's refresh function for consistency
-        await refreshUnreadCount()
+        // Defer unread count update to avoid blocking
+        queueMicrotask(() => {
+          refreshUnreadCount().catch(console.error)
+        })
         
         if (isManual) toast.success('Inbox updated')
       }
@@ -132,11 +157,13 @@ export default function InboxClient({
           table: 'confessions',
           filter: `profile_id=eq.${userId}`,
         },
-        async (payload) => {
+        (payload) => {
           if (payload.eventType === 'INSERT') {
             const newMsg = payload.new as Confession
             setConfessions((prev) => mergeConfessions(prev, [newMsg]))
-            await refreshUnreadCount()
+            
+            // Non-blocking unread count update
+            queueMicrotask(() => debouncedRefreshUnreadCount())
             
             toast('New secret message! 💌', {
               description: 'Tap to view',
@@ -150,10 +177,10 @@ export default function InboxClient({
             setConfessions((prev) =>
               prev.map((c) => (c.id === updated.id ? updated : c))
             )
-            await refreshUnreadCount()
+            queueMicrotask(() => debouncedRefreshUnreadCount())
           } else if (payload.eventType === 'DELETE') {
             setConfessions((prev) => prev.filter((c) => c.id !== payload.old.id))
-            await refreshUnreadCount()
+            queueMicrotask(() => debouncedRefreshUnreadCount())
           }
         }
       )
@@ -162,7 +189,7 @@ export default function InboxClient({
     return () => { 
       supabase.removeChannel(channel) 
     }
-  }, [userId, supabase, refreshUnreadCount, router])
+  }, [userId, supabase, debouncedRefreshUnreadCount, router])
 
   // --- 4. ACTION HANDLERS ---
   const handleRefresh = useCallback(() => {
@@ -170,30 +197,24 @@ export default function InboxClient({
   }, [fetchLatest])
 
   const openMessage = useCallback(async (confession: Confession) => {
-    // Optimistic navigation
-    router.push(`/inbox/${confession.id}`)
-
-    // Optimistic UI update
+    // 1. Mark as read in background (fire and forget)
     if (!confession.is_read) {
-      const originalConfessions = [...confessions]
+      markConfessionAsRead(confession.id).catch(err => {
+        console.error('Mark as read error:', err)
+      })
       
+      // 2. Optimistic UI update
       setConfessions((prev) =>
         prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
       )
-      await refreshUnreadCount()
-
-      try {
-        const result = await markConfessionAsRead(confession.id)
-        if (result?.error) throw new Error(result.error)
-      } catch (err) {
-        console.error('Mark as read error:', err)
-        // Rollback on error
-        setConfessions(originalConfessions)
-        await refreshUnreadCount()
-        toast.error('Failed to mark as read')
-      }
+      
+      // 3. Defer unread count update (non-blocking)
+      queueMicrotask(() => debouncedRefreshUnreadCount())
     }
-  }, [confessions, router, refreshUnreadCount])
+    
+    // 4. Navigate immediately (don't wait for server)
+    router.push(`/inbox/${confession.id}`)
+  }, [router, debouncedRefreshUnreadCount])
 
   // --- RENDER ERROR STATE ---
   if (error && confessions.length === 0) {
@@ -233,11 +254,10 @@ export default function InboxClient({
           ) : (
             confessions.map((c) => (
               <motion.button
-                layout
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.15 }}
                 key={c.id}
                 onClick={() => openMessage(c)}
                 className="w-full text-left px-6 py-5 flex items-start gap-4 hover:bg-gray-50/50 transition-colors active:bg-gray-100 group"
@@ -273,7 +293,7 @@ export default function InboxClient({
                       ? 'text-gray-500' 
                       : 'text-gray-900 font-semibold'
                   }`}>
-                    {c.is_read ? c.message : "You received a new secret message..."}
+                    {c.message.length > 80 ? c.message.slice(0, 80) + '...' : c.message}
                   </p>
                 </div>
 
