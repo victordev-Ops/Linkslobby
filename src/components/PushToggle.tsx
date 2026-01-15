@@ -1,3 +1,4 @@
+//src/components/PushToggle.tsx
 "use client"
 
 import { useState, useEffect, useRef } from "react"
@@ -12,21 +13,38 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+const CHECK_TIMEOUT = 5000 // 5 second timeout for checking status
+
 export default function PushToggle({ userId }: { userId: string }) {
-  const { subscribe, unsubscribe } = usePushSubscription()
+  const { subscribe, unsubscribe, syncSubscription } = usePushSubscription()
   const [isEnabled, setIsEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isSupported, setIsSupported] = useState(true)
   
-  const supabaseRef = useRef(createClient())
-  const supabase = supabaseRef.current
+  const supabase = useRef(createClient()).current
   const mountedRef = useRef(true)
+  const hasCheckedRef = useRef(false)
+  const timeoutRef = useRef<NodeJS.Timeout>()
 
   useEffect(() => {
     mountedRef.current = true
     
+    // Prevent multiple checks
+    if (hasCheckedRef.current) return
+    hasCheckedRef.current = true
+    
     const checkStatus = async () => {
       try {
+        // Set a timeout to prevent infinite loading
+        timeoutRef.current = setTimeout(() => {
+          if (mountedRef.current && loading) {
+            console.warn("Push check timeout - defaulting to disabled")
+            setLoading(false)
+            setIsEnabled(false)
+          }
+        }, CHECK_TIMEOUT)
+
+        // Check browser support
         if (!("Notification" in window) || !("serviceWorker" in navigator)) {
           if (mountedRef.current) {
             setIsSupported(false)
@@ -37,6 +55,13 @@ export default function PushToggle({ userId }: { userId: string }) {
 
         const hasPermission = Notification.permission === "granted"
 
+        // If permission granted, sync subscription in background
+        if (hasPermission) {
+          // Don't await this - let it run in background
+          syncSubscription(userId).catch(console.error)
+        }
+
+        // Check DB subscription status
         const { data, error } = await supabase
           .from("profiles")
           .select("push_subscription")
@@ -45,6 +70,12 @@ export default function PushToggle({ userId }: { userId: string }) {
 
         if (error) {
           console.error("Error checking subscription:", error)
+          // Don't fail completely - just show as disabled
+          if (mountedRef.current) {
+            setIsEnabled(false)
+            setLoading(false)
+          }
+          return
         }
 
         const hasSubscription = !!data?.push_subscription
@@ -56,7 +87,12 @@ export default function PushToggle({ userId }: { userId: string }) {
       } catch (err) {
         console.error("Status check error:", err)
         if (mountedRef.current) {
+          setIsEnabled(false)
           setLoading(false)
+        }
+      } finally {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
         }
       }
     }
@@ -65,8 +101,11 @@ export default function PushToggle({ userId }: { userId: string }) {
 
     return () => {
       mountedRef.current = false
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
     }
-  }, [userId, supabase])
+  }, [userId]) // Only depend on userId, not supabase
 
   const handleToggle = async () => {
     if (loading) return
@@ -86,6 +125,8 @@ export default function PushToggle({ userId }: { userId: string }) {
           setIsEnabled(true)
         }
       }
+    } catch (error) {
+      console.error("Toggle error:", error)
     } finally {
       if (mountedRef.current) {
         setLoading(false)
@@ -153,4 +194,4 @@ export default function PushToggle({ userId }: { userId: string }) {
       </button>
     </div>
   )
-          }
+      }
