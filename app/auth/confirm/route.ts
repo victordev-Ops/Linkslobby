@@ -7,26 +7,57 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
-  const next = searchParams.get('next') ?? '/dashboard'
 
   if (token_hash && type) {
     const supabase = await createSupabaseServerClient()
 
     // 1. Verify the OTP/Magic Link token
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       type,
       token_hash,
     })
 
-    if (!error) {
-      // 2. Redirect to destination (usually /dashboard).
-      // We rely on app/dashboard/layout.tsx to detect if the user
-      // has a profile/username. If not, the layout will redirect 
-      // them to /auth/setup automatically.
-      return NextResponse.redirect(new URL(next, request.url))
+    if (!error && data.user) {
+      // 2. Check if profile exists
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, username, slug')
+        .eq('id', data.user.id)
+        .maybeSingle()
+
+      if (profileError) {
+        console.error('Profile check error:', profileError)
+      }
+
+      // 3. Create minimal profile if it doesn't exist
+      if (!profile) {
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: data.user.email,
+            username: null, // Will be set in setup
+            slug: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+
+        if (insertError) {
+          console.error('Profile creation error:', insertError)
+        }
+      }
+
+      // 4. Redirect based on profile completion
+      if (profile?.username && profile?.slug) {
+        // Profile complete -> go to dashboard
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      } else {
+        // Profile incomplete -> go to setup
+        return NextResponse.redirect(new URL('/auth/setup', request.url))
+      }
     }
   }
 
   // Fallback for expired or invalid tokens
   return NextResponse.redirect(new URL('/login?error=link-expired', request.url))
-}
+  }
