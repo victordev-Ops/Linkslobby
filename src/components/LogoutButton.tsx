@@ -3,23 +3,29 @@
 
 import { useState } from 'react'
 import { LogOut } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext' // Import useAuth
+import { useAuth } from '@/context/AuthContext'
 
 export default function LogoutButton() {
-  const { signOut } = useAuth() // Use the centralized signOut function
+  const { signOut } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
   const handleLogout = async () => {
     setIsLoading(true)
     
-    // Call the context's signOut function, which handles the Supabase call, 
-    // state clear, and redirect automatically via the listener.
-    await signOut()
-
-    // Safety fallback state reset
-    setIsLoading(false)
-    setShowConfirm(false)
+    try {
+      // Force logout regardless of any pending operations
+      await Promise.race([
+        signOut(),
+        new Promise((resolve) => setTimeout(resolve, 3000)) // 3 second max wait
+      ])
+    } catch (error) {
+      console.error("Logout error:", error)
+    } finally {
+      // Always reset loading state and close modal
+      setIsLoading(false)
+      setShowConfirm(false)
+    }
   }
 
   const initiateLogout = () => {
@@ -43,7 +49,14 @@ export default function LogoutButton() {
       </button>
 
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isLoading) {
+              cancelLogout()
+            }
+          }}
+        >
           <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
             <h2 className="mb-4 text-xl font-semibold text-gray-900">
               Confirm logout
@@ -55,7 +68,7 @@ export default function LogoutButton() {
               <button
                 onClick={cancelLogout}
                 disabled={isLoading}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -72,5 +85,4 @@ export default function LogoutButton() {
       )}
     </>
   )
-    }
-          
+}
