@@ -1,15 +1,11 @@
-//src/components/InboxClient.tsx
+//src/components/MessageViewClient.tsx
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { RefreshCw, MessageSquare, ChevronRight, AlertCircle } from 'lucide-react'
-import Link from 'next/link'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { markConfessionAsRead } from 'app/actions/confessions'
-import { useNotifications } from '@/context/NotificationContext'
-import { motion, AnimatePresence } from 'framer-motion'
-import { toast } from 'sonner'
+import { X, Share2, Lock, Camera, Loader2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { toPng } from 'html-to-image'
 
 type Confession = {
   id: string
@@ -19,333 +15,218 @@ type Confession = {
   profile_id: string
 }
 
-/**
- * HELPER: Debounce function
- */
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout | null = null
-  return (...args: Parameters<T>) => {
-    if (timeout) clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
-  }
+type Props = {
+  confession: Confession
+  username: string
 }
 
-/**
- * HELPER: Merges two arrays of messages, removes duplicates by ID, 
- * and sorts them by date (newest first).
- */
-const mergeConfessions = (current: Confession[], incoming: Confession[]): Confession[] => {
-  const map = new Map<string, Confession>()
-  ;[...current, ...incoming].forEach(item => map.set(item.id, item))
-  return Array.from(map.values()).sort((a, b) => 
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  )
-}
+const GRADIENTS = [
+  "bg-gradient-to-r from-rose-500 via-red-500 to-orange-500",
+  "bg-gradient-to-r from-purple-600 to-blue-500",
+  "bg-gradient-to-r from-emerald-500 to-teal-700",
+  "bg-gradient-to-r from-fuchsia-600 to-pink-600",
+  "bg-gradient-to-r from-amber-400 to-orange-600",
+  "bg-gradient-to-r from-gray-900 to-gray-600",
+]
 
-/**
- * HELPER: Formats a date string into a relative time (e.g., "5m ago")
- */
-const formatRelativeTime = (dateString: string): string => {
-  const now = new Date()
-  const then = new Date(dateString)
-  const diffInSeconds = Math.floor((now.getTime() - then.getTime()) / 1000)
-
-  if (diffInSeconds < 60) return 'Just now'
-  
-  const diffInMinutes = Math.floor(diffInSeconds / 60)
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`
-  
-  const diffInHours = Math.floor(diffInMinutes / 60)
-  if (diffInHours < 24) return `${diffInHours}h ago`
-  
-  const diffInDays = Math.floor(diffInHours / 24)
-  if (diffInDays < 7) return `${diffInDays}d ago`
-
-  return then.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
-export default function InboxClient({ 
-  initialConfessions, 
-  userId 
-}: { 
-  initialConfessions: Confession[]
-  userId: string 
-}) {
-  const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  
-  // Track if we have performed the initial mount background sync
-  const hasMounted = useRef(false)
-  const supabase = useRef(createClient()).current
- 
-  const { setUnreadCount, refreshUnreadCount } = useNotifications()
+export default function MessageViewClient({ confession, username }: Props) {
   const router = useRouter()
+  
+  // Ref for the container that includes the background padding
+  const shareWrapperRef = useRef<HTMLDivElement>(null)
+  
+  const [colorIndex, setColorIndex] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isSharing, setIsSharing] = useState(false)
 
-  // Debounced version of refreshUnreadCount to prevent excessive updates
-  const debouncedRefreshUnreadCount = useMemo(
-    () => debounce(() => {
-      refreshUnreadCount().catch(console.error)
-    }, 300),
-    [refreshUnreadCount]
-  )
+  const handleNextColor = () => setColorIndex((prev) => (prev + 1) % GRADIENTS.length)
+  const handleClose = () => router.push('/inbox')
 
-  // --- 1. CORE FETCH LOGIC ---
-  const fetchLatest = useCallback(async (isManual = false) => {
-    if (isManual) {
-      setRefreshing(true)
-      setError(null)
-      if (window.navigator.vibrate) window.navigator.vibrate(10)
-    }
-
+  /**
+   * Generates the image from the ref
+   * Optimized with lower pixelRatio for better performance
+   */
+  const generateImage = async () => {
+    if (!shareWrapperRef.current) return null
+    
     try {
-      const { data, error: supabaseError } = await supabase
-        .from('confessions')
-        .select('id, message, created_at, is_read, profile_id')
-        .eq('profile_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(100)
+      return await toPng(shareWrapperRef.current, { 
+        cacheBust: true, 
+        pixelRatio: 2, // Reduced from 3 for better performance
+        quality: 0.92,
+        backgroundColor: '#F9FAFB',
+        style: {
+          padding: '40px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }
+      })
+    } catch (error) {
+      console.error('Image generation failed:', error)
+      return null
+    }
+  }
 
-      if (supabaseError) throw supabaseError
-
-      if (data) {
-        setConfessions(prev => mergeConfessions(prev, data))
-        
-        // Defer unread count update to avoid blocking
-        queueMicrotask(() => {
-          refreshUnreadCount().catch(console.error)
-        })
-        
-        if (isManual) toast.success('Inbox updated')
+  /**
+   * Save Image (Camera Icon)
+   */
+  const handleSaveImage = async () => {
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      const dataUrl = await generateImage()
+      if (dataUrl) {
+        const link = document.createElement('a')
+        link.download = `confession-${username}.png`
+        link.href = dataUrl
+        link.click()
+      } else {
+        throw new Error('Failed to generate image')
       }
     } catch (err) {
-      console.error('Fetch error:', err)
-      if (isManual) {
-        setError('Failed to load messages.')
-        toast.error('Sync failed')
-      }
+      console.error("Save failed", err)
     } finally {
-      if (isManual) setTimeout(() => setRefreshing(false), 600)
+      setIsSaving(false)
     }
-  }, [userId, supabase, refreshUnreadCount])
-
-  // --- 2. SYNC SERVER PROPS & HANDLE INITIAL MOUNT ---
-  useEffect(() => {
-    // Merge initial confessions from server
-    setConfessions(prev => mergeConfessions(prev, initialConfessions))
-    
-    const unread = initialConfessions.filter(c => !c.is_read).length
-    setUnreadCount(unread)
-
-    // Perform background sync on initial mount only
-    if (!hasMounted.current) {
-      fetchLatest(false) 
-      hasMounted.current = true
-    }
-  }, [initialConfessions, setUnreadCount, fetchLatest])
-
-  // --- 3. REALTIME LISTENER ---
-  useEffect(() => {
-    const channel = supabase
-      .channel(`inbox-realtime-${userId}`)
-      .on('postgres_changes', {
-          event: '*', 
-          schema: 'public',
-          table: 'confessions',
-          filter: `profile_id=eq.${userId}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newMsg = payload.new as Confession
-            setConfessions((prev) => mergeConfessions(prev, [newMsg]))
-            
-            // Non-blocking unread count update
-            queueMicrotask(() => debouncedRefreshUnreadCount())
-            
-            toast('New secret message! 💌', {
-              description: 'Tap to view',
-              action: { 
-                label: 'View', 
-                onClick: () => router.push(`/inbox/${newMsg.id}`) 
-              }
-            })
-          } else if (payload.eventType === 'UPDATE') {
-            const updated = payload.new as Confession
-            setConfessions((prev) =>
-              prev.map((c) => (c.id === updated.id ? updated : c))
-            )
-            queueMicrotask(() => debouncedRefreshUnreadCount())
-          } else if (payload.eventType === 'DELETE') {
-            setConfessions((prev) => prev.filter((c) => c.id !== payload.old.id))
-            queueMicrotask(() => debouncedRefreshUnreadCount())
-          }
-        }
-      )
-      .subscribe()
-
-    return () => { 
-      supabase.removeChannel(channel) 
-    }
-  }, [userId, supabase, debouncedRefreshUnreadCount, router])
-
-  // --- 4. ACTION HANDLERS ---
-  const handleRefresh = useCallback(() => {
-    fetchLatest(true)
-  }, [fetchLatest])
-
-  const openMessage = useCallback(async (confession: Confession) => {
-    // 1. Mark as read in background (fire and forget)
-    if (!confession.is_read) {
-      markConfessionAsRead(confession.id).catch(err => {
-        console.error('Mark as read error:', err)
-      })
-      
-      // 2. Optimistic UI update
-      setConfessions((prev) =>
-        prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
-      )
-      
-      // 3. Defer unread count update (non-blocking)
-      queueMicrotask(() => debouncedRefreshUnreadCount())
-    }
-    
-    // 4. Navigate immediately (don't wait for server)
-    router.push(`/inbox/${confession.id}`)
-  }, [router, debouncedRefreshUnreadCount])
-
-  // --- RENDER ERROR STATE ---
-  if (error && confessions.length === 0) {
-    return <ErrorState retry={handleRefresh} message={error} />
   }
 
+  /**
+   * Share to Stories (Native Share API)
+   */
+  const handleShare = async () => {
+    if (isSharing) return
+    setIsSharing(true)
+    try {
+      const dataUrl = await generateImage()
+      if (!dataUrl) {
+        throw new Error('Failed to generate image')
+      }
+
+      const blob = await (await fetch(dataUrl)).blob()
+      const file = new File([blob], 'confession.png', { type: 'image/png' })
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Anonymous Message',
+          text: `Send me anonymous messages! 👉 say-app.com/confess/${username}`,
+        })
+      } else {
+        // Fallback to download
+        await handleSaveImage()
+      }
+    } catch (err) {
+      console.error("Share failed", err)
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
+  const isLongMessage = confession.message.length > 150
+  const textSizeClass = isLongMessage ? "text-xl leading-relaxed" : "text-2xl leading-tight"
+
   return (
-    <div className="min-h-screen bg-white pb-32">
-      {/* Header */}
-      <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-100 z-10 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Inbox</h1>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="p-2 hover:bg-gray-100 rounded-full transition-all active:scale-90 disabled:opacity-50"
-          aria-label="Refresh messages"
+    <div className="min-h-screen bg-gray-50 font-sans overflow-x-hidden">
+      {/* Background layer */}
+      <div className="fixed inset-x-0 top-0 h-96 bg-gradient-to-b from-pink-100/50 to-transparent pointer-events-none" />
+
+      {/* Top Bar */}
+      <div className="sticky top-0 px-6 pt-6 pb-4 flex items-center justify-end z-50 pointer-events-none">
+        <button 
+          onClick={handleClose} 
+          className="pointer-events-auto p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md hover:bg-white active:scale-90 transition-all"
+          aria-label="Close message"
         >
-          <RefreshCw 
-            size={20} 
-            className={`transition-transform ${refreshing ? 'animate-spin text-purple-600' : 'text-gray-500'}`} 
-          />
+          <X size={20} className="text-gray-500" />
         </button>
       </div>
 
-      {/* Message List */}
-      <div className="divide-y divide-gray-50">
-        <AnimatePresence mode="popLayout" initial={false}>
-          {confessions.length === 0 ? (
-            <motion.div 
-              key="empty"
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
+      <div className="flex flex-col items-center px-6 pb-24 z-10 relative">
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          className="w-full max-w-sm"
+        >
+          {/* SHARE WRAPPER: 
+              This is what gets captured. It includes the card 
+              plus the spacing around it to show the background.
+          */}
+          <div ref={shareWrapperRef} className="py-8 px-4 w-full flex flex-col items-center bg-transparent">
+            <div className="w-full rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border border-gray-100">
+              {/* Card Header */}
+              <div className={`${GRADIENTS[colorIndex]} px-8 py-10 text-center transition-colors duration-500`}>
+                <h1 className="text-white text-lg font-black tracking-tighter uppercase italic">
+                  Anonymous Message
+                </h1>
+              </div>
+
+              {/* Card Body */}
+              <div className="px-8 pt-12 pb-10 min-h-[220px] flex flex-col items-center bg-white">
+                <p className={`text-center text-gray-800 font-bold break-words whitespace-pre-wrap w-full ${textSizeClass}`}>
+                  {confession.message}
+                </p>
+
+                <div className="mt-10 flex items-center gap-1.5 opacity-30">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    say-app/confess/{username}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Interaction Controls */}
+          <div className="flex justify-center gap-10 mt-6">
+            <ControlBtn onClick={handleNextColor} label="Color">
+               <div className={`w-10 h-10 rounded-full ${GRADIENTS[colorIndex]} shadow-inner`} />
+            </ControlBtn>
+            
+            <ControlBtn onClick={handleSaveImage} label="Save" disabled={isSaving}>
+               {isSaving ? <Loader2 className="animate-spin text-gray-400" /> : <Camera size={24} className="text-gray-700" />}
+            </ControlBtn>
+          </div>
+        </motion.div>
+
+        {/* Footer Actions */}
+        <div className="mt-12 space-y-3 w-full max-w-sm">
+            <button className="w-full bg-purple-50 text-purple-500 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-purple-100 transition-colors active:scale-95">
+              <Lock size={16} />
+              <span>Reveal Sender</span>
+            </button>
+
+            <button 
+              onClick={handleShare}
+              disabled={isSharing}
+              className="w-full bg-black text-white font-bold text-lg py-5 rounded-3xl shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-70"
             >
-              <EmptyState />
-            </motion.div>
-          ) : (
-            confessions.map((c) => (
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                key={c.id}
-                onClick={() => openMessage(c)}
-                className="w-full text-left px-6 py-5 flex items-start gap-4 hover:bg-gray-50/50 transition-colors active:bg-gray-100 group"
-              >
-                {/* Message Icon */}
-                <div className="relative flex-shrink-0">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm transition-all duration-300 ${
-                    c.is_read 
-                      ? 'bg-gray-100 grayscale' 
-                      : 'bg-gradient-to-tr from-purple-500 to-pink-500 shadow-purple-200'
-                  }`}>
-                    💌
-                  </div>
-                  {!c.is_read && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
-                  )}
-                </div>
-
-                {/* Message Content */}
-                <div className="flex-1 min-w-0 pt-0.5">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <p className={`text-[10px] tracking-widest uppercase font-black ${
-                      c.is_read ? 'text-gray-400' : 'text-purple-600'
-                    }`}>
-                      {c.is_read ? 'Opened' : 'New Message'}
-                    </p>
-                    <span className="text-[10px] text-gray-400 font-medium">
-                      {formatRelativeTime(c.created_at)}
-                    </span>
-                  </div>
-                  <p className={`text-base line-clamp-2 leading-relaxed ${
-                    c.is_read 
-                      ? 'text-gray-500' 
-                      : 'text-gray-900 font-semibold'
-                  }`}>
-                    {c.message.length > 80 ? c.message.slice(0, 80) + '...' : c.message}
-                  </p>
-                </div>
-
-                <ChevronRight 
-                  size={18} 
-                  className="text-gray-300 mt-5 group-hover:translate-x-1 transition-transform" 
-                />
-              </motion.button>
-            ))
-          )}
-        </AnimatePresence>
+              {isSharing ? <Loader2 className="animate-spin" size={20} /> : <Share2 size={20} />}
+              <span>Share to Story</span>
+            </button>
+        </div>
       </div>
     </div>
   )
 }
 
-// --- Sub-Components ---
-
-function ErrorState({ retry, message }: { retry: () => void; message: string }) {
+function ControlBtn({ children, onClick, label, disabled = false }: { 
+  children: React.ReactNode
+  onClick: () => void
+  label: string
+  disabled?: boolean
+}) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
-      <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4">
-        <AlertCircle size={32} />
+    <button 
+      onClick={onClick} 
+      disabled={disabled} 
+      className="flex flex-col items-center gap-2 group disabled:opacity-50"
+      aria-label={label}
+    >
+      <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg group-active:scale-90 transition-all border border-gray-50">
+        {children}
       </div>
-      <h3 className="text-lg font-bold text-gray-900 mb-2">Unable to sync</h3>
-      <p className="text-gray-500 mb-6 text-sm">{message}</p>
-      <button 
-        onClick={retry} 
-        className="bg-gray-900 text-white px-8 py-2.5 rounded-xl font-bold active:scale-95 transition-transform hover:bg-gray-800"
-      >
-        Try Again
-      </button>
-    </div>
+      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{label}</span>
+    </button>
   )
-}
-
-function EmptyState() {
-  return (
-    <div className="text-center py-20 px-6">
-      <div className="bg-purple-50 w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center">
-        <MessageSquare className="w-10 h-10 text-purple-300" />
-      </div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">Your inbox is empty</h3>
-      <p className="text-gray-500 mb-8 max-w-xs mx-auto text-sm">
-        Share your profile link with others to get anonymous messages.
-      </p>
-      <Link 
-        href="/dashboard" 
-        className="inline-block bg-purple-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-purple-100 active:scale-95 transition-transform hover:bg-purple-700"
-      >
-        Get My Link
-      </Link>
-    </div>
-  )
-}
+      }
