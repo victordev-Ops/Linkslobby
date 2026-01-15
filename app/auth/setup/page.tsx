@@ -1,3 +1,4 @@
+//app/auth/setup/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -18,15 +19,14 @@ export default function SetupUsername() {
 
   const debouncedUsername = useDebounce(username, 500)
   const router = useRouter()
-  const { refreshProfile, user } = useAuth() // Get user from context
+  const { refreshProfile, user, loading: authLoading } = useAuth()
 
-  // Basic check: If no user, they shouldn't be here
+  // Wait for auth to load
   useEffect(() => {
-    if (!user && !loading) {
-       // Optional: Redirect to login if session is truly gone
-       // router.replace('/login')
+    if (!authLoading && !user) {
+      router.replace('/login')
     }
-  }, [user, loading, router])
+  }, [user, authLoading, router])
 
   useEffect(() => {
     async function validate() {
@@ -59,21 +59,37 @@ export default function SetupUsername() {
         setMessage(result.error)
         setLoading(false)
       } else if (result?.success) {
-        console.log("Profile created. Refreshing context...")
-        
-        // 1. Refresh Context
+        // 1. Refresh profile in context
         await refreshProfile()
         
-        // 2. Redirect
-        console.log("Redirecting to dashboard...")
-        router.push('/dashboard')
-        router.refresh() // Force Next.js to refresh server components
+        // 2. Small delay to ensure context updates
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // 3. Hard redirect to dashboard
+        window.location.href = '/dashboard'
       }
     } catch (err) {
       console.error("Unexpected submission error:", err)
-      setMessage("Something went wrong. Please check your connection.")
+      setMessage("Something went wrong. Please try again.")
       setLoading(false)
     }
+  }
+
+  // Show loading state while auth is being checked
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render form if no user
+  if (!user) {
+    return null
   }
 
   return (
@@ -136,4 +152,4 @@ export default function SetupUsername() {
       </AuthForm>
     </div>
   )
-}
+      }
