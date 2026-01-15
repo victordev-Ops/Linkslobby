@@ -23,7 +23,6 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // IMPORTANT: This refreshes the session if it's expired
   const { data: { user } } = await supabase.auth.getUser()
   const pathname = request.nextUrl.pathname
 
@@ -33,11 +32,9 @@ export async function middleware(request: NextRequest) {
   }
 
   // 2. Define Public Routes
-  const publicPaths = ['/login', '/signup', '/auth/confirm', '/auth/setup']
+  const publicPaths = ['/login', '/signup']
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
   const isAuthCallback = pathname.startsWith('/auth/')
-  
-  // ✅ NEW: Allow anonymous access to confession and AMA pages
   const isConfessPage = pathname.startsWith('/confess/')
   const isAmaPage = pathname.startsWith('/ama/')
   const isPublicRoute = isExactPublic || isAuthCallback || isConfessPage || isAmaPage
@@ -47,12 +44,26 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // 4. Logic: Protect Dashboard and other authenticated routes
-  // If no user and trying to access dashboard or other internal pages
+  // 4. Logic: Protect authenticated routes
   if (!user && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
+  }
+
+  // 5. NEW: For authenticated users accessing dashboard, check profile completion
+  // This is a lightweight check - the actual enforcement happens in layout
+  if (user && pathname === '/dashboard') {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('username, slug')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    // If profile incomplete, redirect to setup
+    if (!profile || !profile.username || !profile.slug) {
+      return NextResponse.redirect(new URL('/auth/setup', request.url))
+    }
   }
 
   return response
@@ -60,13 +71,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
-}
+    }
