@@ -24,8 +24,9 @@ export default function PushToggle({ userId }: { userId: string }) {
   const supabase = useRef(createClient()).current
   const mountedRef = useRef(true)
   const hasCheckedRef = useRef(false)
-  const timeoutRef = useRef<NodeJS.Timeout>()
-
+ // const timeoutRef = useRef<NodeJS.Timeout>()
+const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
   useEffect(() => {
     mountedRef.current = true
     
