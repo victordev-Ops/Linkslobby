@@ -1,8 +1,6 @@
-//src/components/MessageViewClient.tsx
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { X, Share2, Lock, Camera, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toPng } from 'html-to-image'
@@ -18,6 +16,7 @@ type Confession = {
 type Props = {
   confession: Confession
   username: string
+  onClose: () => void // ADDED: Close handler
 }
 
 const GRADIENTS = [
@@ -29,9 +28,7 @@ const GRADIENTS = [
   "bg-gradient-to-r from-gray-900 to-gray-600",
 ]
 
-export default function MessageViewClient({ confession, username }: Props) {
-  const router = useRouter()
-  
+export default function MessageViewClient({ confession, username, onClose }: Props) {
   // Ref for the container that includes the background padding
   const shareWrapperRef = useRef<HTMLDivElement>(null)
   
@@ -40,11 +37,9 @@ export default function MessageViewClient({ confession, username }: Props) {
   const [isSharing, setIsSharing] = useState(false)
 
   const handleNextColor = () => setColorIndex((prev) => (prev + 1) % GRADIENTS.length)
-  const handleClose = () => router.push('/inbox')
-
+  
   /**
    * Generates the image from the ref
-   * Optimized with lower pixelRatio for better performance
    */
   const generateImage = async () => {
     if (!shareWrapperRef.current) return null
@@ -52,7 +47,7 @@ export default function MessageViewClient({ confession, username }: Props) {
     try {
       return await toPng(shareWrapperRef.current, { 
         cacheBust: true, 
-        pixelRatio: 2, // Reduced from 3 for better performance
+        pixelRatio: 2, 
         quality: 0.92,
         backgroundColor: '#F9FAFB',
         style: {
@@ -92,16 +87,14 @@ export default function MessageViewClient({ confession, username }: Props) {
   }
 
   /**
-   * Share to Stories (Native Share API)
+   * Share to Stories
    */
   const handleShare = async () => {
     if (isSharing) return
     setIsSharing(true)
     try {
       const dataUrl = await generateImage()
-      if (!dataUrl) {
-        throw new Error('Failed to generate image')
-      }
+      if (!dataUrl) throw new Error('Failed to generate image')
 
       const blob = await (await fetch(dataUrl)).blob()
       const file = new File([blob], 'confession.png', { type: 'image/png' })
@@ -113,7 +106,6 @@ export default function MessageViewClient({ confession, username }: Props) {
           text: `Send me anonymous messages! 👉 say-app.com/confess/${username}`,
         })
       } else {
-        // Fallback to download
         await handleSaveImage()
       }
     } catch (err) {
@@ -134,7 +126,7 @@ export default function MessageViewClient({ confession, username }: Props) {
       {/* Top Bar */}
       <div className="sticky top-0 px-6 pt-6 pb-4 flex items-center justify-end z-50 pointer-events-none">
         <button 
-          onClick={handleClose} 
+          onClick={onClose} 
           className="pointer-events-auto p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md hover:bg-white active:scale-90 transition-all"
           aria-label="Close message"
         >
@@ -149,10 +141,7 @@ export default function MessageViewClient({ confession, username }: Props) {
           transition={{ duration: 0.2 }}
           className="w-full max-w-sm"
         >
-          {/* SHARE WRAPPER: 
-              This is what gets captured. It includes the card 
-              plus the spacing around it to show the background.
-          */}
+          {/* SHARE WRAPPER */}
           <div ref={shareWrapperRef} className="py-8 px-4 w-full flex flex-col items-center bg-transparent">
             <div className="w-full rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border border-gray-100">
               {/* Card Header */}
@@ -229,4 +218,4 @@ function ControlBtn({ children, onClick, label, disabled = false }: {
       <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{label}</span>
     </button>
   )
-      }
+}
