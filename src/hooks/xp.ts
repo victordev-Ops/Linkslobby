@@ -19,13 +19,21 @@ export interface XPResult {
   required?: number
 }
 
+// Import this dynamically to avoid circular dependencies
+let showXPNotification: ((amount: number, reason: string) => void) | null = null
+
+export function setXPNotificationHandler(handler: (amount: number, reason: string) => void) {
+  showXPNotification = handler
+}
+
 /**
  * Award XP to the current user
  */
 export async function earnXP(
   amount: number, 
   reason: string, 
-  metadata?: any
+  metadata?: any,
+  showNotification: boolean = true
 ): Promise<XPResult> {
   const supabase = createClient()
   
@@ -43,7 +51,15 @@ export async function earnXP(
     })
 
     if (error) throw error
-    return data as XPResult
+    
+    const result = data as XPResult
+    
+    // Show notification if enabled and we have the handler
+    if (result.success && showNotification && showXPNotification) {
+      showXPNotification(amount, reason)
+    }
+    
+    return result
   } catch (error) {
     console.error('Error earning XP:', error)
     return { success: false, error: 'Failed to earn XP' }
