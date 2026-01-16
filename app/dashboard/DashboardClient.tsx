@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2, Share2, LayoutGrid } from "lucide-react"
+import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2, Share2, LayoutGrid, Lock } from "lucide-react"
 import { toast } from "sonner"
 import Link from 'next/link'
 import { useRouter } from "next/navigation" 
@@ -40,7 +40,7 @@ export default function DashboardClient() {
     )
   }
 
-  const confessUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
+  const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
 
   const handleCopy = async () => {
     try {
@@ -61,6 +61,14 @@ export default function DashboardClient() {
       href: "/ama",
       color: "text-orange-600",
       bg: "bg-orange-100"
+    },
+    {
+      title: "Confessions",
+      description: "Receive anonymous secrets and messages",
+      icon: <Lock size={22} />,
+      href: `/confess/${profile.slug}`,
+      color: "text-purple-600",
+      bg: "bg-purple-100"
     }
   ]
 
@@ -143,7 +151,7 @@ export default function DashboardClient() {
             ))}
 
             <div className="bg-slate-100/40 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex items-center justify-center text-slate-400">
-               <p className="text-[10px] font-bold uppercase tracking-widest">More coming soon</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest">More coming soon</p>
             </div>
           </div>
         </section>
