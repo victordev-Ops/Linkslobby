@@ -42,7 +42,8 @@ export default function DashboardClient() {
     )
   }
 
-  const confessUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
+  const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
+ const anonymousUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
 
   const handleCopy = async (text: string, isConfess: boolean = false) => {
     try {
@@ -106,7 +107,7 @@ export default function DashboardClient() {
               className="flex-1 bg-transparent py-2 text-xs font-semibold text-slate-600 focus:outline-none truncate"
             />
             <button
-              onClick={() => handleCopy(confessUrl)}
+              onClick={() => handleCopy(anonymousUrl)}
               className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border-2 ${copied ? "bg-green-500 border-green-500 text-white" : "bg-transparent border-purple-600 text-purple-600 hover:bg-purple-50"}`}
             >
               {copied ? <Check size={18} /> : <Copy size={18} />}
