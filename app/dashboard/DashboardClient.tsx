@@ -1,139 +1,172 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2 } from "lucide-react"
+import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2, Sparkles, Share2, LayoutGrid } from "lucide-react"
 import { toast } from "sonner"
 import Link from 'next/link'
 import { useRouter } from "next/navigation" 
 import { useAuth } from "@/context/AuthContext"
 import XPBalance from "@/components/XPBalance"
 
+// Define types for our game/feature cards to keep code clean
+type GameCard = {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  href: string;
+  color: string;
+  bg: string;
+}
+
 export default function DashboardClient() {
   const { user, profile, loading } = useAuth()
   const [copied, setCopied] = useState(false)
   const router = useRouter()
 
-  // 1. Safety Redirect: Handle authentication and profile setup on the client
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        // If loading is done and there's no user, redirect to login
         router.push('/login')
       } else if (!profile) {
-        // If user exists but profile row is missing, redirect to setup
         router.push('/auth/setup')
       }
     }
   }, [user, profile, loading, router])
 
-  // 2. Loading State (Keep showing this if loading OR while waiting for redirect condition)
   if (loading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-        <span className="sr-only">Loading dashboard...</span>
       </div>
     )
   }
 
-  // If we reach here, profile is guaranteed to exist
   const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(confessUrl)
       setCopied(true)
-      toast.success("Link copied to clipboard!")
+      toast.success("Link copied!")
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       toast.error("Failed to copy")
     }
   }
 
+  // --- CONFIGURATION FOR YOUR GRID ---
+  const games: GameCard[] = [
+    {
+      title: "AMA Sticker",
+      description: "Get a question sticker for your Instagram story",
+      icon: <MessageCircleQuestion size={24} />,
+      href: "/ama",
+      color: "text-orange-600",
+      bg: "bg-orange-100"
+    },
+    // You can easily add more games here:
+    /* {
+      title: "Top 3 Truths",
+      description: "Let friends vote on your secrets",
+      icon: <Sparkles size={24} />,
+      href: "/truth",
+      color: "text-blue-600",
+      bg: "bg-blue-100"
+    } 
+    */
+  ]
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation Bar with XP Balance */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-[#F8F9FD]">
+      {/* Navbar */}
+      <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-medium text-slate-900" style={{ fontFamily: 'Roboto, sans-serif' }}>
-              Say
-            </h2>
+            <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-black text-xl italic">S</span>
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Say</h2>
           </div>
           <XPBalance />
         </div>
-      </div>
+      </nav>
 
-      {/* Main Content */}
-      <div className="py-12 px-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-8 md:p-10">
-            <div className="text-center space-y-10">
-              
-              {/* Header */}
-              <div>
-                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-                  Welcome, {profile.username}! 👋
-                </h1>
-                <p className="text-lg text-gray-600">
-                  Share your link and start receiving anonymous confessions
-                </p>
+      <main className="max-w-5xl mx-auto px-6 py-8 md:py-12 space-y-10">
+        
+        {/* Hero: Profile & Link Section */}
+        <section className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-sm border border-slate-100">
+          <div className="max-w-2xl">
+            <h1 className="text-3xl md:text-4xl font-black text-slate-900 mb-2">
+              Hey, {profile.username}! 👋
+            </h1>
+            <p className="text-slate-500 text-lg mb-8">
+              Your inbox is ready. Share your link to start receiving anonymous messages.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="relative w-full group">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400">
+                  <Share2 size={18} />
+                </div>
+                <input 
+                  readOnly 
+                  value={confessUrl}
+                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:outline-none transition-all group-hover:border-slate-200"
+                />
               </div>
-
-              {/* Link Section */}
-              <div className="space-y-6">
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-3">
-                    Your personal confession link
-                  </p>
-
-                  <div className="relative max-w-lg mx-auto">
-                    <div className="p-5 bg-gray-100 rounded-2xl font-mono text-sm break-all pr-16 text-gray-800 border border-gray-300">
-                      {confessUrl}
-                    </div>
-
-                    <button
-                      onClick={handleCopy}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all hover:scale-105"
-                    >
-                      {copied ? <Check className="h-5 w-5 text-green-600" /> : <Copy className="h-5 w-5 text-gray-600" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* AMA Feature Section */}
-                <div className="pt-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Features</h2>
-                  </div>
-
-                  <Link href="/ama" className="block text-left">
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 flex items-center justify-between group active:scale-[0.98] transition-all hover:border-purple-200 hover:bg-purple-50/30">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-                          <MessageCircleQuestion size={24} />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-gray-800">Create AMA Sticker</h3>
-                          <p className="text-xs text-gray-500">Get a question sticker for your story</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" size={20} />
-                    </div>
-                  </Link>
-                </div>
-
-                <div className="bg-purple-50 rounded-2xl p-6 border border-purple-200">
-                  <p className="text-sm text-purple-800 leading-relaxed text-left">
-                    Anyone with this link can send you anonymous messages. 
-                    Share it with friends or add it to your bio!
-                  </p>
-                </div>
-              </div>
+              <button
+                onClick={handleCopy}
+                className="w-full sm:w-auto px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-purple-200"
+              >
+                {copied ? <Check size={20} /> : <Copy size={20} />}
+                <span>{copied ? "Copied" : "Copy Link"}</span>
+              </button>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
+
+        {/* Games Grid Section */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-2 px-2">
+            <LayoutGrid size={20} className="text-purple-600" />
+            <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Game Collection</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {games.map((game, idx) => (
+              <Link key={idx} href={game.href} className="group">
+                <div className="h-full bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-purple-100 flex items-center gap-5">
+                  <div className={`w-16 h-16 shrink-0 rounded-[1.25rem] ${game.bg} ${game.color} flex items-center justify-center transition-transform group-hover:scale-110`}>
+                    {game.icon}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-slate-900 text-lg mb-1">{game.title}</h3>
+                    <p className="text-slate-500 text-sm leading-snug">{game.description}</p>
+                  </div>
+
+                  <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-purple-50 group-hover:text-purple-600 transition-colors">
+                    <ChevronRight size={20} />
+                  </div>
+                </div>
+              </Link>
+            ))}
+
+            {/* Placeholder for "Coming Soon" */}
+            <div className="bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-[2rem] p-6 flex items-center justify-center text-slate-400">
+               <p className="text-sm font-bold italic tracking-wider">More games coming soon...</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Footer Info */}
+        <footer className="px-6 text-center">
+          <p className="text-xs text-slate-400 font-medium bg-slate-100 inline-block px-4 py-2 rounded-full">
+            💡 Pro tip: Add your link to your Instagram bio for 3x more messages!
+          </p>
+        </footer>
+
+      </main>
     </div>
   )
-                      }
+}
