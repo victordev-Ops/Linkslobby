@@ -5,6 +5,8 @@ import ConfessionForm from "./ConfessionForm";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
+// Force Next.js to always fetch fresh data from Supabase
+export const revalidate = 0;
 
 export default async function ConfessionPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
