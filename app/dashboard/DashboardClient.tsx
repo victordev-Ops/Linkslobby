@@ -1,14 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2, Sparkles, Share2, LayoutGrid } from "lucide-react"
+import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2, Share2, LayoutGrid } from "lucide-react"
 import { toast } from "sonner"
 import Link from 'next/link'
 import { useRouter } from "next/navigation" 
 import { useAuth } from "@/context/AuthContext"
 import XPBalance from "@/components/XPBalance"
 
-// Define types for our game/feature cards to keep code clean
+// Define types for our game/feature cards
 type GameCard = {
   title: string;
   description: string;
@@ -54,7 +54,6 @@ export default function DashboardClient() {
     }
   }
 
-  // --- CONFIGURATION FOR YOUR GRID ---
   const games: GameCard[] = [
     {
       title: "AMA Sticker",
@@ -63,17 +62,7 @@ export default function DashboardClient() {
       href: "/ama",
       color: "text-orange-600",
       bg: "bg-orange-100"
-    },
-    // You can easily add more games here:
-    /* {
-      title: "Top 3 Truths",
-      description: "Let friends vote on your secrets",
-      icon: <Sparkles size={24} />,
-      href: "/truth",
-      color: "text-blue-600",
-      bg: "bg-blue-100"
-    } 
-    */
+    }
   ]
 
   return (
@@ -93,7 +82,7 @@ export default function DashboardClient() {
 
       <main className="max-w-5xl mx-auto px-6 py-8 md:py-12 space-y-10">
         
-        {/* Hero: Profile & Link Section */}
+        {/* Hero Section */}
         <section className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-sm border border-slate-100">
           <div className="max-w-2xl">
             <h1 className="text-3xl md:text-4xl font-black text-slate-900 mb-2">
@@ -103,23 +92,29 @@ export default function DashboardClient() {
               Your inbox is ready. Share your link to start receiving anonymous messages.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative w-full group">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400">
-                  <Share2 size={18} />
-                </div>
-                <input 
-                  readOnly 
-                  value={confessUrl}
-                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:outline-none transition-all group-hover:border-slate-200"
-                />
+            {/* REFACTORED COMPACT LINK BAR */}
+            <div className="max-w-md flex items-center gap-2 p-1.5 bg-slate-50 border-2 border-slate-100 rounded-2xl transition-all focus-within:border-purple-200 focus-within:bg-white group">
+              <div className="pl-3 text-slate-400">
+                <Share2 size={16} />
               </div>
+              
+              <input 
+                readOnly 
+                value={confessUrl}
+                className="flex-1 bg-transparent py-2 px-1 text-sm font-semibold text-slate-600 focus:outline-none truncate"
+              />
+
               <button
                 onClick={handleCopy}
-                className="w-full sm:w-auto px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-purple-200"
+                className={`
+                  flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 whitespace-nowrap
+                  ${copied 
+                    ? "bg-green-500 text-white" 
+                    : "bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-100"}
+                `}
               >
-                {copied ? <Check size={20} /> : <Copy size={20} />}
-                <span>{copied ? "Copied" : "Copy Link"}</span>
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+                <span>{copied ? "Copied" : "Copy"}</span>
               </button>
             </div>
           </div>
@@ -152,7 +147,6 @@ export default function DashboardClient() {
               </Link>
             ))}
 
-            {/* Placeholder for "Coming Soon" */}
             <div className="bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-[2rem] p-6 flex items-center justify-center text-slate-400">
                <p className="text-sm font-bold italic tracking-wider">More games coming soon...</p>
             </div>
