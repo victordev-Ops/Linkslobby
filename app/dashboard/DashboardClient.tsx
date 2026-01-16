@@ -44,15 +44,15 @@ export default function DashboardClient() {
 
   const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
 
-  const handleCopy = async (text: string, isHero: boolean) => {
+  const handleCopy = async (text: string, isConfess: boolean = false) => {
     try {
       await navigator.clipboard.writeText(text)
-      if (isHero) {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      } else {
+      if (isConfess) {
         setConfessCopied(true)
         setTimeout(() => setConfessCopied(false), 2000)
+      } else {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
       }
       toast.success("Link copied!")
     } catch (err) {
@@ -60,9 +60,19 @@ export default function DashboardClient() {
     }
   }
 
+  const games: GameCard[] = [
+    {
+      title: "AMA Sticker",
+      description: "Get a question sticker for your Instagram story",
+      icon: <MessageCircleQuestion size={24} />,
+      href: "/ama",
+      color: "text-orange-600",
+      bg: "bg-orange-100"
+    }
+  ]
+
   return (
     <div className="min-h-screen bg-[#F8F9FD]">
-      {/* Navbar */}
       <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -96,7 +106,7 @@ export default function DashboardClient() {
               className="flex-1 bg-transparent py-2 text-xs font-semibold text-slate-600 focus:outline-none truncate"
             />
             <button
-              onClick={() => handleCopy(confessUrl, true)}
+              onClick={() => handleCopy(confessUrl)}
               className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border-2 ${copied ? "bg-green-500 border-green-500 text-white" : "bg-transparent border-purple-600 text-purple-600 hover:bg-purple-50"}`}
             >
               {copied ? <Check size={18} /> : <Copy size={18} />}
@@ -112,57 +122,58 @@ export default function DashboardClient() {
           </div>
 
           <div className="grid grid-cols-1 gap-3">
-            {/* AMA Card */}
-            <Link href="/ama" className="group">
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm transition-all flex items-center gap-4 active:scale-[0.98]">
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
-                  <MessageCircleQuestion size={24} />
+            {/* AMA Sticker Card */}
+            {games.map((game, idx) => (
+              <Link key={idx} href={game.href} className="group">
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm transition-all flex items-center gap-4 active:scale-[0.98]">
+                  <div className={`w-12 h-12 shrink-0 rounded-xl ${game.bg} ${game.color} flex items-center justify-center`}>
+                    {game.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-slate-900 text-base">{game.title}</h3>
+                    <p className="text-slate-400 text-xs line-clamp-1">{game.description}</p>
+                  </div>
+                  <ChevronRight size={18} className="text-slate-300" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-slate-900 text-base">AMA Sticker</h3>
-                  <p className="text-slate-400 text-xs line-clamp-1">Get a question sticker for your story</p>
-                </div>
-                <ChevronRight size={18} className="text-slate-300" />
-              </div>
-            </Link>
+              </Link>
+            ))}
 
             {/* Refactored Confessions Card */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden transition-all">
-              <button 
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
+              <div 
                 onClick={() => setIsConfessOpen(!isConfessOpen)}
-                className="w-full p-4 flex items-center gap-4 active:bg-slate-50 transition-colors"
+                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
               >
                 <div className="w-12 h-12 shrink-0 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
                   <Lock size={22} />
                 </div>
-                <div className="flex-1 text-left min-w-0">
+                <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-slate-900 text-base">Confessions</h3>
-                  <p className="text-slate-400 text-xs line-clamp-1">Receive anonymous secrets</p>
+                  <p className="text-slate-400 text-xs line-clamp-1">Receive anonymous secrets and messages</p>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 transition-transform duration-300 ${isConfessOpen ? 'rotate-180' : ''}`} />
-              </button>
+                <ChevronDown size={18} className={`text-slate-300 transition-transform duration-300 ${isConfessOpen ? "rotate-180" : ""}`} />
+              </div>
 
-              {/* Collapsible Content */}
               {isConfessOpen && (
-                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="p-4 bg-purple-50/50 rounded-xl border border-purple-100 space-y-3">
-                    <p className="text-[11px] text-purple-800 leading-relaxed font-medium">
-                      Share this link on your Bio or Stories. Friends can send you secrets that only you can read. Their identity stays 100% hidden.
+                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="p-3 bg-purple-50 rounded-xl border border-purple-100">
+                    <p className="text-[11px] text-purple-700 leading-relaxed font-medium">
+                      How it works: Share this special link. Anyone can send you a secret message without you knowing who they are. All messages stay 100% anonymous.
                     </p>
-                    
-                    <div className="flex items-center gap-2 p-1 bg-white border border-purple-200 rounded-xl">
-                      <input 
-                        readOnly 
-                        value={confessUrl}
-                        className="flex-1 bg-transparent px-2 text-[10px] font-bold text-slate-500 focus:outline-none truncate"
-                      />
-                      <button
-                        onClick={() => handleCopy(confessUrl, false)}
-                        className={`shrink-0 h-8 px-3 rounded-lg text-[10px] font-bold transition-all ${confessCopied ? 'bg-green-500 text-white' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
-                      >
-                        {confessCopied ? 'COPIED' : 'COPY LINK'}
-                      </button>
-                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 p-1 bg-slate-50 border border-slate-200 rounded-xl">
+                    <input 
+                      readOnly 
+                      value={confessUrl}
+                      className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 focus:outline-none truncate"
+                    />
+                    <button
+                      onClick={() => handleCopy(confessUrl, true)}
+                      className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${confessCopied ? "bg-green-500 border-green-500 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+                    >
+                      {confessCopied ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
                   </div>
                 </div>
               )}
@@ -179,6 +190,7 @@ export default function DashboardClient() {
             💡 TIP: ADD TO YOUR INSTA BIO
           </p>
         </footer>
+
       </main>
     </div>
   )
