@@ -32,34 +32,43 @@ async function ConfessionsLoader({
   userId: string
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
 }) {
-  const { data: confessions, error } = await supabase
-    .from('confessions')
-    .select('id, message, created_at, is_read, profile_id')
-    .eq('profile_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(50)
+  // Fetch both confessions and profile data
+  const [confessionsRes, profileRes] = await Promise.all([
+    supabase
+      .from('confessions')
+      .select('id, message, created_at, is_read, profile_id')
+      .eq('profile_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('profiles')
+      .select('username, slug')
+      .eq('id', userId)
+      .single()
+  ])
 
-  if (error) {
-    console.error('Error fetching confessions:', error)
+  if (confessionsRes.error) {
+    console.error('Error fetching confessions:', confessionsRes.error)
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center p-6">
         <div className="text-center">
-          <p className="text-gray-600">Failed to load confessions</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg"
-          >
-            Retry
-          </button>
+          <p className="text-gray-600 font-medium">Failed to load confessions</p>
+          <p className="text-sm text-gray-400 mb-4">Please check your connection.</p>
         </div>
       </div>
     )
   }
 
+  // Determine the display name for the share cards
+  const username = profileRes.data?.username || profileRes.data?.slug || 'user'
+
   return (
     <InboxClient
-      initialConfessions={confessions || []}
+      initialConfessions={confessionsRes.data || []}
       userId={userId}
+      username={username} // <--- This satisfies the TypeScript requirement
     />
   )
-        }
+}
+
+  
