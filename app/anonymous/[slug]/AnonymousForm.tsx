@@ -68,7 +68,7 @@ export default function ConfessionForm({ profileId, action }: ConfessionFormProp
         <textarea
           name="message"
           rows={5}
-          placeholder="Type your confession here..."
+          placeholder="Type your message here..."
           className="w-full bg-neutral-900/50 text-neutral-200 placeholder-neutral-600 rounded-2xl p-4 border border-white/5 focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all resize-none text-base leading-relaxed"
           required
           minLength={1}
