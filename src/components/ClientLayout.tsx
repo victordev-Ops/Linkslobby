@@ -78,6 +78,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       "/auth/setup",
       "/auth",
       "/fullscreen",
+      "/anonymous",
+      "/confess"
     ];
 
     return (
