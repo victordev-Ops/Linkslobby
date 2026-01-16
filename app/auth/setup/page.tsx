@@ -1,4 +1,3 @@
-//app/auth/setup/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -8,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import AuthForm from '@/components/AuthForm'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
+import { showXPNotification } from '@/components/XPNotification'
 
 export default function SetupUsername() {
   const [username, setUsername] = useState('')
@@ -21,13 +21,14 @@ export default function SetupUsername() {
   const router = useRouter()
   const { refreshProfile, user, loading: authLoading } = useAuth()
 
-  // Wait for auth to load
+  // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace('/login')
     }
   }, [user, authLoading, router])
 
+  // Validate username availability
   useEffect(() => {
     async function validate() {
       if (debouncedUsername.length < 3) {
@@ -49,6 +50,7 @@ export default function SetupUsername() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isAvailable || loading) return
+    
     setLoading(true)
     setMessage('')
     
@@ -58,24 +60,30 @@ export default function SetupUsername() {
       if (result?.error) {
         setMessage(result.error)
         setLoading(false)
-      } else if (result?.success) {
-        // 1. Refresh profile in context
+        return
+      }
+      
+      if (result?.success) {
+        // Show welcome notification
+        showXPNotification(100, 'Welcome to Say! 🎉')
+        
+        // Refresh profile context
         await refreshProfile()
         
-        // 2. Small delay to ensure context updates
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // Allow notification animation to play
+        await new Promise(resolve => setTimeout(resolve, 1500))
         
-        // 3. Hard redirect to dashboard
+        // Navigate to dashboard
         window.location.href = '/dashboard'
       }
     } catch (err) {
-      console.error("Unexpected submission error:", err)
+      console.error("Profile setup error:", err)
       setMessage("Something went wrong. Please try again.")
       setLoading(false)
     }
   }
 
-  // Show loading state while auth is being checked
+  // Loading state
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -87,25 +95,27 @@ export default function SetupUsername() {
     )
   }
 
-  // Don't render form if no user
-  if (!user) {
-    return null
-  }
+  // No user guard
+  if (!user) return null
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <AuthForm>
+        {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-slate-900">Claim your handle</h1>
           <p className="text-slate-500 mt-2">Pick a username to get started.</p>
         </div>
 
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Username Input */}
           <div className="relative">
             <input
               className={`w-full px-5 py-4 rounded-2xl border-2 outline-none transition-all text-lg
                 ${isAvailable === true ? 'border-emerald-500 bg-emerald-50/30' : 
-                  isAvailable === false ? 'border-rose-400 bg-rose-50/30' : 'border-slate-100 bg-slate-50 focus:border-violet-500'}
+                  isAvailable === false ? 'border-rose-400 bg-rose-50/30' : 
+                  'border-slate-100 bg-slate-50 focus:border-violet-500'}
               `}
               placeholder="username"
               value={username}
@@ -114,22 +124,35 @@ export default function SetupUsername() {
               autoFocus
             />
             <div className="absolute right-4 top-1/2 -translate-y-1/2">
-              {isChecking && <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />}
-              {!isChecking && isAvailable === true && <span className="text-emerald-500 font-bold">✓</span>}
+              {isChecking && (
+                <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+              )}
+              {!isChecking && isAvailable === true && (
+                <span className="text-emerald-500 font-bold">✓</span>
+              )}
             </div>
           </div>
 
+          {/* Username Suggestions */}
           <AnimatePresence>
             {!isAvailable && suggestions.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Suggestions:</p>
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-3"
+              >
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  Suggestions:
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {suggestions.map(s => (
                     <button
                       key={s}
                       type="button"
                       onClick={() => setUsername(s)}
-                      className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm hover:border-violet-500 hover:text-violet-600 transition-all shadow-sm"
+                      className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm 
+                        hover:border-violet-500 hover:text-violet-600 transition-all shadow-sm"
                     >
                       {s}
                     </button>
@@ -139,12 +162,21 @@ export default function SetupUsername() {
             )}
           </AnimatePresence>
 
-          {message && <p className={`text-sm font-medium ${message.includes('Success') ? 'text-emerald-500' : 'text-rose-500'}`}>{message}</p>}
+          {/* Error Message */}
+          {message && (
+            <p className={`text-sm font-medium ${
+              message.includes('Success') ? 'text-emerald-500' : 'text-rose-500'
+            }`}>
+              {message}
+            </p>
+          )}
 
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={!isAvailable || loading || isChecking}
-            className="w-full py-4 bg-violet-600 text-white rounded-2xl font-bold text-lg hover:bg-violet-700 disabled:opacity-30 transition-all shadow-lg shadow-violet-200"
+            className="w-full py-4 bg-violet-600 text-white rounded-2xl font-bold text-lg 
+              hover:bg-violet-700 disabled:opacity-30 transition-all shadow-lg shadow-violet-200"
           >
             {loading ? 'Setting things up...' : 'Complete Signup'}
           </button>
@@ -152,4 +184,4 @@ export default function SetupUsername() {
       </AuthForm>
     </div>
   )
-      }
+}
