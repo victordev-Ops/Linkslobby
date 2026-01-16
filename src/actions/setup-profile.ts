@@ -1,4 +1,3 @@
-// src/actions/setup-profile.ts
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
@@ -55,6 +54,15 @@ export async function setupProfile(username: string) {
 
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
+  // Check if this is a new profile (first time setup)
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const isNewProfile = !existingProfile
+
   const { error } = await supabase
     .from('profiles')
     .upsert({
@@ -62,6 +70,7 @@ export async function setupProfile(username: string) {
       email: user.email,    
       username: username,
       slug: slug,
+      xp_balance: isNewProfile ? 100 : undefined, // Set initial XP for new profiles
       updated_at: new Date().toISOString(),
     }, {
       onConflict: 'id'      
@@ -73,9 +82,25 @@ export async function setupProfile(username: string) {
     return { error: 'Could not save profile. Please try again.' }
   }
 
+  // Award XP for profile creation (only for new profiles)
+  if (isNewProfile) {
+    try {
+      await supabase.rpc('add_xp', {
+        p_user_id: user.id,
+        p_amount: 100,
+        p_reason: 'Welcome to Say! 🎉',
+        p_metadata: { action: 'profile_created', username }
+      })
+    } catch (xpError) {
+      // Don't fail profile creation if XP award fails
+      console.error("XP Award Error:", xpError)
+    }
+  }
+
   // Clear cache for the dashboard
   revalidatePath('/', 'layout') 
   revalidatePath('/dashboard')
   
   return { success: true }       
-      }
+    }
+    
