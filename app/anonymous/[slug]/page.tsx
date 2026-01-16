@@ -2,7 +2,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import ConfessionForm from './ConfessionForm'
+import ConfessionForm from './AnonymousForm'
 
 // Ensure dynamic rendering
 export const dynamic = 'force-dynamic'
