@@ -42,7 +42,7 @@ export default function DashboardClient() {
     )
   }
 
-  const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
+  const confessUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
 
   const handleCopy = async (text: string, isConfess: boolean = false) => {
     try {
