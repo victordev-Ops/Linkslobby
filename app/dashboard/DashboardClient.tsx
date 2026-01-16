@@ -1,27 +1,24 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Copy, Check, MessageCircleQuestion, ChevronRight, Loader2, Share2, LayoutGrid, Lock, ChevronDown } from "lucide-react"
+import { Copy, Check, MessageCircleQuestion, Loader2, Share2, LayoutGrid, Lock, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
-import Link from 'next/link'
 import { useRouter } from "next/navigation" 
 import { useAuth } from "@/context/AuthContext"
 import XPBalance from "@/components/XPBalance"
 
-type GameCard = {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  href: string;
-  color: string;
-  bg: string;
-}
-
 export default function DashboardClient() {
   const { user, profile, loading } = useAuth()
-  const [copied, setCopied] = useState(false)
-  const [confessCopied, setConfessCopied] = useState(false)
+  const [heroCopied, setHeroCopied] = useState(false)
+  
+  // AMA State
+  const [isAmaOpen, setIsAmaOpen] = useState(false)
+  const [amaCopied, setAmaCopied] = useState(false)
+  
+  // Confess State
   const [isConfessOpen, setIsConfessOpen] = useState(false)
+  const [confessCopied, setConfessCopied] = useState(false)
+  
   const router = useRouter()
 
   useEffect(() => {
@@ -42,35 +39,28 @@ export default function DashboardClient() {
     )
   }
 
+  const amaUrl = `https://say-app.vercel.app/ama/${profile.slug}`
   const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
- const anonymousUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
+  const anonymousUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
 
-  const handleCopy = async (text: string, isConfess: boolean = false) => {
+  const handleCopy = async (text: string, type: 'hero' | 'ama' | 'confess') => {
     try {
       await navigator.clipboard.writeText(text)
-      if (isConfess) {
+      if (type === 'hero') {
+        setHeroCopied(true)
+        setTimeout(() => setHeroCopied(false), 2000)
+      } else if (type === 'ama') {
+        setAmaCopied(true)
+        setTimeout(() => setAmaCopied(false), 2000)
+      } else if (type === 'confess') {
         setConfessCopied(true)
         setTimeout(() => setConfessCopied(false), 2000)
-      } else {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
       }
       toast.success("Link copied!")
     } catch (err) {
       toast.error("Failed to copy")
     }
   }
-
-  const games: GameCard[] = [
-    {
-      title: "AMA Sticker",
-      description: "Get a question sticker for your Instagram story",
-      icon: <MessageCircleQuestion size={24} />,
-      href: "/ama",
-      color: "text-orange-600",
-      bg: "bg-orange-100"
-    }
-  ]
 
   return (
     <div className="min-h-screen bg-[#F8F9FD]">
@@ -107,15 +97,15 @@ export default function DashboardClient() {
               className="flex-1 bg-transparent py-2 text-xs font-semibold text-slate-600 focus:outline-none truncate"
             />
             <button
-              onClick={() => handleCopy(anonymousUrl)}
-              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border-2 ${copied ? "bg-green-500 border-green-500 text-white" : "bg-transparent border-purple-600 text-purple-600 hover:bg-purple-50"}`}
+              onClick={() => handleCopy(anonymousUrl, 'hero')}
+              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border-2 ${heroCopied ? "bg-green-500 border-green-500 text-white" : "bg-transparent border-purple-600 text-purple-600 hover:bg-purple-50"}`}
             >
-              {copied ? <Check size={18} /> : <Copy size={18} />}
+              {heroCopied ? <Check size={18} /> : <Copy size={18} />}
             </button>
           </div>
         </section>
 
-        {/* Games Grid Section */}
+        {/* Game Collection Section */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 px-2">
             <LayoutGrid size={18} className="text-purple-600" />
@@ -123,23 +113,49 @@ export default function DashboardClient() {
           </div>
 
           <div className="grid grid-cols-1 gap-3">
+            
             {/* AMA Sticker Card */}
-            {games.map((game, idx) => (
-              <Link key={idx} href={game.href} className="group">
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm transition-all flex items-center gap-4 active:scale-[0.98]">
-                  <div className={`w-12 h-12 shrink-0 rounded-xl ${game.bg} ${game.color} flex items-center justify-center`}>
-                    {game.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-slate-900 text-base">{game.title}</h3>
-                    <p className="text-slate-400 text-xs line-clamp-1">{game.description}</p>
-                  </div>
-                  <ChevronRight size={18} className="text-slate-300" />
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
+              <div 
+                onClick={() => setIsAmaOpen(!isAmaOpen)}
+                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
+              >
+                <div className="w-12 h-12 shrink-0 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                  <MessageCircleQuestion size={24} />
                 </div>
-              </Link>
-            ))}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-slate-900 text-base">AMA Sticker</h3>
+                  <p className="text-slate-400 text-xs line-clamp-1">Get a question sticker for your Instagram story</p>
+                </div>
+                <ChevronDown size={18} className={`text-slate-300 transition-transform duration-300 ${isAmaOpen ? "rotate-180" : ""}`} />
+              </div>
 
-            {/* Refactored Confessions Card */}
+              {isAmaOpen && (
+                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="p-3 bg-orange-50 rounded-xl border border-orange-100">
+                    <p className="text-[11px] text-orange-700 leading-relaxed font-medium">
+                      How it works: Share this link on your Instagram story. Friends can tap it to ask you anything anonymously. It's the perfect way to start a fun Q&A!
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 p-1 bg-slate-50 border border-slate-200 rounded-xl">
+                    <input 
+                      readOnly 
+                      value={amaUrl}
+                      className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 focus:outline-none truncate"
+                    />
+                    <button
+                      onClick={() => handleCopy(amaUrl, 'ama')}
+                      className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${amaCopied ? "bg-green-500 border-green-500 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+                    >
+                      {amaCopied ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Confessions Card */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
               <div 
                 onClick={() => setIsConfessOpen(!isConfessOpen)}
@@ -170,7 +186,7 @@ export default function DashboardClient() {
                       className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 focus:outline-none truncate"
                     />
                     <button
-                      onClick={() => handleCopy(confessUrl, true)}
+                      onClick={() => handleCopy(confessUrl, 'confess')}
                       className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${confessCopied ? "bg-green-500 border-green-500 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"}`}
                     >
                       {confessCopied ? <Check size={14} /> : <Copy size={14} />}
