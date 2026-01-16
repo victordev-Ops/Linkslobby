@@ -8,7 +8,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { XPNotificationProvider } from "@/components/XPNotificationProvider";
 import { Toaster } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { setXPNotificationHandler } from "@/hooks/xp"; // Fixed: Changed from @/lib/xp to @/hooks/xp
+import { setXPNotificationHandler } from "@/hooks/xp";
 import { showXPNotification } from "@/components/XPNotification";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -68,7 +68,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // 4. Navbar Visibility Logic
+  // 4. Navbar Visibility Logic - Updated for /anonymous/ prefix
   const shouldHideNavbar = useMemo(() => {
     const hideNavbarPaths = [
       "/login",
@@ -78,22 +78,24 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       "/auth/setup",
       "/auth",
       "/fullscreen",
-      "/anonymous",
-      "/confess"
     ];
 
-    return (
-      hideNavbarPaths.includes(pathname) || 
+    const isExactMatch = hideNavbarPaths.includes(pathname);
+    
+    // Prefix checks for dynamic routes or sub-folders
+    const isPrefixMatch = 
       pathname.startsWith("/confess/") || 
-      pathname.startsWith("/auth/")
-    );
+      pathname.startsWith("/auth/") ||
+      pathname.startsWith("/anonymous/"); // <--- Added this
+
+    return isExactMatch || isPrefixMatch;
   }, [pathname]);
 
   return (
     <AuthProvider> 
       <NotificationProvider profileId={profileId}>
         <XPNotificationProvider>
-          <div className={`min-h-screen ${shouldHideNavbar ? "pb-0" : "pb-24"}`}>
+          <div className={`min-h-screen transition-all ${shouldHideNavbar ? "pb-0" : "pb-24"}`}>
             <main>{children}</main>
             {!shouldHideNavbar && <BottomNavbar />}
             <Toaster position="top-center" richColors />
