@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Coins, TrendingUp, TrendingDown, Clock } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion"
 
 interface XPTransaction {
   id: string
@@ -14,16 +14,67 @@ interface XPTransaction {
   metadata?: any
 }
 
+// Animated counter component
+function AnimatedCounter({ value }: { value: number }) {
+  const spring = useSpring(value, { 
+    stiffness: 100, 
+    damping: 30,
+    duration: 1000 
+  })
+  const display = useTransform(spring, (current) => 
+    Math.round(current).toLocaleString()
+  )
+
+  useEffect(() => {
+    spring.set(value)
+  }, [spring, value])
+
+  return <motion.span>{display}</motion.span>
+}
+
 export default function XPBalance() {
   const [balance, setBalance] = useState<number>(0)
+  const [prevBalance, setPrevBalance] = useState<number>(0)
   const [showHistory, setShowHistory] = useState(false)
   const [transactions, setTransactions] = useState<XPTransaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [shouldPulse, setShouldPulse] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
     fetchBalance()
-  }, [])
+    
+    // Subscribe to XP changes
+    const channel = supabase
+      .channel('xp-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${supabase.auth.getUser().then(u => u.data.user?.id)}`
+        },
+        (payload) => {
+          if (payload.new && 'xp_balance' in payload.new) {
+            const newBalance = payload.new.xp_balance as number
+            setPrevBalance(balance)
+            setBalance(newBalance)
+            
+            // Trigger pulse animation
+            if (newBalance > balance) {
+              setShouldPulse(true)
+              setTimeout(() => setShouldPulse(false), 1000)
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [balance])
 
   const fetchBalance = async () => {
     try {
@@ -37,7 +88,9 @@ export default function XPBalance() {
         .single()
 
       if (profile) {
-        setBalance(profile.xp_balance || 0)
+        const newBalance = profile.xp_balance || 0
+        setBalance(newBalance)
+        setPrevBalance(newBalance)
       }
       setLoading(false)
     } catch (error) {
@@ -90,17 +143,81 @@ export default function XPBalance() {
   return (
     <div className="relative">
       {/* XP Balance Button */}
-      <button
+      <motion.button
         onClick={handleClick}
-        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:border-purple-600 hover:bg-purple-50 transition-all"
+        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:border-purple-600 hover:bg-purple-50 transition-all relative overflow-hidden"
         style={{ fontFamily: 'Roboto, sans-serif' }}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        animate={shouldPulse ? {
+          boxShadow: [
+            "0 0 0 0 rgba(147, 51, 234, 0)",
+            "0 0 0 8px rgba(147, 51, 234, 0.3)",
+            "0 0 0 0 rgba(147, 51, 234, 0)"
+          ]
+        } : {}}
+        transition={{ duration: 0.6 }}
       >
-        <Coins className="w-5 h-5 text-purple-600" />
+        {/* Shine effect on balance increase */}
+        <AnimatePresence>
+          {shouldPulse && (
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-200/30 to-transparent"
+              initial={{ x: '-100%' }}
+              animate={{ x: '200%' }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6, ease: "easeInOut" }}
+            />
+          )}
+        </AnimatePresence>
+
+        <motion.div
+          animate={shouldPulse ? { 
+            rotate: [0, -10, 10, -10, 0],
+            scale: [1, 1.2, 1]
+          } : {}}
+          transition={{ duration: 0.5 }}
+        >
+          <Coins className="w-5 h-5 text-purple-600" />
+        </motion.div>
+        
         <span className="font-medium text-slate-900">
-          {loading ? '...' : balance.toLocaleString()}
+          {loading ? '...' : <AnimatedCounter value={balance} />}
         </span>
         <span className="text-xs text-slate-500">XP</span>
-      </button>
+
+        {/* Particle burst on balance increase */}
+        <AnimatePresence>
+          {shouldPulse && (
+            <>
+              {[...Array(6)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute w-1 h-1 bg-yellow-400 rounded-full"
+                  initial={{ 
+                    opacity: 1,
+                    x: 0,
+                    y: 0,
+                    scale: 1
+                  }}
+                  animate={{
+                    opacity: 0,
+                    x: Math.cos((i / 6) * Math.PI * 2) * 30,
+                    y: Math.sin((i / 6) * Math.PI * 2) * 30,
+                    scale: 0
+                  }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  style={{
+                    left: '50%',
+                    top: '50%',
+                  }}
+                />
+              ))}
+            </>
+          )}
+        </AnimatePresence>
+      </motion.button>
 
       {/* Transaction History Modal */}
       <AnimatePresence>
@@ -127,7 +244,9 @@ export default function XPBalance() {
               {/* Header */}
               <div className="bg-purple-600 text-white p-4">
                 <h3 className="text-lg font-medium mb-1">XP History</h3>
-                <p className="text-sm text-purple-100">Current balance: {balance.toLocaleString()} XP</p>
+                <p className="text-sm text-purple-100">
+                  Current balance: <AnimatedCounter value={balance} /> XP
+                </p>
               </div>
 
               {/* Transaction List */}
@@ -140,21 +259,30 @@ export default function XPBalance() {
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    {transactions.map((transaction) => (
-                      <div key={transaction.id} className="p-4 hover:bg-slate-50 transition-colors">
+                    {transactions.map((transaction, index) => (
+                      <motion.div 
+                        key={transaction.id} 
+                        className="p-4 hover:bg-slate-50 transition-colors"
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-3 flex-1">
-                            <div className={`p-2 rounded-lg ${
-                              transaction.type === 'earn' 
-                                ? 'bg-green-100 text-green-600' 
-                                : 'bg-red-100 text-red-600'
-                            }`}>
+                            <motion.div 
+                              className={`p-2 rounded-lg ${
+                                transaction.type === 'earn' 
+                                  ? 'bg-green-100 text-green-600' 
+                                  : 'bg-red-100 text-red-600'
+                              }`}
+                              whileHover={{ scale: 1.1, rotate: 5 }}
+                            >
                               {transaction.type === 'earn' ? (
                                 <TrendingUp className="w-4 h-4" />
                               ) : (
                                 <TrendingDown className="w-4 h-4" />
                               )}
-                            </div>
+                            </motion.div>
                             <div className="flex-1">
                               <p className="text-sm font-medium text-slate-900">
                                 {transaction.reason}
@@ -175,7 +303,7 @@ export default function XPBalance() {
                             {transaction.type === 'earn' ? '+' : '-'}{Math.abs(transaction.amount).toLocaleString()}
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 )}
@@ -186,4 +314,5 @@ export default function XPBalance() {
       </AnimatePresence>
     </div>
   )
-}
+        }
+        
