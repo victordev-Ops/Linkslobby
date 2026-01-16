@@ -103,7 +103,7 @@ export default function DashboardClient() {
             </div>
             <input 
               readOnly 
-              value={confessUrl}
+              value={anonymousUrl}
               className="flex-1 bg-transparent py-2 text-xs font-semibold text-slate-600 focus:outline-none truncate"
             />
             <button
