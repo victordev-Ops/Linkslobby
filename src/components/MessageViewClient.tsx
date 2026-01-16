@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation' // <--- Re-added for standalone page support
 import { X, Share2, Lock, Camera, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toPng } from 'html-to-image'
@@ -16,7 +17,7 @@ type Confession = {
 type Props = {
   confession: Confession
   username: string
-  onClose: () => void // ADDED: Close handler
+  onClose?: () => void // <--- Changed to Optional (?)
 }
 
 const GRADIENTS = [
@@ -29,7 +30,7 @@ const GRADIENTS = [
 ]
 
 export default function MessageViewClient({ confession, username, onClose }: Props) {
-  // Ref for the container that includes the background padding
+  const router = useRouter()
   const shareWrapperRef = useRef<HTMLDivElement>(null)
   
   const [colorIndex, setColorIndex] = useState(0)
@@ -37,6 +38,17 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
   const [isSharing, setIsSharing] = useState(false)
 
   const handleNextColor = () => setColorIndex((prev) => (prev + 1) % GRADIENTS.length)
+
+  // --- HYBRID CLOSE HANDLER ---
+  // If used as a modal, use the callback. 
+  // If used as a page, navigate back.
+  const handleClose = () => {
+    if (onClose) {
+      onClose()
+    } else {
+      router.push('/inbox')
+    }
+  }
   
   /**
    * Generates the image from the ref
@@ -126,7 +138,7 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
       {/* Top Bar */}
       <div className="sticky top-0 px-6 pt-6 pb-4 flex items-center justify-end z-50 pointer-events-none">
         <button 
-          onClick={onClose} 
+          onClick={handleClose} 
           className="pointer-events-auto p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md hover:bg-white active:scale-90 transition-all"
           aria-label="Close message"
         >
