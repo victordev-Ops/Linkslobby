@@ -1,4 +1,3 @@
-// src/middleware.ts
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
@@ -34,12 +33,17 @@ export async function middleware(request: NextRequest) {
   // 2. Define Public Routes
   const publicPaths = ['/login', '/signup']
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
-  const isAuthCallback = pathname.startsWith('/auth/')
-  const isConfessPage = pathname.startsWith('/confess/')
-  const isAmaPage = pathname.startsWith('/ama/')
-  const isPublicRoute = isExactPublic || isAuthCallback || isConfessPage || isAmaPage
+  
+  // Routes that start with a specific prefix
+  const isPublicPrefix = 
+    pathname.startsWith('/auth/') || 
+    pathname.startsWith('/confess/') || 
+    pathname.startsWith('/ama/') || 
+    pathname.startsWith('/anonymous/') // <--- Added this
 
-  // 3. Logic: Redirect logged-in users away from Login/Signup
+  const isPublicRoute = isExactPublic || isPublicPrefix
+
+  // 3. Logic: Redirect logged-in users away from Login/Signup to Dashboard
   if (user && (pathname === '/login' || pathname === '/signup')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
@@ -51,8 +55,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // 5. NEW: For authenticated users accessing dashboard, check profile completion
-  // This is a lightweight check - the actual enforcement happens in layout
+  // 5. Profile Completion Check
   if (user && pathname === '/dashboard') {
     const { data: profile } = await supabase
       .from('profiles')
@@ -71,6 +74,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
-    }
+}
