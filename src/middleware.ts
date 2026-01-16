@@ -39,7 +39,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/auth/') || 
     pathname.startsWith('/confess/') || 
     pathname.startsWith('/ama/') || 
-    pathname.startsWith('/anonymous/') // <--- Added this
+    pathname.startsWith('/anonymous/') ||
+    pathname.startsWith('/dykm/')// <--- Added this
 
   const isPublicRoute = isExactPublic || isPublicPrefix
 
