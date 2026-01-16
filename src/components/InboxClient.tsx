@@ -1,4 +1,3 @@
-//src/components/InboxClient.tsx
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
@@ -10,6 +9,8 @@ import { markConfessionAsRead } from 'app/actions/confessions'
 import { useNotifications } from '@/context/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
+// IMPORT THE VIEW COMPONENT
+import MessageViewClient from './MessageViewClient'
 
 type Confession = {
   id: string
@@ -19,9 +20,7 @@ type Confession = {
   profile_id: string
 }
 
-/**
- * HELPER: Debounce function
- */
+// --- HELPERS ---
 function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
@@ -33,10 +32,6 @@ function debounce<T extends (...args: any[]) => any>(
   }
 }
 
-/**
- * HELPER: Merges two arrays of messages, removes duplicates by ID, 
- * and sorts them by date (newest first).
- */
 const mergeConfessions = (current: Confession[], incoming: Confession[]): Confession[] => {
   const map = new Map<string, Confession>()
   ;[...current, ...incoming].forEach(item => map.set(item.id, item))
@@ -45,9 +40,6 @@ const mergeConfessions = (current: Confession[], incoming: Confession[]): Confes
   )
 }
 
-/**
- * HELPER: Formats a date string into a relative time (e.g., "5m ago")
- */
 const formatRelativeTime = (dateString: string): string => {
   const now = new Date()
   const then = new Date(dateString)
@@ -69,23 +61,26 @@ const formatRelativeTime = (dateString: string): string => {
 
 export default function InboxClient({ 
   initialConfessions, 
-  userId 
+  userId,
+  username // ADDED: Needed for the view component
 }: { 
   initialConfessions: Confession[]
-  userId: string 
+  userId: string
+  username: string 
 }) {
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // Track if we have performed the initial mount background sync
+  // NEW: State for the instant preview overlay
+  const [selectedConfession, setSelectedConfession] = useState<Confession | null>(null)
+  
   const hasMounted = useRef(false)
   const supabase = useRef(createClient()).current
  
   const { setUnreadCount, refreshUnreadCount } = useNotifications()
   const router = useRouter()
 
-  // Debounced version of refreshUnreadCount to prevent excessive updates
   const debouncedRefreshUnreadCount = useMemo(
     () => debounce(() => {
       refreshUnreadCount().catch(console.error)
@@ -113,12 +108,9 @@ export default function InboxClient({
 
       if (data) {
         setConfessions(prev => mergeConfessions(prev, data))
-        
-        // Defer unread count update to avoid blocking
         queueMicrotask(() => {
           refreshUnreadCount().catch(console.error)
         })
-        
         if (isManual) toast.success('Inbox updated')
       }
     } catch (err) {
@@ -132,15 +124,12 @@ export default function InboxClient({
     }
   }, [userId, supabase, refreshUnreadCount])
 
-  // --- 2. SYNC SERVER PROPS & HANDLE INITIAL MOUNT ---
+  // --- 2. SYNC SERVER PROPS ---
   useEffect(() => {
-    // Merge initial confessions from server
     setConfessions(prev => mergeConfessions(prev, initialConfessions))
-    
     const unread = initialConfessions.filter(c => !c.is_read).length
     setUnreadCount(unread)
 
-    // Perform background sync on initial mount only
     if (!hasMounted.current) {
       fetchLatest(false) 
       hasMounted.current = true
@@ -161,15 +150,13 @@ export default function InboxClient({
           if (payload.eventType === 'INSERT') {
             const newMsg = payload.new as Confession
             setConfessions((prev) => mergeConfessions(prev, [newMsg]))
-            
-            // Non-blocking unread count update
             queueMicrotask(() => debouncedRefreshUnreadCount())
             
             toast('New secret message! 💌', {
               description: 'Tap to view',
               action: { 
                 label: 'View', 
-                onClick: () => router.push(`/inbox/${newMsg.id}`) 
+                onClick: () => setSelectedConfession(newMsg) // Update to use state
               }
             })
           } else if (payload.eventType === 'UPDATE') {
@@ -189,7 +176,7 @@ export default function InboxClient({
     return () => { 
       supabase.removeChannel(channel) 
     }
-  }, [userId, supabase, debouncedRefreshUnreadCount, router])
+  }, [userId, supabase, debouncedRefreshUnreadCount])
 
   // --- 4. ACTION HANDLERS ---
   const handleRefresh = useCallback(() => {
@@ -197,32 +184,34 @@ export default function InboxClient({
   }, [fetchLatest])
 
   const openMessage = useCallback(async (confession: Confession) => {
-    // 1. Mark as read in background (fire and forget)
+    // 1. INSTANTLY OPEN (State update = ~0ms delay)
+    setSelectedConfession(confession)
+
+    // 2. Background Logic (Optimistic update & Server sync)
     if (!confession.is_read) {
-      markConfessionAsRead(confession.id).catch(err => {
-        console.error('Mark as read error:', err)
-      })
-      
-      // 2. Optimistic UI update
+      // Optimistic update local list
       setConfessions((prev) =>
         prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
       )
       
-      // 3. Defer unread count update (non-blocking)
+      // Fire and forget server update
+      markConfessionAsRead(confession.id).catch(err => {
+        console.error('Mark as read error:', err)
+      })
+      
       queueMicrotask(() => debouncedRefreshUnreadCount())
     }
-    
-    // 4. Navigate immediately (don't wait for server)
-    router.push(`/inbox/${confession.id}`)
-  }, [router, debouncedRefreshUnreadCount])
+  }, [debouncedRefreshUnreadCount])
 
-  // --- RENDER ERROR STATE ---
+  const closeMessage = () => setSelectedConfession(null)
+
+  // --- RENDER ---
   if (error && confessions.length === 0) {
     return <ErrorState retry={handleRefresh} message={error} />
   }
 
   return (
-    <div className="min-h-screen bg-white pb-32">
+    <div className="min-h-screen bg-white pb-32 relative">
       {/* Header */}
       <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-100 z-10 px-6 py-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Inbox</h1>
@@ -230,7 +219,6 @@ export default function InboxClient({
           onClick={handleRefresh}
           disabled={refreshing}
           className="p-2 hover:bg-gray-100 rounded-full transition-all active:scale-90 disabled:opacity-50"
-          aria-label="Refresh messages"
         >
           <RefreshCw 
             size={20} 
@@ -306,12 +294,31 @@ export default function InboxClient({
           )}
         </AnimatePresence>
       </div>
+
+      {/* --- INSTANT PREVIEW OVERLAY --- */}
+      <AnimatePresence>
+        {selectedConfession && (
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="fixed inset-0 z-50 bg-white"
+            style={{ willChange: 'transform' }} // Optimization
+          >
+            <MessageViewClient 
+              confession={selectedConfession} 
+              username={username}
+              onClose={closeMessage}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
 // --- Sub-Components ---
-
 function ErrorState({ retry, message }: { retry: () => void; message: string }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
@@ -320,10 +327,7 @@ function ErrorState({ retry, message }: { retry: () => void; message: string }) 
       </div>
       <h3 className="text-lg font-bold text-gray-900 mb-2">Unable to sync</h3>
       <p className="text-gray-500 mb-6 text-sm">{message}</p>
-      <button 
-        onClick={retry} 
-        className="bg-gray-900 text-white px-8 py-2.5 rounded-xl font-bold active:scale-95 transition-transform hover:bg-gray-800"
-      >
+      <button onClick={retry} className="bg-gray-900 text-white px-8 py-2.5 rounded-xl font-bold active:scale-95 transition-transform hover:bg-gray-800">
         Try Again
       </button>
     </div>
@@ -340,10 +344,7 @@ function EmptyState() {
       <p className="text-gray-500 mb-8 max-w-xs mx-auto text-sm">
         Share your profile link with others to get anonymous messages.
       </p>
-      <Link 
-        href="/dashboard" 
-        className="inline-block bg-purple-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-purple-100 active:scale-95 transition-transform hover:bg-purple-700"
-      >
+      <Link href="/dashboard" className="inline-block bg-purple-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-purple-100 active:scale-95 transition-transform hover:bg-purple-700">
         Get My Link
       </Link>
     </div>
