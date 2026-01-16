@@ -1,20 +1,27 @@
-// src/components/ClientLayout.tsx
 "use client";
 
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import BottomNavbar from "./BottomNavbar";
 import { NotificationProvider } from "@/context/NotificationContext";
-import { AuthProvider } from "@/context/AuthContext"; // <--- IMPORT THIS
+import { AuthProvider } from "@/context/AuthContext";
+import { XPNotificationProvider } from "@/components/XPNotificationProvider";
 import { Toaster } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { setXPNotificationHandler } from "@/lib/xp";
+import { showXPNotification } from "@/components/XPNotification";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [profileId, setProfileId] = useState<string | null>(null);
   const supabase = createClient();
 
-  // 1. Fetch current user's profile ID for notifications
+  // 1. Initialize XP notification handler
+  useEffect(() => {
+    setXPNotificationHandler(showXPNotification);
+  }, []);
+
+  // 2. Fetch current user's profile ID for notifications
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -30,14 +37,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => subscription.unsubscribe();
   }, [supabase]);
   
-  // 2. Clear Badges
+  // 3. Clear Badges
   useEffect(() => {
     if ('clearAppBadge' in navigator) {
       (navigator as any).clearAppBadge();
     }
   }, []);
       
-  // 3. Service Worker Registration
+  // 4. Service Worker Registration
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       const handleRegister = async () => {
@@ -61,7 +68,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // 4. Navbar Visibility Logic
+  // 5. Navbar Visibility Logic
   const shouldHideNavbar = useMemo(() => {
     const hideNavbarPaths = [
       "/login",
@@ -80,16 +87,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     );
   }, [pathname]);
 
-  // REMOVED <body className...>. Styles should be moved to a wrapper div or Fragment
-  // Added <AuthProvider> wrapping everything
   return (
     <AuthProvider> 
       <NotificationProvider profileId={profileId}>
-        <div className={`min-h-screen ${shouldHideNavbar ? "pb-0" : "pb-24"}`}>
-          <main>{children}</main>
-          {!shouldHideNavbar && <BottomNavbar />}
-          <Toaster position="top-center" richColors />
-        </div>
+        <XPNotificationProvider>
+          <div className={`min-h-screen ${shouldHideNavbar ? "pb-0" : "pb-24"}`}>
+            <main>{children}</main>
+            {!shouldHideNavbar && <BottomNavbar />}
+            <Toaster position="top-center" richColors />
+          </div>
+        </XPNotificationProvider>
       </NotificationProvider>
     </AuthProvider>
   );
