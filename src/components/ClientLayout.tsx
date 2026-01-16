@@ -8,7 +8,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { XPNotificationProvider } from "@/components/XPNotificationProvider";
 import { Toaster } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { setXPNotificationHandler } from "@/hooks/xp";
+import { setXPNotificationHandler } from "@/hooks/xp"; // Fixed: Changed from @/lib/xp to @/hooks/xp
 import { showXPNotification } from "@/components/XPNotification";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
