@@ -1,3 +1,4 @@
+// app/tod/page.tsx
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
@@ -8,7 +9,6 @@ import { Sparkles, Users } from "lucide-react";
 export default async function TODDashboardPage() {
   const cookieStore = await cookies();
 
-  // Initialize Supabase Server Client
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -30,7 +30,6 @@ export default async function TODDashboardPage() {
     }
   );
 
-  // Auth Check
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -39,7 +38,7 @@ export default async function TODDashboardPage() {
     redirect(`/login`);
   }
 
-  // Fetch user's active lobbies (ones they've joined)
+  // Fetch user's active lobbies
   const { data: userLobbies, error: lobbiesError } = await supabase
     .from("tod_participants")
     .select(
@@ -82,17 +81,16 @@ export default async function TODDashboardPage() {
 
   const validLobbies = lobbiesWithCounts.filter((l) => l !== null);
 
-  // Separate active and finished lobbies
   const activeLobbies = validLobbies.filter(
     (l) => l.status === "waiting" || l.status === "active"
   );
   const finishedLobbies = validLobbies.filter((l) => l.status === "finished");
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-red-950 to-slate-950 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-rose-950 to-slate-950 relative overflow-hidden">
       {/* Decorative Background */}
       <div className="absolute inset-0 opacity-20">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-red-500 rounded-full blur-[120px]" />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-rose-500 rounded-full blur-[120px]" />
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500 rounded-full blur-[120px]" />
       </div>
 
@@ -100,8 +98,8 @@ export default async function TODDashboardPage() {
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
-              <Sparkles size={32} className="text-red-400" />
+            <div className="w-20 h-20 bg-gradient-to-br from-rose-500/20 to-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-500/30">
+              <Sparkles size={32} className="text-rose-400" />
             </div>
             <h1 className="text-4xl sm:text-5xl font-black text-white mb-2 italic">
               Truth or Dare
@@ -120,7 +118,7 @@ export default async function TODDashboardPage() {
           {activeLobbies.length > 0 && (
             <div className="mb-8">
               <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <Users size={20} className="text-red-400" />
+                <Users size={20} className="text-rose-400" />
                 Active Games ({activeLobbies.length})
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -162,5 +160,4 @@ export default async function TODDashboardPage() {
       </div>
     </div>
   );
-}
-  
+                    }
