@@ -17,7 +17,7 @@ interface PlayersSidebarProps {
   messages: Message[];
   currentTargetId?: string;
   hostId: string;
-  onClose?: () => void;  // <- THIS LINE IS CRITICAL
+ // onClose?: () => void;  // <- THIS LINE IS CRITICAL
   className?: string;
 }
 
