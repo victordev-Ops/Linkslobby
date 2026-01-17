@@ -1,9 +1,11 @@
+// src/components/tod/TODGameClient.tsx
 "use client";
 
 import { useRef, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X } from "lucide-react";
+import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
 import { ModeSelector } from "./ui/ModeSelector";
@@ -19,6 +21,7 @@ interface TODGameClientProps {
 
 export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const { profile } = useAuth();
+  const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -83,6 +86,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     return url;
   };
 
+  const handleLeaveLobby = () => {
+    router.push('/tod');
+  };
+
   const isTarget = profile?.id === lobby?.current_target_id;
   const isAsker = profile?.id === lobby?.current_asker_id;
   const isHost = profile?.id === lobby?.host_id;
@@ -124,10 +131,11 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         <h2 className="text-2xl font-bold mb-2 text-white">Lobby Error</h2>
         <p className="text-slate-400 mb-6">{errorStatus || "Game not found."}</p>
         <button
-          onClick={() => window.location.reload()}
-          className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-red-500/50 transition"
+          onClick={handleLeaveLobby}
+          className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-red-500/50 transition flex items-center gap-2"
         >
-          Retry
+          <ArrowLeft size={20} />
+          Back to Lobbies
         </button>
       </div>
     );
@@ -148,23 +156,34 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         {/* Top Header */}
         <header className="flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/50 border-b border-slate-800/50">
           <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-            <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className="lg:hidden w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg"
-            >
-              <Users size={16} className="text-white" />
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white border-2 border-slate-900">
-                {participants.length}
-              </span>
-            </button>
+            {/* Left: Back/Sidebar Button */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleLeaveLobby}
+                className="hidden lg:flex w-9 h-9 rounded-full bg-slate-800 border border-slate-700 items-center justify-center hover:bg-slate-700 transition"
+              >
+                <ArrowLeft size={16} className="text-white" />
+              </button>
 
-            <div className="hidden lg:flex items-center gap-2 text-sm">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg">
+              <button
+                onClick={() => setShowSidebar(!showSidebar)}
+                className="lg:hidden w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg relative"
+              >
                 <Users size={16} className="text-white" />
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white border-2 border-slate-900">
+                  {participants.length}
+                </span>
+              </button>
+
+              <div className="hidden lg:flex items-center gap-2 text-sm">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg">
+                  <Users size={16} className="text-white" />
+                </div>
+                <span className="text-white font-bold">{participants.length} Players</span>
               </div>
-              <span className="text-white font-bold">{participants.length} Players</span>
             </div>
 
+            {/* Center: Game Status */}
             <GameStatus
               status={lobby.status}
               selectedMode={lobby.selected_mode}
@@ -172,6 +191,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               targetUsername={targetUser?.profiles?.username}
             />
 
+            {/* Right: Action Buttons */}
             <div className="flex items-center gap-2">
               {isHost && lobby.status === 'active' && (
                 <button
@@ -230,7 +250,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             messages={messages}
             currentTargetId={lobby.current_target_id}
             hostId={lobby.host_id}
-            className="hidden lg:block"
+            className="hidden lg:flex"
           />
 
           {/* Chat Area */}
@@ -271,15 +291,24 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-2">Game Ended!</h3>
                   <p className="text-slate-400 text-sm mb-6">Thanks for playing!</p>
-                  {isHost && (
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    {isHost && (
+                      <button
+                        onClick={handleStartGame}
+                        className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 inline-flex items-center gap-2"
+                      >
+                        <Play size={20} />
+                        Play Again
+                      </button>
+                    )}
                     <button
-                      onClick={handleStartGame}
-                      className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 inline-flex items-center gap-2"
+                      onClick={handleLeaveLobby}
+                      className="bg-slate-800 border border-slate-700 text-white px-8 py-3 rounded-full font-bold hover:bg-slate-700 transition-all active:scale-95 inline-flex items-center gap-2"
                     >
-                      <Play size={20} />
-                      Play Again
+                      <ArrowLeft size={20} />
+                      Back to Lobbies
                     </button>
-                  )}
+                  </div>
                 </div>
               )}
 
@@ -298,4 +327,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     </div>
   );
-}
+    }
