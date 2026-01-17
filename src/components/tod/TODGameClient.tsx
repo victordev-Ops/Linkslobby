@@ -4,7 +4,7 @@
 import { useRef, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft } from "lucide-react";
+import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
@@ -32,12 +32,14 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     messages,
     isLoading,
     errorStatus,
+    timeRemaining,
     sendMessage,
     selectMode,
     startGame,
     startNextRound,
     endGame,
-    uploadImage
+    uploadImage,
+    cleanup
   } = useGameLogic(lobbyId, profile?.id);
 
   const scrollToBottom = () => {
@@ -47,6 +49,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
 
   const copyInviteLink = () => {
     const url = window.location.href;
@@ -87,6 +96,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   };
 
   const handleLeaveLobby = () => {
+    cleanup();
     router.push('/tod');
   };
 
@@ -95,16 +105,30 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const isHost = profile?.id === lobby?.host_id;
 
   const canSendMessage = () => {
+    // Always allow chat in waiting room
     if (lobby?.status === 'waiting') return true;
-    if (lobby?.status !== 'active') return false;
-    if (!lobby?.selected_mode) return false;
-    if (lobby?.selected_mode && !lobby?.current_question) return isAsker;
-    if (lobby?.current_question) return isTarget;
+    
+    // Always allow chat when game is finished
+    if (lobby?.status === 'finished') return true;
+    
+    // During active game
+    if (lobby?.status === 'active') {
+      // No mode selected yet - only target can select
+      if (!lobby?.selected_mode) return false;
+      
+      // Mode selected but no question - only asker can ask
+      if (lobby?.selected_mode && !lobby?.current_question) return isAsker;
+      
+      // Question asked - only target can answer
+      if (lobby?.current_question) return isTarget;
+    }
+    
     return false;
   };
 
   const getInputPlaceholder = () => {
-    if (lobby?.status === 'waiting') return "Chat while waiting...";
+    if (lobby?.status === 'waiting') return "Chat with everyone...";
+    if (lobby?.status === 'finished') return "Chat with everyone...";
     if (!lobby?.selected_mode) return "Waiting for mode selection...";
     if (lobby?.selected_mode && !lobby?.current_question) {
       return isAsker ? `Ask a ${lobby.selected_mode} question...` : "Waiting for question...";
@@ -184,12 +208,26 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             </div>
 
             {/* Center: Game Status */}
-            <GameStatus
-              status={lobby.status}
-              selectedMode={lobby.selected_mode}
-              askerUsername={askerUser?.profiles?.username}
-              targetUsername={targetUser?.profiles?.username}
-            />
+            <div className="flex items-center gap-2">
+              <GameStatus
+                status={lobby.status}
+                selectedMode={lobby.selected_mode}
+                askerUsername={askerUser?.profiles?.username}
+                targetUsername={targetUser?.profiles?.username}
+              />
+              
+              {/* Timer Display */}
+              {lobby.status === 'active' && timeRemaining !== null && (
+                <div className={`px-3 py-1 rounded-full border flex items-center gap-1.5 ${
+                  timeRemaining <= 10 
+                    ? 'bg-red-500/20 border-red-500/50 text-red-300 animate-pulse' 
+                    : 'bg-slate-800/80 border-slate-700/50 text-slate-300'
+                }`}>
+                  <Timer size={12} />
+                  <span className="text-xs font-bold">{timeRemaining}s</span>
+                </div>
+              )}
+            </div>
 
             {/* Right: Action Buttons */}
             <div className="flex items-center gap-2">
@@ -269,6 +307,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   isTarget={isTarget}
                   targetUsername={targetUser?.profiles?.username}
                   onSelectMode={handleSelectMode}
+                  timeRemaining={timeRemaining}
                 />
               )}
 
@@ -327,4 +366,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     </div>
   );
-    }
+}
