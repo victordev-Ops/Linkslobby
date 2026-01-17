@@ -60,9 +60,9 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
           </div>
           <h1 className="text-2xl font-black text-slate-900">Quiz Complete!</h1>
           <p className="text-slate-500">
-            You scored <span className="text-purple-600 font-bold text-lg">{score}</span> out of {questions.length} knowing {profile.username}.
+            You scored <span className="text-blue-600 font-bold text-lg">{score}</span> out of {questions.length} knowing {profile.username}.
           </p>
-          <a href="/" className="block w-full py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition">
+          <a href="/" className="block w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition">
             Create your own Quiz
           </a>
         </div>
@@ -75,7 +75,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-block px-3 py-1 bg-purple-100 text-purple-700 text-[10px] font-bold uppercase tracking-widest rounded-full">
+          <div className="inline-block px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-widest rounded-full">
             Do You Know Me?
           </div>
           <h1 className="text-xl font-bold text-slate-900">
@@ -86,7 +86,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
         {/* Progress Bar */}
         <div className="flex gap-2">
           {questions.map((_, i) => (
-            <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= currentIndex ? 'bg-purple-600' : 'bg-slate-200'}`} />
+            <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= currentIndex ? 'bg-blue-600' : 'bg-slate-200'}`} />
           ))}
         </div>
 
@@ -116,13 +116,13 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
                {!showHint ? (
                  <button 
                    onClick={() => setShowHint(true)}
-                   className="text-xs font-bold text-orange-500 flex items-center gap-1.5 hover:text-orange-600 transition"
+                   className="text-xs font-bold text-blue-600 flex items-center gap-1.5 hover:text-blue-700 transition"
                  >
                    <Lightbulb size={14} /> Need a hint?
                  </button>
                ) : (
-                 <div className="bg-orange-50 border border-orange-100 p-3 rounded-xl animate-in fade-in slide-in-from-top-1">
-                   <p className="text-xs text-orange-700 font-medium">💡 Hint: {currentQ.hint}</p>
+                 <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl animate-in fade-in slide-in-from-top-1">
+                   <p className="text-xs text-blue-700 font-medium">💡 Hint: {currentQ.hint}</p>
                  </div>
                )}
              </div>
@@ -134,7 +134,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
                  value={input}
                  onChange={(e) => setInput(e.target.value)}
                  placeholder="Type your answer..."
-                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all font-medium"
+                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
                />
                <button 
                  type="submit"
@@ -149,4 +149,5 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
       </div>
     </div>
   )
-}
+        }
+      
