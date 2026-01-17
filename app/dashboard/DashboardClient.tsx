@@ -381,7 +381,7 @@ export default function DashboardClient() {
                 <X size={18} />
               </button>
             </div>
-            
+             
             <div className="p-6 space-y-8">
               {dykmQuestions.map((q, idx) => (
                 <div key={idx} className="space-y-3">
