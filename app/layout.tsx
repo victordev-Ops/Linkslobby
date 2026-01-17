@@ -1,4 +1,5 @@
 // app/layout.tsx
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import type { Metadata, Viewport } from "next";
 import { GeistSans, GeistMono } from "geist/font";
 import "./globals.css";
@@ -36,6 +37,7 @@ export default function RootLayout({
       </head>
       {/* Remove className="loading" and the Script tag */}
       <body className="bg-slate-50"> 
+         <SpeedInsights/>
         <ClientLayout>{children}</ClientLayout>
         {/* PWA prompt is inside ClientLayout or handled there */}
       </body>
