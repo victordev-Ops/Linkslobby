@@ -26,10 +26,7 @@ export default function DashboardClient() {
   const [isAmaOpen, setIsAmaOpen] = useState(false)
   const [isConfessOpen, setIsConfessOpen] = useState(false)
   const [isDykmOpen, setIsDykmOpen] = useState(false)
-  const [isTodOpen, setIsTodOpen] = useState(false) // TOD State
-
-  // Action States
-  const [isCreatingTod, setIsCreatingTod] = useState(false) // TOD Loading State
+  const [isTodOpen, setIsTodOpen] = useState(false)
 
   // DYKM Logic
   const [hasDykm, setHasDykm] = useState(false)
@@ -95,31 +92,9 @@ export default function DashboardClient() {
     }
   }
 
-  // Truth or Dare Logic
-  const handleCreateTod = async () => {
-    if (!profile) return
-    setIsCreatingTod(true)
-    
-    try {
-      const { data, error } = await supabase
-        .from('tod_lobbies')
-        .insert({ 
-          host_id: profile.id, 
-          status: 'waiting' 
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      
-      toast.success("Lobby created! Redirecting...")
-      router.push(`/tod/${data.id}`)
-    } catch (err) {
-      toast.error("Failed to create game lobby")
-      console.error(err)
-    } finally {
-      setIsCreatingTod(false)
-    }
+  // Truth or Dare Logic - Navigate to TOD dashboard
+  const handleNavigateToTod = () => {
+    router.push('/tod')
   }
 
   if (loading || !profile) {
@@ -229,12 +204,11 @@ export default function DashboardClient() {
                   </div>
                   
                   <button 
-                    onClick={handleCreateTod}
-                    disabled={isCreatingTod}
-                    className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                    onClick={handleNavigateToTod}
+                    className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition flex items-center justify-center gap-2"
                   >
-                    {isCreatingTod ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
-                    Create Game Lobby
+                    <Sparkles size={16} />
+                    View Game Lobbies
                   </button>
                 </div>
               )}
@@ -440,33 +414,4 @@ export default function DashboardClient() {
                       }}
                     />
                     <input 
-                      placeholder="Correct Answer"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                      value={q.answer}
-                      onChange={(e) => {
-                        const newQ = [...dykmQuestions];
-                        newQ[idx].answer = e.target.value;
-                        setDykmQuestions(newQ);
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-6 border-t border-slate-100 bg-slate-50/50 sticky bottom-0 backdrop-blur-md">
-              <button
-                onClick={handleSaveDykm}
-                disabled={isSavingDykm}
-                className="w-full py-3.5 bg-slate-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition active:scale-95 disabled:opacity-50 disabled:active:scale-100"
-              >
-                {isSavingDykm ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                Save Quiz
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+                      placeholder=
