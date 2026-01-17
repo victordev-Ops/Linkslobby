@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, ImageIcon, X, Loader2, Clock } from 'lucide-react';
+import { Send, ImageIcon as ImageIconLucide, X, Loader2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ChatInputProps {
@@ -23,7 +23,6 @@ export const ChatInput = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -72,7 +71,6 @@ export const ChatInput = ({
 
   return (
     <div className="flex-shrink-0 p-3 sm:p-4 backdrop-blur-xl bg-slate-900/80 border-t border-slate-800/50">
-      {/* Image Preview */}
       {imagePreview && (
         <div className="mb-3 relative inline-block">
           <img
@@ -89,7 +87,6 @@ export const ChatInput = ({
         </div>
       )}
 
-      {/* Disabled State Message */}
       {!canSend && (
         <div className="mb-2 text-center">
           <p className="text-xs text-slate-400 flex items-center justify-center gap-2">
@@ -99,7 +96,6 @@ export const ChatInput = ({
         </div>
       )}
 
-      {/* Input Controls */}
       <div className="flex items-end gap-2">
         <input
           type="file"
@@ -115,7 +111,7 @@ export const ChatInput = ({
           disabled={!canSend}
           className="p-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 transition shrink-0 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90"
         >
-          <ImageIcon size={20} className="text-slate-300" />
+          <ImageIconLucide size={20} className="text-slate-300" />
         </button>
 
         <textarea
@@ -141,4 +137,3 @@ export const ChatInput = ({
     </div>
   );
 };
-  
