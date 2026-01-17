@@ -1,4 +1,3 @@
-// WaitingRoom.tsx
 import { Sparkles, Play } from 'lucide-react';
 
 interface WaitingRoomProps {
@@ -31,4 +30,3 @@ export const WaitingRoom = ({ isHost, playersCount, onStartGame }: WaitingRoomPr
     </div>
   );
 };
-
