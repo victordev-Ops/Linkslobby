@@ -1,4 +1,3 @@
-// MessageBubble.tsx
 import { Check, Clock, Skull, Flame } from 'lucide-react';
 
 interface Message {
@@ -56,7 +55,7 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
             </span>
           </div>
           <p className="text-base sm:text-lg font-bold text-white italic leading-relaxed">
-            "{content}"
+            &quot;{content}&quot;
           </p>
           {image_url && (
             <img
