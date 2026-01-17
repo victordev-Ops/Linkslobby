@@ -1,3 +1,4 @@
+// MessageBubble.tsx
 import { Check, Clock, Skull, Flame } from 'lucide-react';
 
 interface Message {
@@ -20,23 +21,21 @@ interface MessageBubbleProps {
 export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
   const { message_type, content, image_url, profiles, created_at, isOptimistic, isSent } = message;
 
-  // System message
   if (message_type === 'system') {
     return (
-      <div className="flex justify-center">
-        <div className="px-4 py-2 bg-slate-800/50 backdrop-blur-sm rounded-full text-xs font-bold text-slate-300 border border-slate-700/50">
+      <div className="flex justify-center px-4">
+        <div className="px-4 py-2 bg-slate-800/50 backdrop-blur-sm rounded-full text-xs font-bold text-slate-300 border border-slate-700/50 max-w-[90%] text-center">
           {content}
         </div>
       </div>
     );
   }
 
-  // Truth/Dare challenge
   if (message_type === 'truth' || message_type === 'dare') {
     return (
-      <div className="flex justify-center my-6">
+      <div className="flex justify-center my-6 px-4">
         <div
-          className={`max-w-lg w-full p-6 rounded-3xl border-2 backdrop-blur-md ${
+          className={`max-w-lg w-full p-5 sm:p-6 rounded-3xl border-2 backdrop-blur-md ${
             message_type === 'truth'
               ? 'bg-orange-500/10 border-orange-500/50'
               : 'bg-red-500/10 border-red-500/50'
@@ -44,9 +43,9 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
         >
           <div className="flex items-center gap-2 mb-3">
             {message_type === 'truth' ? (
-              <Skull size={20} className="text-orange-400" />
+              <Skull size={20} className="text-orange-400 flex-shrink-0" />
             ) : (
-              <Flame size={20} className="text-red-400" />
+              <Flame size={20} className="text-red-400 flex-shrink-0" />
             )}
             <span
               className={`text-xs font-black uppercase ${
@@ -56,7 +55,7 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
               {message_type} Challenge
             </span>
           </div>
-          <p className="text-lg font-bold text-white italic leading-relaxed">
+          <p className="text-base sm:text-lg font-bold text-white italic leading-relaxed">
             "{content}"
           </p>
           {image_url && (
@@ -72,11 +71,10 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
     );
   }
 
-  // Regular chat message
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} items-end gap-2 px-2`}>
       <div
-        className={`max-w-[75%] sm:max-w-xs ${
+        className={`max-w-[85%] sm:max-w-xs ${
           isOwn
             ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white'
             : 'bg-slate-800/80 backdrop-blur-sm text-white border border-slate-700/50'
@@ -114,4 +112,3 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
     </div>
   );
 };
-              
