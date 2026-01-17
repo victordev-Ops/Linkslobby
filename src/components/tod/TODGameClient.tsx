@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle } from "lucide-react";
+import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X } from "lucide-react";
 import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
 import { ModeSelector } from "./ui/ModeSelector";
@@ -202,15 +202,23 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               onClick={() => setShowSidebar(false)}
             >
               <div
-                className="absolute left-0 top-0 bottom-0 w-80 bg-slate-900 shadow-2xl"
+                className="absolute left-0 top-0 bottom-0 w-80 bg-slate-900 shadow-2xl overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
+                <div className="flex items-center justify-between p-4 border-b border-slate-800">
+                  <h2 className="text-lg font-bold text-white">Game Info</h2>
+                  <button
+                    onClick={() => setShowSidebar(false)}
+                    className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition"
+                  >
+                    <X size={16} className="text-white" />
+                  </button>
+                </div>
                 <PlayersSidebar
                   participants={participants}
                   messages={messages}
                   currentTargetId={lobby.current_target_id}
                   hostId={lobby.host_id}
-                  onClose={() => setShowSidebar(false)}
                 />
               </div>
             </div>
