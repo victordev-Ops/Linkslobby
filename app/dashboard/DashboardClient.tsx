@@ -1,7 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Copy, Check, MessageCircleQuestion, Loader2, Share2, LayoutGrid, Lock, ChevronDown, Brain, X, Save } from "lucide-react"
+import { 
+  Copy, Check, MessageCircleQuestion, Loader2, Share2, 
+  LayoutGrid, Lock, ChevronDown, Brain, X, Save,
+  Dices, Sparkles 
+} from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation" 
 import { useAuth } from "@/context/AuthContext"
@@ -22,6 +26,10 @@ export default function DashboardClient() {
   const [isAmaOpen, setIsAmaOpen] = useState(false)
   const [isConfessOpen, setIsConfessOpen] = useState(false)
   const [isDykmOpen, setIsDykmOpen] = useState(false)
+  const [isTodOpen, setIsTodOpen] = useState(false) // TOD State
+
+  // Action States
+  const [isCreatingTod, setIsCreatingTod] = useState(false) // TOD Loading State
 
   // DYKM Logic
   const [hasDykm, setHasDykm] = useState(false)
@@ -62,7 +70,6 @@ export default function DashboardClient() {
   }
 
   const handleSaveDykm = async () => {
-    // Validation
     if (dykmQuestions.some(q => !q.question || !q.answer)) {
       toast.error("Please fill in all questions and answers")
       return
@@ -85,6 +92,33 @@ export default function DashboardClient() {
       console.error(err)
     } finally {
       setIsSavingDykm(false)
+    }
+  }
+
+  // Truth or Dare Logic
+  const handleCreateTod = async () => {
+    if (!profile) return
+    setIsCreatingTod(true)
+    
+    try {
+      const { data, error } = await supabase
+        .from('tod_lobbies')
+        .insert({ 
+          host_id: profile.id, 
+          status: 'waiting' 
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      
+      toast.success("Lobby created! Redirecting...")
+      router.push(`/tod/${data.id}`)
+    } catch (err) {
+      toast.error("Failed to create game lobby")
+      console.error(err)
+    } finally {
+      setIsCreatingTod(false)
     }
   }
 
@@ -167,6 +201,45 @@ export default function DashboardClient() {
 
           <div className="grid grid-cols-1 gap-3">
             
+            {/* Truth or Dare Card */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
+              <div 
+                onClick={() => setIsTodOpen(!isTodOpen)}
+                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
+              >
+                <div className="w-12 h-12 shrink-0 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <Dices size={24} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-900 text-base">Truth or Dare</h3>
+                    <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Live</span>
+                  </div>
+                  <p className="text-slate-400 text-xs line-clamp-1">Play with friends in real-time</p>
+                </div>
+                <ChevronDown size={18} className={`text-slate-300 transition-transform duration-300 ${isTodOpen ? "rotate-180" : ""}`} />
+              </div>
+
+              {isTodOpen && (
+                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="p-3 bg-rose-50 rounded-xl border border-rose-100">
+                    <p className="text-[11px] text-rose-700 leading-relaxed font-medium">
+                      How it works: Create a lobby and share the link. Everyone takes turns asking or being the target. Real-time multiplayer fun!
+                    </p>
+                  </div>
+                  
+                  <button 
+                    onClick={handleCreateTod}
+                    disabled={isCreatingTod}
+                    className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isCreatingTod ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                    Create Game Lobby
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* DYKM Card */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
                <div 
