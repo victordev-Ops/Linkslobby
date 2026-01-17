@@ -1,4 +1,3 @@
-// ModeSelector.tsx
 import { Skull, Flame, Clock } from 'lucide-react';
 
 interface ModeSelectorProps {
@@ -45,4 +44,3 @@ export const ModeSelector = ({ isTarget, targetUsername, onSelectMode }: ModeSel
     </div>
   );
 };
-
