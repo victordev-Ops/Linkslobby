@@ -6,9 +6,21 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { 
   Users, Sparkles, Send, ArrowRight, 
-  Skull, Flame, Loader2, ShieldAlert, AlertCircle,
-  Copy, Crown, CheckCircle2, UserPlus, Info
+  Skull, Flame, Loader2, AlertCircle,
+  Copy, Crown, CheckCircle2, UserPlus, Image as ImageIcon,
+  X, Smile
 } from "lucide-react";
+
+interface Message {
+  id: string;
+  lobby_id: string;
+  user_id: string;
+  content: string;
+  image_url?: string;
+  message_type: 'chat' | 'truth' | 'dare' | 'system';
+  created_at: string;
+  profiles?: { username: string };
+}
 
 export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
   const { profile } = useAuth();
@@ -16,10 +28,26 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
   
   const [lobby, setLobby] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
-  const [questionInput, setQuestionInput] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messageInput, setMessageInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
   const isMounted = useRef(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-scroll to bottom
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // --- Data Fetching ---
   const fetchParticipants = useCallback(async () => {
@@ -29,6 +57,16 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
       .select("user_id, has_gone_this_round, profiles(username)")
       .eq("lobby_id", lobbyId);
     if (!error && isMounted.current) setParticipants(data || []);
+  }, [lobbyId, supabase]);
+
+  const fetchMessages = useCallback(async () => {
+    if (!lobbyId || lobbyId === "undefined") return;
+    const { data, error } = await supabase
+      .from("tod_messages")
+      .select("*, profiles(username)")
+      .eq("lobby_id", lobbyId)
+      .order("created_at", { ascending: true });
+    if (!error && isMounted.current) setMessages(data || []);
   }, [lobbyId, supabase]);
 
   const fetchInitialData = useCallback(async () => {
@@ -44,29 +82,33 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
       if (isMounted.current) {
         setLobby(data);
         await fetchParticipants();
+        await fetchMessages();
       }
     } catch (err: any) {
       if (isMounted.current) setErrorStatus(err.message);
     } finally {
       if (isMounted.current) setIsLoading(false);
     }
-  }, [lobbyId, supabase, fetchParticipants]);
+  }, [lobbyId, supabase, fetchParticipants, fetchMessages]);
 
   useEffect(() => {
     isMounted.current = true;
     fetchInitialData();
+    
     const channel = supabase.channel(`tod_realtime_${lobbyId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tod_lobbies', filter: `id=eq.${lobbyId}` }, 
         (payload) => setLobby(payload.new))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tod_participants', filter: `lobby_id=eq.${lobbyId}` }, 
         () => fetchParticipants())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tod_messages', filter: `lobby_id=eq.${lobbyId}` }, 
+        () => fetchMessages())
       .subscribe();
 
     return () => {
       isMounted.current = false;
       supabase.removeChannel(channel);
     };
-  }, [lobbyId, fetchInitialData, fetchParticipants, supabase]);
+  }, [lobbyId, fetchInitialData, fetchParticipants, fetchMessages, supabase]);
 
   // --- Helper Actions ---
   const copyInviteLink = () => {
@@ -78,16 +120,122 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
   const pickNextTurn = async () => {
     const { error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
     if (error) toast.error(error.message);
+    else {
+      // Add system message
+      await supabase.from("tod_messages").insert({
+        lobby_id: lobbyId,
+        user_id: profile?.id,
+        content: "🎯 New round started!",
+        message_type: 'system'
+      });
+    }
   };
 
   const selectMode = async (mode: 'truth' | 'dare') => {
     await supabase.from("tod_lobbies").update({ selected_mode: mode }).eq("id", lobbyId);
+    
+    // Add system message
+    const targetUser = participants.find(p => p.user_id === lobby.current_target_id);
+    await supabase.from("tod_messages").insert({
+      lobby_id: lobbyId,
+      user_id: profile?.id,
+      content: `${targetUser?.profiles?.username} chose ${mode.toUpperCase()}! 🎲`,
+      message_type: 'system'
+    });
   };
 
-  const submitQuestion = async () => {
-    if (!questionInput.trim()) return;
-    const { error } = await supabase.from("tod_lobbies").update({ current_question: questionInput }).eq("id", lobbyId);
-    if (!error) setQuestionInput("");
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image must be less than 5MB");
+        return;
+      }
+      setSelectedImage(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${lobbyId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('tod-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('tod-images')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error("Failed to upload image");
+      return null;
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!messageInput.trim() && !selectedImage) return;
+    
+    setIsUploading(true);
+    try {
+      let imageUrl = null;
+      if (selectedImage) {
+        imageUrl = await uploadImage(selectedImage);
+        if (!imageUrl) {
+          setIsUploading(false);
+          return;
+        }
+      }
+
+      const isAsker = profile?.id === lobby.current_asker_id;
+      const messageType = (isAsker && lobby.selected_mode && !lobby.current_question) 
+        ? lobby.selected_mode 
+        : 'chat';
+
+      const { error } = await supabase.from("tod_messages").insert({
+        lobby_id: lobbyId,
+        user_id: profile?.id,
+        content: messageInput.trim() || "📷 Photo",
+        image_url: imageUrl,
+        message_type: messageType
+      });
+
+      if (!error) {
+        setMessageInput("");
+        removeImage();
+        
+        // If this is a truth/dare question, update lobby
+        if (messageType === 'truth' || messageType === 'dare') {
+          await supabase.from("tod_lobbies").update({ 
+            current_question: messageInput.trim() 
+          }).eq("id", lobbyId);
+        }
+      } else {
+        toast.error("Failed to send message");
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   };
 
   // --- View Logic ---
@@ -147,109 +295,172 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
           </div>
         </div>
 
-        {/* MAIN GAME BOARD */}
-        <div className="lg:col-span-3 bg-white rounded-[2.5rem] shadow-sm p-8 border border-slate-100 flex flex-col items-center justify-center min-h-[550px] relative overflow-hidden">
+        {/* MAIN CHAT AREA */}
+        <div className="lg:col-span-3 bg-white rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col overflow-hidden h-[calc(100vh-8rem)]">
           
-          {lobby.status === 'waiting' ? (
-            <div className="text-center animate-in zoom-in-95 duration-500">
-              <div className="w-20 h-20 bg-rose-50 rounded-3xl flex items-center justify-center text-rose-500 mx-auto mb-6">
-                <Sparkles size={40} />
+          {/* Chat Header */}
+          <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-purple-50">
+            {lobby.status === 'waiting' ? (
+              <div className="text-center">
+                <h2 className="text-xl font-black text-slate-900 mb-1">Waiting for Players</h2>
+                <p className="text-sm text-slate-500">Chat while you wait...</p>
               </div>
-              <h1 className="text-3xl font-black text-slate-900 mb-2">The Lobby is Open</h1>
-              <p className="text-slate-400 text-sm mb-8">Waiting for players to join the party...</p>
-              {isHost ? (
-                <button onClick={pickNextTurn} disabled={participants.length < 2} className="bg-rose-500 text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-rose-200 hover:scale-105 transition disabled:opacity-50">
-                  {participants.length < 2 ? "NEED MORE PLAYERS" : "START FIRST ROUND"}
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 text-rose-500 font-bold justify-center">
-                  <Loader2 className="animate-spin" size={20} /> WAITING FOR HOST...
+            ) : (
+              <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+                <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold">
+                  <Sparkles size={16} />
+                  {askerUser?.profiles?.username}
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="w-full max-w-2xl space-y-12 animate-in fade-in duration-700">
-              {/* Turn Banner */}
-              <div className="flex flex-col md:flex-row items-center justify-center gap-6">
-                <div className="text-center">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Asker</p>
-                  <div className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase min-w-[140px]">
-                    {askerUser?.profiles?.username || "..."}
-                  </div>
+                <ArrowRight className="text-slate-300 hidden md:block" size={20} />
+                <div className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded-xl text-sm font-bold">
+                  {lobby.selected_mode === 'truth' ? <Skull size={16} /> : <Flame size={16} />}
+                  {targetUser?.profiles?.username}
                 </div>
-                <ArrowRight className="text-slate-200 mt-4 hidden md:block" size={32} />
-                <div className="text-center">
-                  <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2">Target</p>
-                  <div className="px-6 py-3 bg-rose-500 text-white rounded-2xl font-black text-sm uppercase shadow-xl shadow-rose-100 min-w-[140px]">
-                    {targetUser?.profiles?.username || "..."}
-                  </div>
-                </div>
-              </div>
-
-              {/* Game Stages */}
-              <div className="bg-slate-50/50 rounded-[3rem] p-10 border border-slate-100 text-center relative">
-                {!lobby.selected_mode ? (
-                  <div className="space-y-8">
-                    <h2 className="text-2xl font-black text-slate-800 italic">"Pick your poison..."</h2>
-                    {isTarget ? (
-                      <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <button onClick={() => selectMode('truth')} className="group px-12 py-6 bg-white border-4 border-purple-500 text-purple-600 rounded-[2rem] font-black text-xl hover:bg-purple-500 hover:text-white transition-all active:scale-95 flex items-center gap-3">
-                          <Skull className="group-hover:rotate-12 transition-transform" /> TRUTH
-                        </button>
-                        <button onClick={() => selectMode('dare')} className="group px-12 py-6 bg-white border-4 border-rose-500 text-rose-600 rounded-[2rem] font-black text-xl hover:bg-rose-500 hover:text-white transition-all active:scale-95 flex items-center gap-3">
-                          <Flame className="group-hover:animate-bounce" /> DARE
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="p-8 border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center gap-3">
-                        <Loader2 className="animate-spin text-slate-300" size={32} />
-                        <p className="text-slate-400 font-bold text-sm uppercase">{targetUser?.profiles?.username} is choosing...</p>
-                      </div>
-                    )}
-                  </div>
-                ) : !lobby.current_question ? (
-                  <div className="space-y-6">
-                    <div className={`inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${lobby.selected_mode === 'truth' ? 'bg-purple-100 text-purple-600' : 'bg-rose-100 text-rose-600'}`}>
-                      MODE: {lobby.selected_mode}
-                    </div>
-                    {isAsker ? (
-                      <div className="space-y-4">
-                        <textarea 
-                          value={questionInput} 
-                          onChange={(e) => setQuestionInput(e.target.value)}
-                          placeholder={`Ask ${targetUser?.profiles?.username} a ${lobby.selected_mode}...`}
-                          className="w-full p-8 rounded-[2rem] border-2 border-slate-200 outline-none focus:border-rose-500 transition-all text-lg font-medium shadow-inner resize-none"
-                          rows={3}
-                        />
-                        <button onClick={submitQuestion} className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black flex items-center justify-center gap-2 shadow-xl hover:bg-slate-800 active:scale-95 transition">
-                          SEND CHALLENGE <Send size={20} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="p-8 border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center gap-3">
-                        <Loader2 className="animate-spin text-slate-300" size={32} />
-                        <p className="text-slate-400 font-bold text-sm uppercase">{askerUser?.profiles?.username} is writing a {lobby.selected_mode}...</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-10 py-4">
-                    <div className="relative p-10 bg-white rounded-[2.5rem] border-2 border-slate-100 shadow-sm">
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-slate-900 text-white rounded-full text-[10px] font-black uppercase">The Challenge</div>
-                      <p className="text-3xl font-black text-slate-800 leading-tight italic">"{lobby.current_question}"</p>
-                    </div>
-                    {isHost && (
-                      <button onClick={pickNextTurn} className="group bg-rose-500 text-white px-12 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-2 mx-auto hover:bg-rose-600 transition shadow-lg shadow-rose-200">
-                        NEXT ROUND <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                      </button>
-                    )}
+                {lobby.selected_mode && (
+                  <div className={`px-3 py-1 rounded-full text-xs font-black uppercase ${lobby.selected_mode === 'truth' ? 'bg-purple-100 text-purple-600' : 'bg-rose-100 text-rose-600'}`}>
+                    {lobby.selected_mode}
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+            )}
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {lobby.status === 'waiting' && (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 mx-auto mb-4">
+                  <Sparkles size={32} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Game Lobby</h3>
+                <p className="text-sm text-slate-500 mb-6">Waiting for more players to join...</p>
+                {isHost && participants.length >= 2 && (
+                  <button onClick={pickNextTurn} className="bg-rose-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-rose-200 hover:scale-105 transition">
+                    START FIRST ROUND
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Mode Selection Prompt */}
+            {lobby.status === 'active' && !lobby.selected_mode && isTarget && (
+              <div className="bg-gradient-to-br from-purple-50 to-rose-50 rounded-3xl p-8 text-center border-2 border-dashed border-rose-200">
+                <h3 className="text-2xl font-black text-slate-800 mb-6 italic">Pick your poison...</h3>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button onClick={() => selectMode('truth')} className="group px-8 py-4 bg-white border-4 border-purple-500 text-purple-600 rounded-2xl font-black text-lg hover:bg-purple-500 hover:text-white transition-all active:scale-95 flex items-center justify-center gap-3">
+                    <Skull className="group-hover:rotate-12 transition-transform" /> TRUTH
+                  </button>
+                  <button onClick={() => selectMode('dare')} className="group px-8 py-4 bg-white border-4 border-rose-500 text-rose-600 rounded-2xl font-black text-lg hover:bg-rose-500 hover:text-white transition-all active:scale-95 flex items-center justify-center gap-3">
+                    <Flame className="group-hover:animate-bounce" /> DARE
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Messages */}
+            {messages.map((msg) => {
+              const isOwn = msg.user_id === profile?.id;
+              const isSystemMsg = msg.message_type === 'system';
+              const isTruthDare = msg.message_type === 'truth' || msg.message_type === 'dare';
+
+              if (isSystemMsg) {
+                return (
+                  <div key={msg.id} className="flex justify-center">
+                    <div className="px-4 py-2 bg-slate-100 rounded-full text-xs font-bold text-slate-600">
+                      {msg.content}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isTruthDare) {
+                return (
+                  <div key={msg.id} className="flex justify-center my-6">
+                    <div className={`max-w-lg w-full p-6 rounded-3xl border-4 ${msg.message_type === 'truth' ? 'bg-purple-50 border-purple-300' : 'bg-rose-50 border-rose-300'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        {msg.message_type === 'truth' ? <Skull size={20} className="text-purple-600" /> : <Flame size={20} className="text-rose-600" />}
+                        <span className={`text-xs font-black uppercase ${msg.message_type === 'truth' ? 'text-purple-600' : 'text-rose-600'}`}>
+                          {msg.message_type} Challenge
+                        </span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-800 italic">"{msg.content}"</p>
+                      {msg.image_url && (
+                        <img src={msg.image_url} alt="Challenge" className="mt-4 rounded-2xl max-h-64 object-cover w-full" />
+                      )}
+                      <p className="text-xs text-slate-500 mt-3">from {msg.profiles?.username}</p>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs ${isOwn ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-800'} rounded-2xl px-4 py-3`}>
+                    {!isOwn && (
+                      <p className="text-xs font-bold opacity-70 mb-1">{msg.profiles?.username}</p>
+                    )}
+                    {msg.image_url && (
+                      <img src={msg.image_url} alt="Shared" className="rounded-xl mb-2 max-h-48 object-cover" />
+                    )}
+                    <p className="text-sm break-words">{msg.content}</p>
+                    <p className={`text-xs mt-1 opacity-60`}>
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Next Round Button */}
+            {lobby.status === 'active' && lobby.current_question && isHost && (
+              <div className="flex justify-center pt-4">
+                <button onClick={pickNextTurn} className="group bg-gradient-to-r from-rose-500 to-purple-500 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 hover:scale-105 transition shadow-lg">
+                  NEXT ROUND <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="p-4 border-t border-slate-100 bg-slate-50">
+            {imagePreview && (
+              <div className="mb-3 relative inline-block">
+                <img src={imagePreview} alt="Preview" className="h-20 rounded-xl object-cover" />
+                <button onClick={removeImage} className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 hover:bg-rose-600">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+            
+            <div className="flex items-end gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageSelect}
+                accept="image/*"
+                className="hidden"
+              />
+              
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="p-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 transition shrink-0"
+              >
+                <ImageIcon size={20} className="text-slate-600" />
+              </button>
+
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type a message..."
+                className="flex-1 p-3 rounded-xl border border-slate-200 outline-none focus:border-rose-500 transition resize-none"
+                rows={1}
+              />
+
+              <button 
+                onClick={sendMessage}
+                disabled={(!messageInput.trim() && !selectedImage) || isUploading}
+                className="p-3 rounded-xl bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            
