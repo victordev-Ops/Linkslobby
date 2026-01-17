@@ -95,18 +95,49 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
     isMounted.current = true;
     fetchInitialData();
     
+    // Realtime subscription
     const channel = supabase.channel(`tod_realtime_${lobbyId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tod_lobbies', filter: `id=eq.${lobbyId}` }, 
-        (payload) => setLobby(payload.new))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tod_participants', filter: `lobby_id=eq.${lobbyId}` }, 
-        () => fetchParticipants())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tod_messages', filter: `lobby_id=eq.${lobbyId}` }, 
-        () => fetchMessages())
-      .subscribe();
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'tod_lobbies', 
+        filter: `id=eq.${lobbyId}` 
+      }, (payload) => {
+        console.log('Lobby updated:', payload);
+        if (payload.new) setLobby(payload.new);
+      })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'tod_participants', 
+        filter: `lobby_id=eq.${lobbyId}` 
+      }, () => {
+        console.log('Participants changed');
+        fetchParticipants();
+      })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'tod_messages', 
+        filter: `lobby_id=eq.${lobbyId}` 
+      }, () => {
+        console.log('New message received');
+        fetchMessages();
+      })
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
+
+    // Polling as backup (every 3 seconds)
+    const pollInterval = setInterval(() => {
+      fetchMessages();
+      fetchParticipants();
+    }, 3000);
 
     return () => {
       isMounted.current = false;
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [lobbyId, fetchInitialData, fetchParticipants, fetchMessages, supabase]);
 
@@ -118,9 +149,14 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
   };
 
   const pickNextTurn = async () => {
-    const { error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
-    if (error) toast.error(error.message);
-    else {
+    try {
+      const { data, error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
+      if (error) {
+        console.error('Next turn error:', error);
+        toast.error(error.message);
+        return;
+      }
+      
       // Add system message
       await supabase.from("tod_messages").insert({
         lobby_id: lobbyId,
@@ -128,20 +164,40 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
         content: "🎯 New round started!",
         message_type: 'system'
       });
+
+      // Force refresh
+      await fetchInitialData();
+      toast.success("Next round started!");
+    } catch (err: any) {
+      console.error('Unexpected error:', err);
+      toast.error("Failed to start next round");
     }
   };
 
   const selectMode = async (mode: 'truth' | 'dare') => {
-    await supabase.from("tod_lobbies").update({ selected_mode: mode }).eq("id", lobbyId);
-    
-    // Add system message
-    const targetUser = participants.find(p => p.user_id === lobby.current_target_id);
-    await supabase.from("tod_messages").insert({
-      lobby_id: lobbyId,
-      user_id: profile?.id,
-      content: `${targetUser?.profiles?.username} chose ${mode.toUpperCase()}! 🎲`,
-      message_type: 'system'
-    });
+    try {
+      const { error } = await supabase.from("tod_lobbies").update({ selected_mode: mode }).eq("id", lobbyId);
+      if (error) {
+        console.error('Select mode error:', error);
+        toast.error("Failed to select mode");
+        return;
+      }
+      
+      // Add system message
+      const targetUser = participants.find(p => p.user_id === lobby.current_target_id);
+      await supabase.from("tod_messages").insert({
+        lobby_id: lobbyId,
+        user_id: profile?.id,
+        content: `${targetUser?.profiles?.username} chose ${mode.toUpperCase()}! 🎲`,
+        message_type: 'system'
+      });
+
+      // Force refresh lobby state
+      const { data } = await supabase.from("tod_lobbies").select("*").eq("id", lobbyId).single();
+      if (data) setLobby(data);
+    } catch (err) {
+      console.error('Unexpected error:', err);
+    }
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -267,31 +323,94 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
         
         {/* LEFT PANEL: PLAYERS & INVITE */}
         <div className="lg:col-span-1 space-y-4">
-          <div className="bg-white rounded-[2rem] shadow-sm p-6 border border-slate-100">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Users size={18} className="text-rose-500" />
-                <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Players ({participants.length})</h2>
-              </div>
+          <div className="bg-white rounded-3xl shadow-sm p-5 border border-slate-100">
+            <div className="flex items-center gap-2 mb-4">
+              <Users size={16} className="text-rose-500" />
+              <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Players · {participants.length}
+              </h2>
             </div>
 
-            <div className="space-y-2 mb-6">
+            {/* Minimalistic Participant List */}
+            <div className="flex flex-wrap gap-2 mb-5">
               {participants.map((p) => (
-                <div key={p.user_id} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${p.user_id === lobby.current_target_id ? 'border-rose-200 bg-rose-50 ring-2 ring-rose-100' : 'border-slate-50 bg-slate-50/50'}`}>
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    {p.user_id === lobby.host_id && <Crown size={14} className="text-amber-500 shrink-0" />}
-                    <span className={`text-sm font-bold truncate ${p.user_id === lobby.current_target_id ? 'text-rose-600' : 'text-slate-700'}`}>
-                      {p.profiles?.username}
-                    </span>
-                  </div>
-                  {p.has_gone_this_round && <CheckCircle2 size={16} className="text-green-500 shrink-0" />}
+                <div 
+                  key={p.user_id} 
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    p.user_id === lobby.current_target_id 
+                      ? 'bg-rose-500 text-white shadow-md' 
+                      : 'bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  {p.user_id === lobby.host_id && (
+                    <Crown size={12} className="text-amber-400" />
+                  )}
+                  <span className="truncate max-w-[100px]">
+                    {p.profiles?.username}
+                  </span>
+                  {p.has_gone_this_round && (
+                    <CheckCircle2 size={12} className="text-green-400" />
+                  )}
                 </div>
               ))}
             </div>
 
-            <button onClick={copyInviteLink} className="w-full py-4 px-4 rounded-2xl bg-slate-900 text-white text-xs font-black flex items-center justify-center gap-2 hover:bg-slate-800 transition shadow-lg shadow-slate-200">
-              <UserPlus size={16} /> INVITE FRIENDS
+            <button 
+              onClick={copyInviteLink} 
+              className="w-full py-3 px-4 rounded-2xl bg-slate-900 text-white text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition shadow-md"
+            >
+              <UserPlus size={14} /> Invite Friends
             </button>
+          </div>
+
+          {/* Lobby History Log */}
+          <div className="bg-white rounded-3xl shadow-sm p-5 border border-slate-100 max-h-[300px] overflow-y-auto">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-3 flex items-center gap-2">
+              <Sparkles size={14} className="text-purple-500" />
+              Game Log
+            </h3>
+            <div className="space-y-2 text-xs">
+              {messages
+                .filter(m => m.message_type === 'system' || m.message_type === 'truth' || m.message_type === 'dare')
+                .slice(-10)
+                .map((msg, idx) => (
+                  <div 
+                    key={msg.id} 
+                    className={`p-2 rounded-lg ${
+                      msg.message_type === 'system' 
+                        ? 'bg-slate-50 text-slate-600' 
+                        : msg.message_type === 'truth'
+                        ? 'bg-purple-50 text-purple-700'
+                        : 'bg-rose-50 text-rose-700'
+                    }`}
+                  >
+                    {msg.message_type === 'system' ? (
+                      <p className="font-medium">{msg.content}</p>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-1 mb-1">
+                          {msg.message_type === 'truth' ? (
+                            <Skull size={10} />
+                          ) : (
+                            <Flame size={10} />
+                          )}
+                          <span className="font-bold uppercase" style={{ fontSize: '10px' }}>
+                            {msg.message_type}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 font-medium leading-tight">
+                          {msg.content.length > 60 
+                            ? msg.content.substring(0, 60) + '...' 
+                            : msg.content}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ))}
+              {messages.filter(m => m.message_type === 'system' || m.message_type === 'truth' || m.message_type === 'dare').length === 0 && (
+                <p className="text-slate-400 text-center py-4 italic">No game events yet</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -384,92 +503,4 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
                         </span>
                       </div>
                       <p className="text-lg font-bold text-slate-800 italic">"{msg.content}"</p>
-                      {msg.image_url && (
-                        <img src={msg.image_url} alt="Challenge" className="mt-4 rounded-2xl max-h-64 object-cover w-full" />
-                      )}
-                      <p className="text-xs text-slate-500 mt-3">from {msg.profiles?.username}</p>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-xs ${isOwn ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-800'} rounded-2xl px-4 py-3`}>
-                    {!isOwn && (
-                      <p className="text-xs font-bold opacity-70 mb-1">{msg.profiles?.username}</p>
-                    )}
-                    {msg.image_url && (
-                      <img src={msg.image_url} alt="Shared" className="rounded-xl mb-2 max-h-48 object-cover" />
-                    )}
-                    <p className="text-sm break-words">{msg.content}</p>
-                    <p className={`text-xs mt-1 opacity-60`}>
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Next Round Button */}
-            {lobby.status === 'active' && lobby.current_question && isHost && (
-              <div className="flex justify-center pt-4">
-                <button onClick={pickNextTurn} className="group bg-gradient-to-r from-rose-500 to-purple-500 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 hover:scale-105 transition shadow-lg">
-                  NEXT ROUND <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input Area */}
-          <div className="p-4 border-t border-slate-100 bg-slate-50">
-            {imagePreview && (
-              <div className="mb-3 relative inline-block">
-                <img src={imagePreview} alt="Preview" className="h-20 rounded-xl object-cover" />
-                <button onClick={removeImage} className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 hover:bg-rose-600">
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-            
-            <div className="flex items-end gap-2">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImageSelect}
-                accept="image/*"
-                className="hidden"
-              />
-              
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="p-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 transition shrink-0"
-              >
-                <ImageIcon size={20} className="text-slate-600" />
-              </button>
-
-              <textarea
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type a message..."
-                className="flex-1 p-3 rounded-xl border border-slate-200 outline-none focus:border-rose-500 transition resize-none"
-                rows={1}
-              />
-
-              <button 
-                onClick={sendMessage}
-                disabled={(!messageInput.trim() && !selectedImage) || isUploading}
-                className="p-3 rounded-xl bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-              >
-                {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+    
