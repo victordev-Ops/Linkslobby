@@ -8,6 +8,7 @@ interface Participant {
   profiles?: { username: string };
 }
 
+
 interface Message {
   id: string;
   content: string;
