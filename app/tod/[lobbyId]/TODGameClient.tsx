@@ -463,4 +463,13 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
                 onClick={sendMessage}
                 disabled={(!messageInput.trim() && !selectedImage) || isUploading}
                 className="p-3 rounded-xl bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-            
+              >
+                {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
