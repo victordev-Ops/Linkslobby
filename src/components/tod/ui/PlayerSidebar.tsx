@@ -1,3 +1,5 @@
+// src/components/tod/ui/PlayerSidebar.tsx
+
 import { Sparkles, Flame, Crown, CheckCircle2, Skull, X } from 'lucide-react';
 
 interface Participant {
@@ -17,8 +19,8 @@ interface PlayersSidebarProps {
   messages: Message[];
   currentTargetId?: string;
   hostId: string;
- onClose?: () => void;  // <- THIS LINE IS CRITICAL
-  className?: string;
+  onClose?: () => void;
+  className?: string; // <--- ENSURE THIS IS HERE
 }
 
 export const PlayersSidebar = ({
@@ -26,7 +28,7 @@ export const PlayersSidebar = ({
   messages,
   currentTargetId,
   hostId,
-  onClose,  // <- MUST BE DESTRUCTURED HERE
+  onClose,
   className = ''
 }: PlayersSidebarProps) => {
   const gameEvents = messages
@@ -35,6 +37,7 @@ export const PlayersSidebar = ({
 
   return (
     <aside className={`w-64 flex-shrink-0 p-4 overflow-y-auto ${className}`}>
+      {/* ... rest of your component code ... */}
       {onClose && (
         <div className="flex items-center justify-between mb-4 lg:hidden">
           <h2 className="text-lg font-bold text-white">Game Info</h2>
@@ -72,43 +75,7 @@ export const PlayersSidebar = ({
           ))}
         </div>
       </div>
-
-      {/* Game Log */}
-      <div className="bg-slate-900/50 backdrop-blur-md rounded-2xl p-4 border border-slate-800/50 max-h-[400px] overflow-y-auto">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3 flex items-center gap-2">
-          <Flame size={12} className="text-red-400" />
-          Activity
-        </h3>
-        <div className="space-y-2">
-          {gameEvents.map((msg) => (
-            <div
-              key={msg.id}
-              className={`p-2.5 rounded-lg text-xs ${
-                msg.message_type === 'system'
-                  ? 'bg-slate-800/50 text-slate-300'
-                  : msg.message_type === 'truth'
-                  ? 'bg-orange-500/10 text-orange-300 border border-orange-500/20'
-                  : 'bg-red-500/10 text-red-300 border border-red-500/20'
-              }`}
-            >
-              {msg.message_type !== 'system' && (
-                <div className="flex items-center gap-1 mb-1">
-                  {msg.message_type === 'truth' ? <Skull size={10} /> : <Flame size={10} />}
-                  <span className="font-bold uppercase opacity-70" style={{ fontSize: '9px' }}>
-                    {msg.message_type}
-                  </span>
-                </div>
-              )}
-              <p className="font-medium leading-snug">
-                {msg.content.length > 60 ? msg.content.substring(0, 60) + '...' : msg.content}
-              </p>
-            </div>
-          ))}
-          {gameEvents.length === 0 && (
-            <p className="text-slate-500 text-center py-6 text-xs italic">No activity yet</p>
-          )}
-        </div>
-      </div>
+      {/* ... rest of the component ... */}
     </aside>
   );
 };
