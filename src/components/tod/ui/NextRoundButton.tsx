@@ -1,4 +1,3 @@
-// NextRoundButton.tsx
 import { ArrowRight } from 'lucide-react';
 
 interface NextRoundButtonProps {
