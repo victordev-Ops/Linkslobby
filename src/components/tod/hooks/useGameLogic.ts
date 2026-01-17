@@ -40,7 +40,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const isMounted = useRef(true);
 
-  // Fetch participants
   const fetchParticipants = useCallback(async () => {
     if (!lobbyId || lobbyId === 'undefined') return;
     const { data, error } = await supabase
@@ -50,7 +49,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     if (!error && isMounted.current) setParticipants(data || []);
   }, [lobbyId, supabase]);
 
-  // Fetch messages
   const fetchMessages = useCallback(async () => {
     if (!lobbyId || lobbyId === 'undefined') return;
     const { data, error } = await supabase
@@ -79,7 +77,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   }, [lobbyId, supabase]);
 
-  // Fetch initial data
   const fetchInitialData = useCallback(async () => {
     if (!lobbyId || lobbyId === 'undefined') {
       setErrorStatus('Invalid Lobby ID.');
@@ -106,7 +103,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   }, [lobbyId, supabase, fetchParticipants, fetchMessages]);
 
-  // Add optimistic message
   const addOptimisticMessage = useCallback((message: Partial<Message>) => {
     const optimisticMsg: Message = {
       id: `temp-${Date.now()}`,
@@ -124,19 +120,16 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     return optimisticMsg.id;
   }, [lobbyId, userId]);
 
-  // Mark message as sent
   const markMessageAsSent = useCallback((tempId: string) => {
     setMessages(prev => prev.map(m =>
       m.id === tempId ? { ...m, isSent: true } : m
     ));
   }, []);
 
-  // Remove optimistic message
   const removeOptimisticMessage = useCallback((tempId: string) => {
     setMessages(prev => prev.filter(m => m.id !== tempId));
   }, []);
 
-  // Send message
   const sendMessage = useCallback(async (
     content: string,
     imageUrl: string | null,
@@ -162,7 +155,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       if (error) throw error;
       markMessageAsSent(tempId);
       
-      // Update lobby if truth/dare question
       if (messageType === 'truth' || messageType === 'dare') {
         await supabase.from('tod_lobbies').update({
           current_question: content
@@ -177,7 +169,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   }, [lobbyId, userId, supabase, addOptimisticMessage, markMessageAsSent, removeOptimisticMessage]);
 
-  // Select mode
   const selectMode = useCallback(async (mode: 'truth' | 'dare', username?: string) => {
     try {
       const { error } = await supabase
@@ -189,7 +180,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
       const targetUser = participants.find(p => p.user_id === lobby?.current_target_id);
       await sendMessage(
-        `${targetUser?.profiles?.username} chose ${mode.toUpperCase()}! 🎲`,
+        `${targetUser?.profiles?.username || 'Player'} chose ${mode.toUpperCase()}! 🎲`,
         null,
         'system',
         username
@@ -209,13 +200,39 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   }, [lobbyId, supabase, lobby, participants, sendMessage]);
 
-  // Start next round
-  const startNextRound = useCallback(async (username?: string) => {
+  const startGame = useCallback(async () => {
     try {
       const { error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
       if (error) throw error;
 
-      await sendMessage('🎯 New round started!', null, 'system', username);
+      await supabase.from('tod_messages').insert({
+        lobby_id: lobbyId,
+        user_id: userId,
+        content: '🎮 Game started! Let the fun begin!',
+        message_type: 'system'
+      });
+
+      await fetchInitialData();
+      toast.success('Game started! 🎉');
+      return true;
+    } catch (err: any) {
+      toast.error('Failed to start game');
+      return false;
+    }
+  }, [lobbyId, userId, supabase, fetchInitialData]);
+
+  const startNextRound = useCallback(async () => {
+    try {
+      const { error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
+      if (error) throw error;
+
+      await supabase.from('tod_messages').insert({
+        lobby_id: lobbyId,
+        user_id: userId,
+        content: '🎯 New round started!',
+        message_type: 'system'
+      });
+
       await fetchInitialData();
       toast.success('Next round started! 🎲');
       return true;
@@ -223,9 +240,33 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       toast.error('Failed to start next round');
       return false;
     }
-  }, [lobbyId, supabase, sendMessage, fetchInitialData]);
+  }, [lobbyId, userId, supabase, fetchInitialData]);
 
-  // Upload image
+  const endGame = useCallback(async () => {
+    try {
+      const { error } = await supabase
+        .from('tod_lobbies')
+        .update({ status: 'finished' })
+        .eq('id', lobbyId);
+      
+      if (error) throw error;
+
+      await supabase.from('tod_messages').insert({
+        lobby_id: lobbyId,
+        user_id: userId,
+        content: '🏁 Game ended! Thanks for playing!',
+        message_type: 'system'
+      });
+
+      await fetchInitialData();
+      toast.success('Game ended!');
+      return true;
+    } catch (err) {
+      toast.error('Failed to end game');
+      return false;
+    }
+  }, [lobbyId, userId, supabase, fetchInitialData]);
+
   const uploadImage = useCallback(async (file: File): Promise<string | null> => {
     try {
       const fileExt = file.name.split('.').pop();
@@ -249,7 +290,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   }, [lobbyId, supabase]);
 
-  // Setup real-time and polling
   useEffect(() => {
     isMounted.current = true;
     fetchInitialData();
@@ -301,9 +341,10 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     errorStatus,
     sendMessage,
     selectMode,
+    startGame,
     startNextRound,
+    endGame,
     uploadImage,
     refetch: fetchInitialData
   };
 };
-    
