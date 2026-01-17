@@ -1,3 +1,4 @@
+// src/components/tod/hooks/useGameLogic.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -202,9 +203,21 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
   const startGame = useCallback(async () => {
     try {
-      const { error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
-      if (error) throw error;
+      console.log('Starting game for lobby:', lobbyId);
+      
+      // First, call the RPC function to set up the first turn
+      const { data: rpcData, error: rpcError } = await supabase.rpc('next_tod_turn', { 
+        lobby_uuid: lobbyId 
+      });
+      
+      console.log('RPC result:', { rpcData, rpcError });
+      
+      if (rpcError) {
+        console.error('RPC Error:', rpcError);
+        throw rpcError;
+      }
 
+      // Insert system message
       await supabase.from('tod_messages').insert({
         lobby_id: lobbyId,
         user_id: userId,
@@ -212,19 +225,32 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         message_type: 'system'
       });
 
+      // Fetch the updated lobby data
       await fetchInitialData();
+      
       toast.success('Game started! 🎉');
       return true;
     } catch (err: any) {
-      toast.error('Failed to start game');
+      console.error('Start game error:', err);
+      toast.error('Failed to start game: ' + err.message);
       return false;
     }
   }, [lobbyId, userId, supabase, fetchInitialData]);
 
   const startNextRound = useCallback(async () => {
     try {
-      const { error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
-      if (error) throw error;
+      console.log('Starting next round for lobby:', lobbyId);
+      
+      const { data: rpcData, error: rpcError } = await supabase.rpc('next_tod_turn', { 
+        lobby_uuid: lobbyId 
+      });
+      
+      console.log('Next round RPC result:', { rpcData, rpcError });
+      
+      if (rpcError) {
+        console.error('RPC Error:', rpcError);
+        throw rpcError;
+      }
 
       await supabase.from('tod_messages').insert({
         lobby_id: lobbyId,
@@ -237,7 +263,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       toast.success('Next round started! 🎲');
       return true;
     } catch (err: any) {
-      toast.error('Failed to start next round');
+      console.error('Next round error:', err);
+      toast.error('Failed to start next round: ' + err.message);
       return false;
     }
   }, [lobbyId, userId, supabase, fetchInitialData]);
@@ -301,6 +328,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         table: 'tod_lobbies',
         filter: `id=eq.${lobbyId}`
       }, (payload) => {
+        console.log('Lobby update:', payload);
         if (payload.new) setLobby(payload.new as Lobby);
       })
       .on('postgres_changes', {
@@ -348,3 +376,4 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     refetch: fetchInitialData
   };
 };
+    
