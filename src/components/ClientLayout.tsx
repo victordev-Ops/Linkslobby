@@ -78,6 +78,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       "/auth/setup",
       "/auth",
       "/fullscreen",
+      "/tod",
     ];
 
     const isExactMatch = hideNavbarPaths.includes(pathname);
@@ -86,6 +87,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const isPrefixMatch = 
       pathname.startsWith("/confess/") || 
       pathname.startsWith("/auth/") ||
+      pathname.startswith("/tod/") ||
       pathname.startsWith("/anonymous/"); // <--- Added this
 
     return isExactMatch || isPrefixMatch;
