@@ -503,4 +503,92 @@ export default function TODGameClient({ lobbyId }: { lobbyId: string }) {
                         </span>
                       </div>
                       <p className="text-lg font-bold text-slate-800 italic">"{msg.content}"</p>
-    
+                      {msg.image_url && (
+                        <img src={msg.image_url} alt="Challenge" className="mt-4 rounded-2xl max-h-64 object-cover w-full" />
+                      )}
+                      <p className="text-xs text-slate-500 mt-3">from {msg.profiles?.username}</p>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs ${isOwn ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-800'} rounded-2xl px-4 py-3`}>
+                    {!isOwn && (
+                      <p className="text-xs font-bold opacity-70 mb-1">{msg.profiles?.username}</p>
+                    )}
+                    {msg.image_url && (
+                      <img src={msg.image_url} alt="Shared" className="rounded-xl mb-2 max-h-48 object-cover" />
+                    )}
+                    <p className="text-sm break-words">{msg.content}</p>
+                    <p className={`text-xs mt-1 opacity-60`}>
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Next Round Button */}
+            {lobby.status === 'active' && lobby.current_question && isHost && (
+              <div className="flex justify-center pt-4">
+                <button onClick={pickNextTurn} className="group bg-gradient-to-r from-rose-500 to-purple-500 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 hover:scale-105 transition shadow-lg">
+                  NEXT ROUND <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="p-4 border-t border-slate-100 bg-slate-50">
+            {imagePreview && (
+              <div className="mb-3 relative inline-block">
+                <img src={imagePreview} alt="Preview" className="h-20 rounded-xl object-cover" />
+                <button onClick={removeImage} className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 hover:bg-rose-600">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+            
+            <div className="flex items-end gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageSelect}
+                accept="image/*"
+                className="hidden"
+              />
+              
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="p-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 transition shrink-0"
+              >
+                <ImageIcon size={20} className="text-slate-600" />
+              </button>
+
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type a message..."
+                className="flex-1 p-3 rounded-xl border border-slate-200 outline-none focus:border-rose-500 transition resize-none"
+                rows={1}
+              />
+
+              <button 
+                onClick={sendMessage}
+                disabled={(!messageInput.trim() && !selectedImage) || isUploading}
+                className="p-3 rounded-xl bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
