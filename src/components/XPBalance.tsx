@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Coins, TrendingUp, TrendingDown, Clock } from "lucide-react"
+import { Star, TrendingUp, TrendingDown, Clock } from "lucide-react"
 import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion"
 
 interface XPTransaction {
@@ -142,34 +142,34 @@ export default function XPBalance() {
 
   return (
     <div className="relative">
-      {/* XP Balance Button */}
+      {/* Stars Balance Button */}
       <div className="relative group">
         {/* Outer glow effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 rounded-full blur-sm opacity-60 group-hover:opacity-80 transition-opacity"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 rounded-full blur-sm opacity-50 group-hover:opacity-70 transition-opacity"></div>
         
         {/* Main button */}
         <motion.button
           onClick={handleClick}
-          className="relative flex items-center gap-2 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 px-4 py-2 rounded-full shadow-lg overflow-hidden"
+          className="relative flex items-center gap-1.5 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 px-3 py-1.5 rounded-full shadow-md overflow-hidden"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           animate={shouldPulse ? {
             boxShadow: [
-              "0 4px 6px rgba(0,0,0,0.1)",
-              "0 8px 20px rgba(251, 191, 36, 0.6)",
-              "0 4px 6px rgba(0,0,0,0.1)"
+              "0 2px 4px rgba(0,0,0,0.1)",
+              "0 6px 16px rgba(249, 115, 22, 0.6)",
+              "0 2px 4px rgba(0,0,0,0.1)"
             ]
           } : {}}
           transition={{ duration: 0.6 }}
         >
           {/* Animated shimmer overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-25 animate-shimmer"></div>
 
           {/* Shine effect on balance increase */}
           <AnimatePresence>
             {shouldPulse && (
               <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-100/50 to-transparent"
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-100/50 to-transparent"
                 initial={{ x: '-100%' }}
                 animate={{ x: '200%' }}
                 exit={{ opacity: 0 }}
@@ -178,31 +178,31 @@ export default function XPBalance() {
             )}
           </AnimatePresence>
 
-          {/* Gold coin icon with pulse dot */}
+          {/* Star icon with pulse dot */}
           <motion.div
             className="relative"
             animate={shouldPulse ? { 
-              rotate: [0, -10, 10, -10, 0],
-              scale: [1, 1.2, 1]
+              rotate: [0, -15, 15, -15, 0],
+              scale: [1, 1.3, 1]
             } : {}}
             transition={{ duration: 0.5 }}
           >
-            <Coins className="w-[18px] h-[18px] text-amber-900 drop-shadow-sm" strokeWidth={2.5} />
-            <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-yellow-200 rounded-full animate-pulse"></div>
+            <Star className="w-[14px] h-[14px] text-orange-900 fill-orange-900 drop-shadow-sm" strokeWidth={2} />
+            <div className="absolute -top-0.5 -right-0.5 w-1 h-1 bg-orange-100 rounded-full animate-pulse"></div>
           </motion.div>
           
-          <span className="text-sm font-black text-amber-900 drop-shadow-sm tracking-tight relative z-10">
-            {loading ? '...' : <AnimatedCounter value={balance} />} XP
+          <span className="text-xs font-black text-orange-900 drop-shadow-sm tracking-tight relative z-10">
+            {loading ? '...' : <AnimatedCounter value={balance} />}
           </span>
 
           {/* Particle burst on balance increase */}
           <AnimatePresence>
             {shouldPulse && (
               <>
-                {[...Array(8)].map((_, i) => (
+                {[...Array(6)].map((_, i) => (
                   <motion.div
                     key={i}
-                    className="absolute w-1.5 h-1.5 bg-yellow-200 rounded-full"
+                    className="absolute w-1 h-1 bg-orange-200 rounded-full"
                     initial={{ 
                       opacity: 1,
                       x: 0,
@@ -211,12 +211,12 @@ export default function XPBalance() {
                     }}
                     animate={{
                       opacity: 0,
-                      x: Math.cos((i / 8) * Math.PI * 2) * 40,
-                      y: Math.sin((i / 8) * Math.PI * 2) * 40,
+                      x: Math.cos((i / 6) * Math.PI * 2) * 30,
+                      y: Math.sin((i / 6) * Math.PI * 2) * 30,
                       scale: 0
                     }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    transition={{ duration: 0.7, ease: "easeOut" }}
                     style={{
                       left: '50%',
                       top: '50%',
@@ -252,12 +252,12 @@ export default function XPBalance() {
             >
               {/* Header */}
               <div className="relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600"></div>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
                 <div className="relative p-5">
-                  <h3 className="text-lg font-bold text-amber-900 mb-1 drop-shadow-sm">XP History</h3>
-                  <p className="text-sm text-amber-900/80 font-medium drop-shadow-sm">
-                    Current balance: <AnimatedCounter value={balance} /> XP
+                  <h3 className="text-lg font-bold text-orange-900 mb-1 drop-shadow-sm">Stars History</h3>
+                  <p className="text-sm text-orange-900/80 font-medium drop-shadow-sm">
+                    Current balance: <AnimatedCounter value={balance} /> Stars
                   </p>
                 </div>
               </div>
@@ -267,11 +267,11 @@ export default function XPBalance() {
                 {transactions.length === 0 ? (
                   <div className="p-8 text-center text-slate-500">
                     <div className="relative inline-block mb-3">
-                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 rounded-full blur-md opacity-20"></div>
-                      <Coins className="relative w-12 h-12 mx-auto text-amber-400" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 rounded-full blur-md opacity-20"></div>
+                      <Star className="relative w-12 h-12 mx-auto text-orange-400 fill-orange-400" />
                     </div>
                     <p className="text-sm font-medium">No transactions yet</p>
-                    <p className="text-xs mt-1 text-slate-400">Start earning XP!</p>
+                    <p className="text-xs mt-1 text-slate-400">Start earning stars!</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
