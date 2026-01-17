@@ -17,7 +17,7 @@ interface PlayersSidebarProps {
   messages: Message[];
   currentTargetId?: string;
   hostId: string;
-  onClose?: () => void;
+  onClose?: () => void;  // <- THIS LINE IS CRITICAL
   className?: string;
 }
 
@@ -26,7 +26,7 @@ export const PlayersSidebar = ({
   messages,
   currentTargetId,
   hostId,
-  onClose,
+  onClose,  // <- MUST BE DESTRUCTURED HERE
   className = ''
 }: PlayersSidebarProps) => {
   const gameEvents = messages
