@@ -413,5 +413,35 @@ export default function DashboardClient() {
                         setDykmQuestions(newQ);
                       }}
                     />
-                    <input 
-                      placeholder=
+                           <input 
+                      placeholder="Correct Answer"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      value={q.answer}
+                      onChange={(e) => {
+                        const newQ = [...dykmQuestions];
+                        newQ[idx].answer = e.target.value;
+                        setDykmQuestions(newQ);
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50 sticky bottom-0 backdrop-blur-md">
+              <button
+                onClick={handleSaveDykm}
+                disabled={isSavingDykm}
+                className="w-full py-3.5 bg-slate-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+              >
+                {isSavingDykm ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                Save Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
