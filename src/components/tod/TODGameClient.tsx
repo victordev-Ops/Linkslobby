@@ -1,6 +1,4 @@
 // src/components/tod/TODGameClient.tsx
-// FIXED: ModeSelector above chat input, chat input sticky at bottom
-
 "use client";
 
 import { useRef, useEffect, useState } from "react";
@@ -80,7 +78,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   };
 
   const handleSelectMode = async (mode: 'truth' | 'dare') => {
-    await selectMode(mode, profile?.username);
+    // FIXED: Removed profile?.username to match hook signature
+    await selectMode(mode);
   };
 
   const handleStartGame = async () => {
@@ -97,9 +96,12 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
   const handleSendMessage = async (content: string, imageUrl: string | null) => {
     const isAsker = profile?.id === lobby?.current_asker_id;
-    const messageType = (isAsker && lobby?.selected_mode && !lobby?.current_question)
-      ? lobby.selected_mode
-      : 'chat';
+    
+    // FIXED: Added explicit type casting for messageType
+    const messageType: 'chat' | 'truth' | 'dare' | 'system' = 
+      (isAsker && lobby?.selected_mode && !lobby?.current_question)
+        ? lobby.selected_mode
+        : 'chat';
 
     await sendMessage(content, imageUrl, messageType, profile?.username);
     setTimeout(() => scrollToBottom(true), 100);
@@ -295,9 +297,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             className="hidden lg:flex"
           />
 
-          {/* Chat Area - RESTRUCTURED */}
+          {/* Chat Area */}
           <main className="flex-1 flex flex-col overflow-hidden">
-            {/* Messages Area - Scrollable */}
             <div 
               ref={messagesContainerRef}
               className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
@@ -381,5 +382,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     </div>
   );
-         }
-    
+}
