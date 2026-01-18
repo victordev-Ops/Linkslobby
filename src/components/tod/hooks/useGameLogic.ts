@@ -1,4 +1,3 @@
-// src/components/tod/hooks/useGameLogic.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -87,7 +86,13 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         (p) => setLobby(prev => ({ ...prev, ...p.new } as Lobby))
       )
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tod_messages', filter: `lobby_id=eq.${lobbyId}` }, 
-        (p) => setMessages(prev => prev.some(m => m.id === p.new.id) ? prev : [...prev, { ...p.new, status: 'sent' } as Message])
+        (p) => {
+            // Only update via Realtime to avoid duplicate messages in the UI
+            setMessages(prev => {
+                if (prev.some(m => m.id === p.new.id)) return prev;
+                return [...prev, { ...p.new, status: 'sent' } as Message];
+            });
+        }
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tod_participants', filter: `lobby_id=eq.${lobbyId}` }, 
         () => fetchData()
@@ -100,7 +105,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     return () => cleanup();
   }, [lobbyId, supabase, fetchData, cleanup]);
 
-  // Timer & Auto-Cycle
+  // Timer & Auto-Cycle (Host Only)
   useEffect(() => {
     if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at) return;
 
@@ -109,6 +114,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       const remaining = Math.max(0, 60 - elapsed);
       setTimeRemaining(remaining);
 
+      // Only the host triggers the RPC to avoid redundant calls
       if (remaining === 0 && userId === lobby.host_id) {
         startNextRound();
       }
@@ -120,30 +126,35 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const sendMessage = useCallback(async (
     content: string, 
     imageUrl: string | null, 
-    messageType: 'chat' | 'truth' | 'dare' | 'system', 
-    username?: string
+    messageType: 'chat' | 'truth' | 'dare' | 'system'
   ) => {
     if (!userId || !lobby) return;
 
-    const tempId = `temp-${Date.now()}`;
-    setMessages(prev => [...prev, { 
-      id: tempId, lobby_id: lobbyId, user_id: userId, content, image_url: imageUrl || undefined,
-      message_type: messageType, created_at: new Date().toISOString(), status: 'sending', profiles: { username: username || 'You' }
-    }]);
-
     try {
+      // Step 1: Insert the message
       const { error } = await supabase.from('tod_messages').insert({
-        lobby_id: lobbyId, user_id: userId, content, image_url: imageUrl, message_type: messageType
+        lobby_id: lobbyId,
+        user_id: userId,
+        content,
+        image_url: imageUrl,
+        message_type: messageType
       });
+
       if (error) throw error;
 
-      // Logic: If the Target answered, move to next round after 3 seconds
+      // Step 2: If the Asker is sending a question, update the lobby state
+      if (messageType === 'truth' || messageType === 'dare') {
+        await supabase.from('tod_lobbies')
+          .update({ current_question: content })
+          .eq('id', lobbyId);
+      }
+
+      // Step 3: If Target is answering, cycle to next round after 4 seconds
       if (lobby.current_question && userId === lobby.current_target_id) {
-        setTimeout(startNextRound, 3000);
+        setTimeout(startNextRound, 4000);
       }
     } catch (err) {
       toast.error("Message failed to send");
-      setMessages(prev => prev.filter(m => m.id !== tempId));
     }
   }, [lobbyId, userId, lobby, supabase, startNextRound]);
 
@@ -152,7 +163,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     participants, 
     messages, 
     isLoading, 
-    errorStatus, // Added back for TypeScript
+    errorStatus, 
     timeRemaining,
     sendMessage, 
     selectMode: (mode: 'truth' | 'dare') => supabase.from('tod_lobbies').update({ selected_mode: mode }).eq('id', lobbyId),
@@ -164,6 +175,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       await supabase.storage.from('tod-images').upload(path, file);
       return supabase.storage.from('tod-images').getPublicUrl(path).data.publicUrl;
     },
-    cleanup // Added back for TypeScript
+    cleanup
   };
 };
