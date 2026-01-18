@@ -1,10 +1,7 @@
-// src/components/tod/hooks/useGameLogic.ts
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
-// Updated Interface with 'status'
 export interface Message {
   id: string;
   lobby_id: string;
@@ -14,109 +11,155 @@ export interface Message {
   message_type: 'chat' | 'truth' | 'dare' | 'system';
   created_at: string;
   profiles?: { username: string };
-  status: 'sending' | 'sent' | 'error'; // <--- New State Field
+  status: 'sending' | 'sent' | 'error';
+}
+
+interface Participant {
+  user_id: string;
+  has_gone_this_round: boolean;
+  profiles?: { username: string };
+}
+
+interface Lobby {
+  id: string;
+  host_id: string;
+  status: 'waiting' | 'active' | 'finished';
+  current_asker_id?: string;
+  current_target_id?: string;
+  selected_mode?: 'truth' | 'dare';
+  current_question?: string;
+  turn_started_at?: string;
 }
 
 export const useGameLogic = (lobbyId: string, userId?: string) => {
   const [supabase] = useState(() => createClient());
+  const [lobby, setLobby] = useState<Lobby | null>(null);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  // ... (keep your other states like lobby, participants, etc.)
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  
+  const isMounted = useRef(true);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. REALTIME LISTENER (Deduplicates messages)
+  // Initial Data Fetch
+  const fetchData = useCallback(async () => {
+    if (!lobbyId || lobbyId === 'undefined') return;
+    try {
+      const [lobbyRes, partsRes, msgsRes] = await Promise.all([
+        supabase.from('tod_lobbies').select('*').eq('id', lobbyId).single(),
+        supabase.from('tod_participants').select('*, profiles(username)').eq('lobby_id', lobbyId),
+        supabase.from('tod_messages').select('*, profiles(username)').eq('lobby_id', lobbyId).order('created_at', { ascending: true })
+      ]);
+
+      if (lobbyRes.data) setLobby(lobbyRes.data);
+      if (partsRes.data) setParticipants(partsRes.data);
+      if (msgsRes.data) {
+        setMessages(msgsRes.data.map(m => ({ ...m, status: 'sent' })));
+      }
+      setIsLoading(false);
+    } catch (err) {
+      console.error(err);
+      setErrorStatus('Failed to load game');
+      setIsLoading(false);
+    }
+  }, [lobbyId, supabase]);
+
+  // Realtime Subscription
   useEffect(() => {
-    if (!lobbyId) return;
+    if (!lobbyId || lobbyId === 'undefined') return;
+    isMounted.current = true;
 
     const channel = supabase
       .channel(`game:${lobbyId}`)
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'tod_messages', 
-        filter: `lobby_id=eq.${lobbyId}` 
-      }, async (payload) => {
-        
-        // Prevent duplicates: If we already have this ID (from optimistic update), ignore it
-        setMessages(prev => {
-          if (prev.some(m => m.id === payload.new.id)) return prev;
-
-          // If it's a new message from someone else, add it
-          return [...prev, { 
-            ...payload.new, 
-            status: 'sent', 
-            profiles: { username: 'Loading...' } // Placeholder until fetch
-          } as Message];
-        });
-        
-        // (Optional: You can add a fetch here to get the username for the new message)
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tod_lobbies', filter: `id=eq.${lobbyId}` }, 
+        (payload) => setLobby(prev => ({ ...prev, ...payload.new } as Lobby))
+      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tod_messages', filter: `lobby_id=eq.${lobbyId}` }, 
+        async (payload) => {
+          setMessages(prev => {
+            if (prev.some(m => m.id === payload.new.id)) return prev;
+            return [...prev, { ...payload.new, status: 'sent' } as Message];
+          });
+        }
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tod_participants', filter: `lobby_id=eq.${lobbyId}` }, 
+        () => fetchData()
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [lobbyId, supabase]);
+    fetchData();
 
-  // 2. SEND MESSAGE (Optimistic)
-  const sendMessage = useCallback(async (
-    content: string,
-    imageUrl: string | null,
-    messageType: 'chat' | 'truth' | 'dare' | 'system',
-    username?: string
-  ) => {
-    if (!userId || !lobbyId) return;
-
-    // A. Generate Temp ID
-    const tempId = `temp-${Date.now()}`;
-    
-    // B. Add to UI Immediately (Status: sending)
-    const optimisticMsg: Message = {
-      id: tempId,
-      lobby_id: lobbyId,
-      user_id: userId,
-      content: content || '📷 Photo',
-      image_url: imageUrl || undefined,
-      message_type: messageType,
-      created_at: new Date().toISOString(),
-      status: 'sending',
-      profiles: { username: username || 'You' }
+    return () => {
+      isMounted.current = false;
+      supabase.removeChannel(channel);
     };
+  }, [lobbyId, supabase, fetchData]);
 
+  // Timer Logic
+  useEffect(() => {
+    if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - new Date(lobby.turn_started_at!).getTime()) / 1000);
+      const remaining = Math.max(0, 60 - elapsed);
+      setTimeRemaining(remaining);
+      if (remaining === 0 && lobby.host_id === userId) startNextRound();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lobby?.turn_started_at, lobby?.status]);
+
+  // Actions
+  const sendMessage = useCallback(async (content: string, imageUrl: string | null, messageType: any, username?: string) => {
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: tempId, lobby_id: lobbyId, user_id: userId!, content, image_url: imageUrl || undefined,
+      message_type: messageType, created_at: new Date().toISOString(), status: 'sending', profiles: { username: username || 'You' }
+    };
     setMessages(prev => [...prev, optimisticMsg]);
 
     try {
-      // C. Send to Server
-      const { data, error } = await supabase
-        .from('tod_messages')
-        .insert({
-          lobby_id: lobbyId,
-          user_id: userId,
-          content: content || '📷 Photo',
-          image_url: imageUrl,
-          message_type: messageType
-        })
-        .select()
-        .single();
-
+      const { data, error } = await supabase.from('tod_messages').insert({
+        lobby_id: lobbyId, user_id: userId, content, image_url: imageUrl, message_type: messageType
+      }).select().single();
       if (error) throw error;
-
-      // D. Success: Swap Temp ID for Real ID (Status: sent)
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempId 
-          ? { ...msg, id: data.id, status: 'sent', created_at: data.created_at } 
-          : msg
-      ));
-
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: data.id, status: 'sent' } : m));
     } catch (err) {
-      console.error('Send failed:', err);
-      // E. Error: Mark as failed (Status: error)
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempId ? { ...msg, status: 'error' } : msg
-      ));
-      toast.error('Failed to send message');
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
     }
   }, [lobbyId, userId, supabase]);
 
+  const selectMode = async (mode: string) => {
+    await supabase.from('tod_lobbies').update({ selected_mode: mode }).eq('id', lobbyId);
+  };
+
+  const startGame = async () => {
+    await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
+  };
+
+  const startNextRound = async () => {
+    await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
+  };
+
+  const endGame = async () => {
+    await supabase.from('tod_lobbies').update({ status: 'finished' }).eq('id', lobbyId);
+  };
+
+  const uploadImage = async (file: File) => {
+    const filePath = `${lobbyId}/${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from('tod-images').upload(filePath, file);
+    if (error) return null;
+    return supabase.storage.from('tod-images').getPublicUrl(filePath).data.publicUrl;
+  };
+
   return {
-    messages,
-    sendMessage,
-    // ... return other states/functions
+    lobby, participants, messages, isLoading, errorStatus, timeRemaining,
+    sendMessage, selectMode, startGame, startNextRound, endGame, uploadImage,
+    cleanup: () => {}
   };
 };
