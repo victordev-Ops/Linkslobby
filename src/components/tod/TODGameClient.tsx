@@ -1,5 +1,5 @@
 // src/components/tod/TODGameClient.tsx
-// Improved: Scroll only when user is at bottom, not forced
+// FIXED: ModeSelector above chat input, chat input sticky at bottom
 
 "use client";
 
@@ -51,26 +51,22 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     if (!messagesContainerRef.current || !messagesEndRef.current) return;
 
     const container = messagesContainerRef.current;
-    const scrollThreshold = 150; // pixels from bottom
+    const scrollThreshold = 150;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     const isNearBottom = distanceFromBottom < scrollThreshold;
 
-    // Only auto-scroll if user is near bottom OR forced (like when sending a message)
     if (force || isNearBottom) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   };
 
-  // Auto-scroll only when new messages arrive AND user is at bottom
   useEffect(() => {
     if (messages.length > previousMessageCount.current) {
-      // New message arrived - scroll only if user is at bottom
       scrollToBottom(false);
       previousMessageCount.current = messages.length;
     }
   }, [messages.length]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanup();
@@ -106,8 +102,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       : 'chat';
 
     await sendMessage(content, imageUrl, messageType, profile?.username);
-    
-    // Force scroll to bottom when user sends a message
     setTimeout(() => scrollToBottom(true), 100);
   };
 
@@ -128,13 +122,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const isHost = profile?.id === lobby?.host_id;
 
   const canSendMessage = () => {
-    // Always allow chat in waiting room
     if (lobby?.status === 'waiting') return true;
-    
-    // Always allow chat when game is finished
     if (lobby?.status === 'finished') return true;
     
-    // During active game - role-specific restrictions
     if (lobby?.status === 'active') {
       if (!lobby?.selected_mode) return false;
       if (lobby?.selected_mode && !lobby?.current_question) return isAsker;
@@ -198,7 +188,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         {/* Top Header */}
         <header className="flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/50 border-b border-slate-800/50">
           <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-            {/* Left: Back/Sidebar Button */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleLeaveLobby}
@@ -225,7 +214,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               </div>
             </div>
 
-            {/* Center: Game Status */}
             <div className="flex items-center gap-2">
               <GameStatus
                 status={lobby.status}
@@ -234,7 +222,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 targetUsername={targetUser?.profiles?.username}
               />
               
-              {/* Timer Display */}
               {lobby.status === 'active' && timeRemaining !== null && (
                 <div className={`px-3 py-1 rounded-full border flex items-center gap-1.5 ${
                   timeRemaining <= 10 
@@ -247,7 +234,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               )}
             </div>
 
-            {/* Right: Action Buttons */}
             <div className="flex items-center gap-2">
               {isHost && lobby.status === 'active' && (
                 <button
@@ -309,8 +295,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             className="hidden lg:flex"
           />
 
-          {/* Chat Area */}
+          {/* Chat Area - RESTRUCTURED */}
           <main className="flex-1 flex flex-col overflow-hidden">
+            {/* Messages Area - Scrollable */}
             <div 
               ref={messagesContainerRef}
               className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
@@ -320,15 +307,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   isHost={isHost}
                   playersCount={participants.length}
                   onStartGame={handleStartGame}
-                />
-              )}
-
-              {lobby.status === 'active' && !lobby.selected_mode && (
-                <ModeSelector
-                  isTarget={isTarget}
-                  targetUsername={targetUser?.profiles?.username}
-                  onSelectMode={handleSelectMode}
-                  timeRemaining={timeRemaining}
                 />
               )}
 
@@ -373,20 +351,35 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 </div>
               )}
 
-              {/* Scroll anchor */}
               <div ref={messagesEndRef} />
             </div>
 
-            <ChatInput
-              canSend={canSendMessage()}
-              placeholder={getInputPlaceholder()}
-              isUploading={isUploading}
-              onSend={handleSendMessage}
-              onUploadImage={handleUploadImage}
-            />
+            {/* Mode Selector - ABOVE CHAT INPUT */}
+            {lobby.status === 'active' && !lobby.selected_mode && (
+              <div className="flex-shrink-0 px-4 py-4 border-t border-slate-800/50 backdrop-blur-xl bg-slate-900/50">
+                <ModeSelector
+                  isTarget={isTarget}
+                  targetUsername={targetUser?.profiles?.username}
+                  onSelectMode={handleSelectMode}
+                  timeRemaining={timeRemaining}
+                />
+              </div>
+            )}
+
+            {/* Chat Input - STICKY AT BOTTOM */}
+            <div className="flex-shrink-0">
+              <ChatInput
+                canSend={canSendMessage()}
+                placeholder={getInputPlaceholder()}
+                isUploading={isUploading}
+                onSend={handleSendMessage}
+                onUploadImage={handleUploadImage}
+              />
+            </div>
           </main>
         </div>
       </div>
     </div>
   );
-}
+         }
+    
