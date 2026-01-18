@@ -1,3 +1,6 @@
+// src/components/tod/ui/ChatInput.tsx
+// Refactored: Clean, no auto-scroll side effects
+
 import { useState, useRef, useEffect } from 'react';
 import { Send, ImageIcon as ImageIconLucide, X, Loader2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,6 +13,9 @@ interface ChatInputProps {
   onUploadImage: (file: File) => Promise<string | null>;
 }
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_TEXTAREA_HEIGHT = 120; // pixels
+
 export const ChatInput = ({
   canSend,
   placeholder,
@@ -20,120 +26,189 @@ export const ChatInput = ({
   const [messageInput, setMessageInput] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-resize textarea as user types
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
   }, [messageInput]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image must be less than 5MB');
-        return;
-      }
-      setSelectedImage(file);
-      setImagePreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    // Validate file size
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error('Image must be less than 5MB');
+      return;
     }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
   };
 
   const removeImage = () => {
+    // Revoke object URL to free memory
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    
     setSelectedImage(null);
     setImagePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const resetInput = () => {
+    setMessageInput('');
+    removeImage();
+    setIsSending(false);
   };
 
   const handleSend = async () => {
+    // Validation
     if (!messageInput.trim() && !selectedImage) return;
+    if (!canSend || isSending) return;
 
-    let imageUrl = null;
-    if (selectedImage) {
-      imageUrl = await onUploadImage(selectedImage);
-      if (!imageUrl) return;
+    setIsSending(true);
+
+    try {
+      let imageUrl: string | null = null;
+
+      // Upload image if present
+      if (selectedImage) {
+        imageUrl = await onUploadImage(selectedImage);
+        if (!imageUrl) {
+          toast.error('Failed to upload image');
+          setIsSending(false);
+          return;
+        }
+      }
+
+      // Send message
+      await onSend(messageInput.trim(), imageUrl);
+
+      // Reset input after successful send
+      resetInput();
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+      setIsSending(false);
     }
-
-    await onSend(messageInput.trim(), imageUrl);
-    setMessageInput('');
-    removeImage();
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Send on Enter (without Shift)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
+  const isDisabled = !canSend || isSending || isUploading;
+  const canSubmit = (messageInput.trim() || selectedImage) && !isDisabled;
+
   return (
     <div className="flex-shrink-0 p-3 sm:p-4 backdrop-blur-xl bg-slate-900/80 border-t border-slate-800/50">
+      {/* Image Preview */}
       {imagePreview && (
         <div className="mb-3 relative inline-block">
           <img
             src={imagePreview}
             alt="Preview"
-            className="h-20 rounded-xl object-cover border-2 border-red-500/50"
+            className="h-20 w-20 rounded-xl object-cover border-2 border-red-500/50"
           />
           <button
+            type="button"
             onClick={removeImage}
-            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition active:scale-90"
+            disabled={isSending}
+            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition active:scale-90 disabled:opacity-50"
+            aria-label="Remove image"
           >
             <X size={14} />
           </button>
         </div>
       )}
 
+      {/* Disabled State Message */}
       {!canSend && (
         <div className="mb-2 text-center">
           <p className="text-xs text-slate-400 flex items-center justify-center gap-2">
             <Clock size={12} />
-            {placeholder}
+            <span>{placeholder}</span>
           </p>
         </div>
       )}
 
+      {/* Input Row */}
       <div className="flex items-end gap-2">
+        {/* Hidden File Input */}
         <input
           type="file"
           ref={fileInputRef}
           onChange={handleImageSelect}
           accept="image/*"
           className="hidden"
-          disabled={!canSend}
+          disabled={isDisabled}
+          aria-label="Upload image"
         />
 
+        {/* Image Upload Button */}
         <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={!canSend}
+          disabled={isDisabled}
           className="p-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 transition shrink-0 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90"
+          aria-label="Select image"
         >
           <ImageIconLucide size={20} className="text-slate-300" />
         </button>
 
+        {/* Message Textarea */}
         <textarea
           ref={textareaRef}
           value={messageInput}
           onChange={(e) => setMessageInput(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          disabled={!canSend}
+          disabled={isDisabled}
           className="flex-1 p-3 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 outline-none focus:border-red-500 transition resize-none disabled:opacity-50 disabled:cursor-not-allowed"
           rows={1}
-          style={{ maxHeight: '120px' }}
+          style={{ maxHeight: `${MAX_TEXTAREA_HEIGHT}px` }}
+          aria-label="Message input"
         />
 
+        {/* Send Button */}
         <button
+          type="button"
           onClick={handleSend}
-          disabled={(!messageInput.trim() && !selectedImage) || isUploading || !canSend}
+          disabled={!canSubmit}
           className="p-3 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50 transition disabled:opacity-30 disabled:cursor-not-allowed shrink-0 active:scale-90"
+          aria-label="Send message"
         >
-          {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+          {isSending || isUploading ? (
+            <Loader2 size={20} className="animate-spin" />
+          ) : (
+            <Send size={20} />
+          )}
         </button>
       </div>
     </div>
   );
 };
+    
