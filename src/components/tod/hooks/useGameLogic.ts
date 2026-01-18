@@ -41,9 +41,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   
   const isMounted = useRef(true);
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initial Data Fetch
   const fetchData = useCallback(async () => {
     if (!lobbyId || lobbyId === 'undefined') return;
     try {
@@ -60,13 +58,11 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       }
       setIsLoading(false);
     } catch (err) {
-      console.error(err);
       setErrorStatus('Failed to load game');
       setIsLoading(false);
     }
   }, [lobbyId, supabase]);
 
-  // Realtime Subscription
   useEffect(() => {
     if (!lobbyId || lobbyId === 'undefined') return;
     isMounted.current = true;
@@ -77,7 +73,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         (payload) => setLobby(prev => ({ ...prev, ...payload.new } as Lobby))
       )
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tod_messages', filter: `lobby_id=eq.${lobbyId}` }, 
-        async (payload) => {
+        (payload) => {
           setMessages(prev => {
             if (prev.some(m => m.id === payload.new.id)) return prev;
             return [...prev, { ...payload.new, status: 'sent' } as Message];
@@ -97,7 +93,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     };
   }, [lobbyId, supabase, fetchData]);
 
-  // Timer Logic
   useEffect(() => {
     if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at) {
       setTimeRemaining(null);
@@ -108,17 +103,24 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       const elapsed = Math.floor((Date.now() - new Date(lobby.turn_started_at!).getTime()) / 1000);
       const remaining = Math.max(0, 60 - elapsed);
       setTimeRemaining(remaining);
-      if (remaining === 0 && lobby.host_id === userId) startNextRound();
+      if (remaining === 0 && lobby.host_id === userId) {
+        supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [lobby?.turn_started_at, lobby?.status]);
+  }, [lobby?.turn_started_at, lobby?.status, lobbyId, userId, supabase]);
 
-  // Actions
-  const sendMessage = useCallback(async (content: string, imageUrl: string | null, messageType: any, username?: string) => {
+  const sendMessage = useCallback(async (
+    content: string, 
+    imageUrl: string | null, 
+    messageType: 'chat' | 'truth' | 'dare' | 'system', 
+    username?: string
+  ) => {
+    if (!userId) return;
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg: Message = {
-      id: tempId, lobby_id: lobbyId, user_id: userId!, content, image_url: imageUrl || undefined,
+      id: tempId, lobby_id: lobbyId, user_id: userId, content, image_url: imageUrl || undefined,
       message_type: messageType, created_at: new Date().toISOString(), status: 'sending', profiles: { username: username || 'You' }
     };
     setMessages(prev => [...prev, optimisticMsg]);
@@ -134,7 +136,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   }, [lobbyId, userId, supabase]);
 
-  const selectMode = async (mode: string) => {
+  const selectMode = async (mode: 'truth' | 'dare') => {
     await supabase.from('tod_lobbies').update({ selected_mode: mode }).eq('id', lobbyId);
   };
 
