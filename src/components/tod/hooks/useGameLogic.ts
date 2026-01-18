@@ -1,10 +1,9 @@
 // src/components/tod/hooks/useGameLogic.ts
-// FIXED: Realtime participants update + Chat in waiting room
+// SIMPLIFIED VERSION - Uses reliable polling instead of flaky realtime
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface Message {
   id: string;
@@ -46,43 +45,73 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   
   const isMounted = useRef(true);
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLobbyStatus = useRef<string>('');
+  const lastParticipantCount = useRef<number>(0);
+  const lastMessageCount = useRef<number>(0);
 
-  const fetchParticipants = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!lobbyId || lobbyId === 'undefined' || !isMounted.current) return;
 
     try {
-      const { data, error } = await supabase
-        .from('tod_participants')
-        .select('user_id, has_gone_this_round, profiles(username)')
-        .eq('lobby_id', lobbyId)
-        .order('joined_at', { ascending: true });
-      
-      if (!error && isMounted.current) {
-        console.log('👥 Fetched participants:', data?.length);
-        setParticipants(data || []);
+      // Fetch all data in parallel
+      const [lobbyResult, participantsResult, messagesResult] = await Promise.all([
+        supabase.from('tod_lobbies').select('*').eq('id', lobbyId).single(),
+        supabase.from('tod_participants').select('user_id, has_gone_this_round, profiles(username)').eq('lobby_id', lobbyId).order('joined_at', { ascending: true }),
+        supabase.from('tod_messages').select('*, profiles(username)').eq('lobby_id', lobbyId).order('created_at', { ascending: true })
+      ]);
+
+      if (!isMounted.current) return;
+
+      // Update lobby
+      if (lobbyResult.data) {
+        const newLobby = lobbyResult.data;
+        
+        // Detect status changes
+        if (lastLobbyStatus.current && lastLobbyStatus.current !== newLobby.status) {
+          if (newLobby.status === 'active') {
+            toast.success('🎮 Game Started!', { duration: 3000 });
+          } else if (newLobby.status === 'finished') {
+            toast.info('🏁 Game Ended!', { duration: 3000 });
+          }
+        }
+        
+        // Detect mode selection
+        if (lobby?.status === 'active' && !lobby?.selected_mode && newLobby.selected_mode) {
+          toast.info(`${newLobby.selected_mode.toUpperCase()} Selected!`, { duration: 2000 });
+        }
+        
+        // Detect new round
+        if (lobby?.current_target_id && newLobby.current_target_id !== lobby?.current_target_id) {
+          toast.info('🎯 New Round!', { duration: 2000 });
+        }
+        
+        lastLobbyStatus.current = newLobby.status;
+        setLobby(newLobby);
       }
-    } catch (err) {
-      console.error('Error fetching participants:', err);
-    }
-  }, [lobbyId, supabase]);
 
-  const fetchMessages = useCallback(async () => {
-    if (!lobbyId || lobbyId === 'undefined' || !isMounted.current) return;
+      // Update participants
+      if (participantsResult.data) {
+        const newCount = participantsResult.data.length;
+        
+        // Detect new participants
+        if (lastParticipantCount.current > 0 && newCount > lastParticipantCount.current) {
+          toast.success('👋 New player joined!', { duration: 2000 });
+        }
+        
+        lastParticipantCount.current = newCount;
+        setParticipants(participantsResult.data);
+      }
 
-    try {
-      const { data, error } = await supabase
-        .from('tod_messages')
-        .select('*, profiles(username)')
-        .eq('lobby_id', lobbyId)
-        .order('created_at', { ascending: true });
-      
-      if (!error && isMounted.current) {
-        console.log('💬 Fetched messages:', data?.length);
+      // Update messages
+      if (messagesResult.data) {
+        const newCount = messagesResult.data.length;
+        
+        // Clear optimistic messages when we get real ones
         setMessages(prev => {
           const optimistic = prev.filter(m => m.isOptimistic);
-          const real = (data || []).map(msg => ({ ...msg, isSent: true }));
+          const real = messagesResult.data.map(msg => ({ ...msg, isSent: true }));
           
           const filtered = optimistic.filter(opt =>
             !real.some(r =>
@@ -96,44 +125,14 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
             (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           );
         });
+        
+        lastMessageCount.current = newCount;
       }
+
     } catch (err) {
-      console.error('Error fetching messages:', err);
+      console.error('❌ Error fetching data:', err);
     }
-  }, [lobbyId, supabase]);
-
-  const fetchInitialData = useCallback(async () => {
-    if (!lobbyId || lobbyId === 'undefined') {
-      setErrorStatus('Invalid Lobby ID.');
-      setIsLoading(false);
-      return;
-    }
-    
-    setIsLoading(true);
-    try {
-      console.log('📥 Fetching initial data for lobby:', lobbyId);
-      
-      const [lobbyResult, participantsResult, messagesResult] = await Promise.all([
-        supabase.from('tod_lobbies').select('*').eq('id', lobbyId).single(),
-        supabase.from('tod_participants').select('user_id, has_gone_this_round, profiles(username)').eq('lobby_id', lobbyId).order('joined_at', { ascending: true }),
-        supabase.from('tod_messages').select('*, profiles(username)').eq('lobby_id', lobbyId).order('created_at', { ascending: true })
-      ]);
-
-      if (lobbyResult.error) throw lobbyResult.error;
-      
-      if (isMounted.current) {
-        console.log('✅ Initial data loaded');
-        setLobby(lobbyResult.data);
-        setParticipants(participantsResult.data || []);
-        setMessages((messagesResult.data || []).map(msg => ({ ...msg, isSent: true })));
-      }
-    } catch (err: any) {
-      console.error('❌ Error fetching initial data:', err);
-      if (isMounted.current) setErrorStatus(err.message);
-    } finally {
-      if (isMounted.current) setIsLoading(false);
-    }
-  }, [lobbyId, supabase]);
+  }, [lobbyId, supabase, lobby?.status, lobby?.selected_mode, lobby?.current_target_id]);
 
   // Timer logic
   useEffect(() => {
@@ -203,8 +202,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     messageType: 'chat' | 'truth' | 'dare' | 'system',
     username?: string
   ) => {
-    console.log('📤 Sending message:', { content, messageType, status: lobby?.status });
-    
     const tempId = addOptimisticMessage({
       content: content || '📷 Photo',
       image_url: imageUrl || undefined,
@@ -221,15 +218,10 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         message_type: messageType
       });
 
-      if (error) {
-        console.error('❌ Message send error:', error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log('✅ Message sent successfully');
-      
-      // Remove optimistic after delay
-      setTimeout(() => removeOptimisticMessage(tempId), 5000);
+      // Immediately fetch to get the real message
+      setTimeout(() => fetchData(), 200);
       
       if (messageType === 'truth' || messageType === 'dare') {
         await supabase.from('tod_lobbies').update({
@@ -239,18 +231,14 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       
       return true;
     } catch (err) {
-      console.error('❌ Failed to send message:', err);
       removeOptimisticMessage(tempId);
       toast.error('Failed to send message');
       return false;
     }
-  }, [lobbyId, userId, supabase, lobby?.status, addOptimisticMessage, removeOptimisticMessage]);
+  }, [lobbyId, userId, supabase, addOptimisticMessage, removeOptimisticMessage, fetchData]);
 
   const selectMode = useCallback(async (mode: 'truth' | 'dare', username?: string) => {
     try {
-      // Optimistic update
-      setLobby(prev => prev ? { ...prev, selected_mode: mode } : null);
-
       const { error } = await supabase
         .from('tod_lobbies')
         .update({ selected_mode: mode })
@@ -266,21 +254,18 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         username
       );
 
+      // Immediately fetch updates
+      setTimeout(() => fetchData(), 200);
+      
       return true;
     } catch (err) {
       toast.error('Failed to select mode');
-      await fetchInitialData();
       return false;
     }
-  }, [lobbyId, supabase, lobby, participants, sendMessage, fetchInitialData]);
+  }, [lobbyId, supabase, lobby, participants, sendMessage, fetchData]);
 
   const startGame = useCallback(async () => {
     try {
-      console.log('🎮 Starting game...');
-      
-      // Optimistic update
-      setLobby(prev => prev ? { ...prev, status: 'active' } : null);
-      
       const { error: rpcError } = await supabase.rpc('next_tod_turn', { 
         lobby_uuid: lobbyId 
       });
@@ -294,20 +279,19 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         message_type: 'system'
       });
 
-      toast.success('Game started! 🎉');
+      // Immediately fetch updates
+      setTimeout(() => fetchData(), 200);
+      
       return true;
     } catch (err: any) {
       console.error('Start game error:', err);
       toast.error('Failed to start game');
-      await fetchInitialData();
       return false;
     }
-  }, [lobbyId, userId, supabase, fetchInitialData]);
+  }, [lobbyId, userId, supabase, fetchData]);
 
   const startNextRound = useCallback(async () => {
     try {
-      console.log('🎯 Starting next round...');
-      
       const { error: rpcError } = await supabase.rpc('next_tod_turn', { 
         lobby_uuid: lobbyId 
       });
@@ -321,20 +305,19 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         message_type: 'system'
       });
 
-      toast.success('Next round started! 🎲');
+      // Immediately fetch updates
+      setTimeout(() => fetchData(), 200);
+      
       return true;
     } catch (err: any) {
       console.error('Next round error:', err);
       toast.error('Failed to start next round');
       return false;
     }
-  }, [lobbyId, userId, supabase]);
+  }, [lobbyId, userId, supabase, fetchData]);
 
   const endGame = useCallback(async () => {
     try {
-      // Optimistic update
-      setLobby(prev => prev ? { ...prev, status: 'finished' } : null);
-
       const { error } = await supabase
         .from('tod_lobbies')
         .update({ status: 'finished' })
@@ -349,14 +332,15 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         message_type: 'system'
       });
 
-      toast.success('Game ended!');
+      // Immediately fetch updates
+      setTimeout(() => fetchData(), 200);
+      
       return true;
     } catch (err) {
       toast.error('Failed to end game');
-      await fetchInitialData();
       return false;
     }
-  }, [lobbyId, userId, supabase, fetchInitialData]);
+  }, [lobbyId, userId, supabase, fetchData]);
 
   const uploadImage = useCallback(async (file: File): Promise<string | null> => {
     try {
@@ -382,143 +366,46 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   }, [lobbyId, supabase]);
 
   const cleanup = useCallback(() => {
-    console.log('🧹 Cleaning up game logic...');
+    console.log('🧹 Cleaning up...');
     isMounted.current = false;
     
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
     }
 
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
-  }, [supabase]);
+  }, []);
 
-  // ✨ FIXED REALTIME SUBSCRIPTIONS
+  // Initial load and polling
   useEffect(() => {
+    if (!lobbyId || lobbyId === 'undefined') {
+      setErrorStatus('Invalid Lobby ID.');
+      setIsLoading(false);
+      return;
+    }
+
     isMounted.current = true;
-    fetchInitialData();
+    
+    // Initial fetch
+    fetchData().then(() => {
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
+    });
 
-    console.log('🔌 Setting up realtime for lobby:', lobbyId);
-
-    channelRef.current = supabase
-      .channel(`game_${lobbyId}`, {
-        config: {
-          broadcast: { self: false },
-          presence: { key: userId }
-        }
-      })
-      // Listen to lobby changes
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tod_lobbies',
-          filter: `id=eq.${lobbyId}`
-        },
-        (payload) => {
-          console.log('🔥 Lobby realtime update:', payload);
-          if (payload.new && isMounted.current) {
-            const newLobby = payload.new as Lobby;
-            const oldLobby = lobby;
-            
-            setLobby(newLobby);
-            
-            // Notifications
-            if (payload.eventType === 'UPDATE' && oldLobby) {
-              if (newLobby.status === 'active' && oldLobby.status !== 'active') {
-                toast.success('🎮 Game Started!', { duration: 3000 });
-              }
-              
-              if (newLobby.selected_mode && !oldLobby.selected_mode) {
-                toast.info(`${newLobby.selected_mode.toUpperCase()} Selected!`, { duration: 2000 });
-              }
-              
-              if (newLobby.current_target_id !== oldLobby.current_target_id) {
-                toast.info('🎯 New Round!', { duration: 2000 });
-              }
-            }
-          }
-        }
-      )
-      // Listen to participant changes - FIXED!
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tod_participants',
-          filter: `lobby_id=eq.${lobbyId}`
-        },
-        (payload) => {
-          console.log('👥 Participants realtime update:', payload.eventType);
-          if (isMounted.current) {
-            // Immediately refetch participants
-            fetchParticipants();
-            
-            if (payload.eventType === 'INSERT') {
-              toast.success('👋 New player joined!', { duration: 2000 });
-            } else if (payload.eventType === 'DELETE') {
-              toast.info('👋 Player left', { duration: 2000 });
-            }
-          }
-        }
-      )
-      // Listen to message changes - FIXED!
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'tod_messages',
-          filter: `lobby_id=eq.${lobbyId}`
-        },
-        (payload) => {
-          console.log('💬 Message realtime insert');
-          if (isMounted.current && payload.new) {
-            const newMsg = payload.new as Message;
-            
-            // Add message immediately
-            setMessages(prev => {
-              // Remove optimistic with same content
-              const filtered = prev.filter(m => 
-                !(m.isOptimistic && m.content === newMsg.content && m.user_id === newMsg.user_id)
-              );
-              
-              // Check if already exists
-              if (filtered.some(m => m.id === newMsg.id)) return prev;
-              
-              return [...filtered, { ...newMsg, isSent: true }].sort(
-                (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-              );
-            });
-            
-            // Fetch to get profile data
-            setTimeout(() => fetchMessages(), 200);
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Realtime subscription status:', status);
-        
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime connected!');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Realtime channel error');
-          toast.error('Connection issue. Refreshing...', { duration: 2000 });
-          setTimeout(() => fetchInitialData(), 2000);
-        } else if (status === 'TIMED_OUT') {
-          console.error('⏱️ Realtime connection timed out');
-          toast.error('Connection timed out. Refreshing...', { duration: 2000 });
-          setTimeout(() => fetchInitialData(), 2000);
-        }
-      });
+    // Poll every 1 second for fast updates
+    pollIntervalRef.current = setInterval(() => {
+      if (isMounted.current) {
+        fetchData();
+      }
+    }, 1000);
 
     return cleanup;
-  }, [lobbyId, userId, supabase, fetchInitialData, fetchParticipants, fetchMessages, cleanup]);
+  }, [lobbyId, fetchData, cleanup]);
 
   return {
     lobby,
@@ -533,8 +420,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     startNextRound,
     endGame,
     uploadImage,
-    refetch: fetchInitialData,
+    refetch: fetchData,
     cleanup
   };
 };
-  
