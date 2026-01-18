@@ -370,17 +370,11 @@ export default function DashboardClient() {
               )}
             </div>
 
-            <div className="bg-slate-100/40 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex items-center justify-center text-slate-400">
-                <p className="text-[10px] font-bold uppercase tracking-widest">More coming soon</p>
-            </div>
+            
           </div>
         </section>
 
-        <footer className="text-center pt-2">
-          <p className="text-[10px] text-slate-400 font-bold bg-white border border-slate-100 inline-block px-4 py-2 rounded-full shadow-sm">
-            💡 TIP: ADD TO YOUR INSTA BIO
-          </p>
-        </footer>
+
 
       </main>
 
