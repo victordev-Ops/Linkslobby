@@ -1,5 +1,5 @@
 import { Check, Clock, Skull, Flame, AlertCircle } from 'lucide-react';
-import { Message } from '@/hooks/useGameLogic'; // Ensure you import the interface
+import { Message } from '../hooks/useGameLogic'; // Ensure you import the interface
 
 interface MessageBubbleProps {
   message: Message;
