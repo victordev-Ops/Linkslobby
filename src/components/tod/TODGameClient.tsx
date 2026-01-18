@@ -1,4 +1,6 @@
 // src/components/tod/TODGameClient.tsx
+// FIXED: Chat enabled in waiting room and finished state
+
 "use client";
 
 import { useRef, useEffect, useState } from "react";
@@ -104,25 +106,52 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const isAsker = profile?.id === lobby?.current_asker_id;
   const isHost = profile?.id === lobby?.host_id;
 
+  // FIXED: Chat permissions - allow chat in waiting and finished states
   const canSendMessage = () => {
-    // Always allow chat in waiting room
-    if (lobby?.status === 'waiting') return true;
-    
-    // Always allow chat when game is finished
-    if (lobby?.status === 'finished') return true;
-    
-    // During active game
-    if (lobby?.status === 'active') {
-      // No mode selected yet - only target can select
-      if (!lobby?.selected_mode) return false;
-      
-      // Mode selected but no question - only asker can ask
-      if (lobby?.selected_mode && !lobby?.current_question) return isAsker;
-      
-      // Question asked - only target can answer
-      if (lobby?.current_question) return isTarget;
+    console.log('🔍 Checking chat permissions:', {
+      status: lobby?.status,
+      selected_mode: lobby?.selected_mode,
+      current_question: lobby?.current_question,
+      isAsker,
+      isTarget
+    });
+
+    // ✅ ALWAYS allow chat in waiting room
+    if (lobby?.status === 'waiting') {
+      console.log('✅ Chat allowed: Waiting room');
+      return true;
     }
     
+    // ✅ ALWAYS allow chat when game is finished
+    if (lobby?.status === 'finished') {
+      console.log('✅ Chat allowed: Game finished');
+      return true;
+    }
+    
+    // During active game - role-specific restrictions
+    if (lobby?.status === 'active') {
+      // No mode selected yet - only target can select (not chat)
+      if (!lobby?.selected_mode) {
+        console.log('❌ Chat disabled: Waiting for mode selection');
+        return false;
+      }
+      
+      // Mode selected but no question - only asker can ask
+      if (lobby?.selected_mode && !lobby?.current_question) {
+        const allowed = isAsker;
+        console.log(allowed ? '✅ Chat allowed: Asker can ask' : '❌ Chat disabled: Only asker can ask');
+        return allowed;
+      }
+      
+      // Question asked - only target can answer
+      if (lobby?.current_question) {
+        const allowed = isTarget;
+        console.log(allowed ? '✅ Chat allowed: Target can answer' : '❌ Chat disabled: Only target can answer');
+        return allowed;
+      }
+    }
+    
+    console.log('❌ Chat disabled: Unknown state');
     return false;
   };
 
@@ -311,7 +340,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 />
               )}
 
-              {lobby.status === 'active' && lobby.selected_mode && messages.map((msg) => (
+              {/* Show messages in all states */}
+              {messages.map((msg) => (
                 <MessageBubble
                   key={msg.id}
                   message={msg}
