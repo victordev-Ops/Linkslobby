@@ -1,3 +1,4 @@
+// src/components/tod/TODGameClient.tsx
 "use client";
 
 import { useRef, useEffect, useState } from "react";
@@ -46,9 +47,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const scrollToBottom = (force = false) => {
     if (!messagesContainerRef.current || !messagesEndRef.current) return;
     const container = messagesContainerRef.current;
-    const scrollThreshold = 150;
-    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (force || distanceFromBottom < scrollThreshold) {
+    if (force || (container.scrollHeight - container.scrollTop - container.clientHeight < 150)) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   };
@@ -70,14 +69,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
   const canSendMessage = () => {
     if (lobby?.status === 'waiting' || lobby?.status === 'finished') return true;
-    
     if (lobby?.status === 'active') {
       if (!lobby.selected_mode) return false;
-      
-      // If mode is selected but no question has been asked: Only Asker can type
       if (!lobby.current_question) return isAsker;
-      
-      // If question is already asked: Only Target can answer, and only if they haven't yet
       if (lobby.current_question) {
         const hasAnswered = messages.some(m => 
           m.user_id === profile?.id && 
@@ -90,23 +84,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     return false;
   };
 
-  const getInputPlaceholder = () => {
-    if (lobby?.status === 'waiting' || lobby?.status === 'finished') return "Chat with everyone...";
-    if (!lobby?.selected_mode) return "Waiting for mode selection...";
-    if (!lobby?.current_question) {
-      return isAsker ? `Ask your ${lobby.selected_mode} question...` : "Waiting for question...";
-    }
-    
-    const hasAnswered = messages.some(m => 
-        m.user_id === profile?.id && 
-        new Date(m.created_at) > new Date(lobby.turn_started_at || 0) &&
-        m.message_type === 'chat'
-    );
-
-    if (isTarget) return hasAnswered ? "Answer sent! Waiting for next round..." : "Type your answer...";
-    return "Waiting for answer...";
-  };
-
   const handleSendMessage = async (content: string, imageUrl: string | null) => {
     const messageType: 'chat' | 'truth' | 'dare' | 'system' = 
       (isAsker && lobby?.selected_mode && !lobby?.current_question)
@@ -117,15 +94,18 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     setTimeout(() => scrollToBottom(true), 100);
   };
 
+  const handleSelectMode = async (mode: 'truth' | 'dare') => {
+    await selectMode(mode);
+  };
+
   const handleLeaveLobby = () => {
     cleanup();
     router.push('/tod');
   };
 
   if (isLoading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950">
       <Loader2 className="w-12 h-12 animate-spin text-red-400" />
-      <p className="text-slate-300">Loading game...</p>
     </div>
   );
 
@@ -133,8 +113,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-950">
       <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
       <h2 className="text-2xl font-bold text-white">Error</h2>
-      <p className="text-slate-400 mb-6">{errorStatus || "Game not found."}</p>
-      <button onClick={handleLeaveLobby} className="bg-red-500 text-white px-8 py-3 rounded-full font-bold">Back</button>
+      <button onClick={handleLeaveLobby} className="mt-4 bg-red-500 text-white px-8 py-2 rounded-full">Back</button>
     </div>
   );
 
@@ -142,35 +121,31 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const askerUser = participants.find(p => p.user_id === lobby.current_asker_id);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-red-950 to-slate-950 relative flex flex-col">
-      <header className="px-4 py-3 backdrop-blur-xl bg-slate-900/50 border-b border-slate-800/50">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <button onClick={handleLeaveLobby} className="text-white hover:text-red-400"><ArrowLeft /></button>
-          <GameStatus 
-            status={lobby.status} 
-            selectedMode={lobby.selected_mode} 
-            askerUsername={askerUser?.profiles?.username} 
-            targetUsername={targetUser?.profiles?.username} 
-          />
-          {lobby.status === 'active' && timeRemaining !== null && (
-             <div className="text-red-400 font-mono font-bold flex items-center gap-1">
-                <Timer size={16}/> {timeRemaining}s
-             </div>
-          )}
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-red-950 to-slate-950 flex flex-col overflow-hidden">
+      <header className="px-4 py-3 bg-slate-900/50 border-b border-slate-800/50 flex items-center justify-between">
+        <button onClick={handleLeaveLobby} className="text-white"><ArrowLeft /></button>
+        <GameStatus 
+          status={lobby.status} 
+          selectedMode={lobby.selected_mode} 
+          askerUsername={askerUser?.profiles?.username} 
+          targetUsername={targetUser?.profiles?.username} 
+        />
+        {lobby.status === 'active' && timeRemaining !== null && (
+          <div className="text-red-400 font-bold flex items-center gap-1"><Timer size={14}/> {timeRemaining}s</div>
+        )}
       </header>
 
       <div className="flex-1 flex max-w-6xl mx-auto w-full overflow-hidden">
         <PlayersSidebar 
-            className="hidden lg:flex" 
-            participants={participants} 
-            messages={messages} 
-            currentTargetId={lobby.current_target_id} 
-            hostId={lobby.host_id} 
+          className="hidden lg:flex" 
+          participants={participants} 
+          messages={messages} 
+          currentTargetId={lobby.current_target_id} 
+          hostId={lobby.host_id} 
         />
         
         <main className="flex-1 flex flex-col overflow-hidden">
-          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
             {lobby.status === 'waiting' && <WaitingRoom isHost={isHost} playersCount={participants.length} onStartGame={startGame} />}
             {messages.map((msg) => <MessageBubble key={msg.id} message={msg} isOwn={msg.user_id === profile?.id} />)}
             <div ref={messagesEndRef} />
@@ -178,13 +153,18 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
           {lobby.status === 'active' && !lobby.selected_mode && (
             <div className="p-4 border-t border-slate-800">
-              <ModeSelector isTarget={isTarget} targetUsername={targetUser?.profiles?.username} onSelectMode={selectMode} timeRemaining={timeRemaining} />
+              <ModeSelector 
+                isTarget={isTarget} 
+                targetUsername={targetUser?.profiles?.username} 
+                onSelectMode={handleSelectMode} // Now uses the improved local handler
+                timeRemaining={timeRemaining} 
+              />
             </div>
           )}
 
           <ChatInput 
             canSend={canSendMessage()} 
-            placeholder={getInputPlaceholder()} 
+            placeholder={isTarget && lobby.current_question ? "Type your answer..." : "Wait for your turn..."} 
             isUploading={isUploading} 
             onSend={handleSendMessage} 
             onUploadImage={uploadImage} 
