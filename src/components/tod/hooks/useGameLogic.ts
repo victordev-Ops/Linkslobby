@@ -1,3 +1,4 @@
+// src/components/tod/hooks/useGameLogic.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -71,13 +72,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   }, [lobbyId, supabase]);
 
-  const cleanup = useCallback(() => {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
-  }, [supabase]);
-
   useEffect(() => {
     if (!lobbyId || lobbyId === 'undefined') return;
 
@@ -87,11 +81,10 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       )
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tod_messages', filter: `lobby_id=eq.${lobbyId}` }, 
         (p) => {
-            // Only update via Realtime to avoid duplicate messages in the UI
-            setMessages(prev => {
-                if (prev.some(m => m.id === p.new.id)) return prev;
-                return [...prev, { ...p.new, status: 'sent' } as Message];
-            });
+          setMessages(prev => {
+            if (prev.some(m => m.id === p.new.id)) return prev;
+            return [...prev, { ...p.new, status: 'sent' } as Message];
+          });
         }
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tod_participants', filter: `lobby_id=eq.${lobbyId}` }, 
@@ -102,10 +95,9 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     channelRef.current = channel;
     fetchData();
 
-    return () => cleanup();
-  }, [lobbyId, supabase, fetchData, cleanup]);
+    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
+  }, [lobbyId, supabase, fetchData]);
 
-  // Timer & Auto-Cycle (Host Only)
   useEffect(() => {
     if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at) return;
 
@@ -114,7 +106,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       const remaining = Math.max(0, 60 - elapsed);
       setTimeRemaining(remaining);
 
-      // Only the host triggers the RPC to avoid redundant calls
       if (remaining === 0 && userId === lobby.host_id) {
         startNextRound();
       }
@@ -122,6 +113,27 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
     return () => clearInterval(interval);
   }, [lobby?.turn_started_at, lobby?.status, lobby?.host_id, userId, startNextRound]);
+
+  const selectMode = async (mode: 'truth' | 'dare') => {
+    if (!lobby) return;
+    
+    // 1. Optimistic UI update (hide selector instantly)
+    const previousMode = lobby.selected_mode;
+    setLobby(prev => prev ? { ...prev, selected_mode: mode } : null);
+
+    try {
+      const { error } = await supabase
+        .from('tod_lobbies')
+        .update({ selected_mode: mode })
+        .eq('id', lobbyId);
+
+      if (error) throw error;
+    } catch (err) {
+      // 2. Rollback on error
+      setLobby(prev => prev ? { ...prev, selected_mode: previousMode } : null);
+      toast.error("Failed to select mode. Check your database permissions.");
+    }
+  };
 
   const sendMessage = useCallback(async (
     content: string, 
@@ -131,7 +143,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     if (!userId || !lobby) return;
 
     try {
-      // Step 1: Insert the message
       const { error } = await supabase.from('tod_messages').insert({
         lobby_id: lobbyId,
         user_id: userId,
@@ -142,14 +153,12 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
       if (error) throw error;
 
-      // Step 2: If the Asker is sending a question, update the lobby state
       if (messageType === 'truth' || messageType === 'dare') {
         await supabase.from('tod_lobbies')
           .update({ current_question: content })
           .eq('id', lobbyId);
       }
 
-      // Step 3: If Target is answering, cycle to next round after 4 seconds
       if (lobby.current_question && userId === lobby.current_target_id) {
         setTimeout(startNextRound, 4000);
       }
@@ -166,7 +175,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     errorStatus, 
     timeRemaining,
     sendMessage, 
-    selectMode: (mode: 'truth' | 'dare') => supabase.from('tod_lobbies').update({ selected_mode: mode }).eq('id', lobbyId),
+    selectMode,
     startGame: startNextRound,
     startNextRound,
     endGame: () => supabase.from('tod_lobbies').update({ status: 'finished' }).eq('id', lobbyId),
@@ -175,6 +184,6 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       await supabase.storage.from('tod-images').upload(path, file);
       return supabase.storage.from('tod-images').getPublicUrl(path).data.publicUrl;
     },
-    cleanup
+    cleanup: () => { if (channelRef.current) supabase.removeChannel(channelRef.current); }
   };
 };
