@@ -141,41 +141,29 @@ export default function DashboardClient() {
       <main className="max-w-xl mx-auto px-4 py-8 space-y-8">
         
         {/* Hero Section */}
-        <section className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100">
-          {/* Profile Section - Top Right */}
-          <div className="flex justify-end mb-4">
-            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-full border border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                {profile.username?.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-semibold text-slate-700">
-                @{profile.username}
-              </span>
-            </div>
-          </div>
+        <section className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100 text-center">
+          <h1 className="text-2xl font-black text-slate-900 mb-1">
+            Hey, {profile.username}! 👋
+          </h1>
+          <p className="text-slate-500 text-sm mb-6">
+            Share your link to start receiving messages.
+          </p>
 
-          {/* Content */}
-          <div className="text-center">
-            <p className="text-slate-500 text-sm mb-6">
-              Share your link to start receiving messages.
-            </p>
-
-            <div className="flex items-center gap-2 p-1.5 bg-slate-50 border border-slate-200 rounded-2xl max-w-sm mx-auto">
-              <div className="pl-3 text-slate-400 shrink-0">
-                <Share2 size={16} />
-              </div>
-              <input 
-                readOnly 
-                value={anonymousUrl}
-                className="flex-1 bg-transparent py-2 text-xs font-semibold text-slate-600 focus:outline-none truncate"
-              />
-              <button
-                onClick={() => handleCopy(anonymousUrl, 'hero')}
-                className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 ${heroCopied ? "bg-green-500 text-white" : "bg-purple-600 text-white hover:bg-purple-700"}`}
-              >
-                {heroCopied ? <Check size={18} /> : <Copy size={18} />}
-              </button>
+          <div className="flex items-center gap-2 p-1.5 bg-slate-50 border border-slate-200 rounded-2xl max-w-sm mx-auto">
+            <div className="pl-3 text-slate-400 shrink-0">
+              <Share2 size={16} />
             </div>
+            <input 
+              readOnly 
+              value={anonymousUrl}
+              className="flex-1 bg-transparent py-2 text-xs font-semibold text-slate-600 focus:outline-none truncate"
+            />
+            <button
+              onClick={() => handleCopy(anonymousUrl, 'hero')}
+              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border-2 ${heroCopied ? "bg-green-500 border-green-500 text-white" : "bg-transparent border-purple-600 text-purple-600 hover:bg-purple-50"}`}
+            >
+              {heroCopied ? <Check size={18} /> : <Copy size={18} />}
+            </button>
           </div>
         </section>
 
@@ -200,11 +188,7 @@ export default function DashboardClient() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-slate-900 text-base">Truth or Dare</h3>
-                    <div className="relative">
-                      {/* Beeping animation */}
-                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
-                      <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Live</span>
-                    </div>
+                    <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Live</span>
                   </div>
                   <p className="text-slate-400 text-xs line-clamp-1">Play with friends in real-time</p>
                 </div>
@@ -370,11 +354,17 @@ export default function DashboardClient() {
               )}
             </div>
 
-            
+            <div className="bg-slate-100/40 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex items-center justify-center text-slate-400">
+                <p className="text-[10px] font-bold uppercase tracking-widest">More coming soon</p>
+            </div>
           </div>
         </section>
 
-
+        <footer className="text-center pt-2">
+          <p className="text-[10px] text-slate-400 font-bold bg-white border border-slate-100 inline-block px-4 py-2 rounded-full shadow-sm">
+            💡 TIP: ADD TO YOUR INSTA BIO
+          </p>
+        </footer>
 
       </main>
 
@@ -423,7 +413,17 @@ export default function DashboardClient() {
                         setDykmQuestions(newQ);
                       }}
                     />
-                           <input 
+                    <input 
+                      placeholder="Hint (optional but recommended)"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      value={q.hint}
+                      onChange={(e) => {
+                        const newQ = [...dykmQuestions];
+                        newQ[idx].hint = e.target.value;
+                        setDykmQuestions(newQ);
+                      }}
+                    />
+                    <input 
                       placeholder="Correct Answer"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                       value={q.answer}
