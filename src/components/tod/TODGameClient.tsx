@@ -1,5 +1,5 @@
 // src/components/tod/TODGameClient.tsx
-// FIXED: Chat enabled in waiting room and finished state
+// Improved: Scroll only when user is at bottom, not forced
 
 "use client";
 
@@ -27,6 +27,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const previousMessageCount = useRef(0);
 
   const {
     lobby,
@@ -44,13 +46,29 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     cleanup
   } = useGameLogic(lobbyId, profile?.id);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Smart scroll: only auto-scroll if user is near bottom
+  const scrollToBottom = (force = false) => {
+    if (!messagesContainerRef.current || !messagesEndRef.current) return;
+
+    const container = messagesContainerRef.current;
+    const scrollThreshold = 150; // pixels from bottom
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isNearBottom = distanceFromBottom < scrollThreshold;
+
+    // Only auto-scroll if user is near bottom OR forced (like when sending a message)
+    if (force || isNearBottom) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
+  // Auto-scroll only when new messages arrive AND user is at bottom
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (messages.length > previousMessageCount.current) {
+      // New message arrived - scroll only if user is at bottom
+      scrollToBottom(false);
+      previousMessageCount.current = messages.length;
+    }
+  }, [messages.length]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -88,6 +106,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       : 'chat';
 
     await sendMessage(content, imageUrl, messageType, profile?.username);
+    
+    // Force scroll to bottom when user sends a message
+    setTimeout(() => scrollToBottom(true), 100);
   };
 
   const handleUploadImage = async (file: File): Promise<string | null> => {
@@ -106,52 +127,20 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const isAsker = profile?.id === lobby?.current_asker_id;
   const isHost = profile?.id === lobby?.host_id;
 
-  // FIXED: Chat permissions - allow chat in waiting and finished states
   const canSendMessage = () => {
-    console.log('🔍 Checking chat permissions:', {
-      status: lobby?.status,
-      selected_mode: lobby?.selected_mode,
-      current_question: lobby?.current_question,
-      isAsker,
-      isTarget
-    });
-
-    // ✅ ALWAYS allow chat in waiting room
-    if (lobby?.status === 'waiting') {
-      console.log('✅ Chat allowed: Waiting room');
-      return true;
-    }
+    // Always allow chat in waiting room
+    if (lobby?.status === 'waiting') return true;
     
-    // ✅ ALWAYS allow chat when game is finished
-    if (lobby?.status === 'finished') {
-      console.log('✅ Chat allowed: Game finished');
-      return true;
-    }
+    // Always allow chat when game is finished
+    if (lobby?.status === 'finished') return true;
     
     // During active game - role-specific restrictions
     if (lobby?.status === 'active') {
-      // No mode selected yet - only target can select (not chat)
-      if (!lobby?.selected_mode) {
-        console.log('❌ Chat disabled: Waiting for mode selection');
-        return false;
-      }
-      
-      // Mode selected but no question - only asker can ask
-      if (lobby?.selected_mode && !lobby?.current_question) {
-        const allowed = isAsker;
-        console.log(allowed ? '✅ Chat allowed: Asker can ask' : '❌ Chat disabled: Only asker can ask');
-        return allowed;
-      }
-      
-      // Question asked - only target can answer
-      if (lobby?.current_question) {
-        const allowed = isTarget;
-        console.log(allowed ? '✅ Chat allowed: Target can answer' : '❌ Chat disabled: Only target can answer');
-        return allowed;
-      }
+      if (!lobby?.selected_mode) return false;
+      if (lobby?.selected_mode && !lobby?.current_question) return isAsker;
+      if (lobby?.current_question) return isTarget;
     }
     
-    console.log('❌ Chat disabled: Unknown state');
     return false;
   };
 
@@ -322,7 +311,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
           {/* Chat Area */}
           <main className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+            >
               {lobby.status === 'waiting' && (
                 <WaitingRoom
                   isHost={isHost}
@@ -340,7 +332,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 />
               )}
 
-              {/* Show messages in all states */}
+              {/* Messages */}
               {messages.map((msg) => (
                 <MessageBubble
                   key={msg.id}
@@ -381,6 +373,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 </div>
               )}
 
+              {/* Scroll anchor */}
               <div ref={messagesEndRef} />
             </div>
 
