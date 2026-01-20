@@ -165,16 +165,18 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const isHost = profile?.id === lobby?.host_id;
 
   const canSendMessage = () => {
+    // Allow chat in waiting and finished states for everyone
     if (lobby?.status === 'waiting') return true;
     if (lobby?.status === 'finished') return true;
     
+    // During active game, only asker and target can send messages
     if (lobby?.status === 'active') {
-      // Target can select mode
-      if (!lobby?.selected_mode && isTarget) return false; // They use mode selector
       // Asker can ask question after mode is selected
-      if (lobby?.selected_mode && !lobby?.current_question) return isAsker;
+      if (lobby?.selected_mode && !lobby?.current_question && isAsker) return true;
       // Target can answer question
-      if (lobby?.current_question) return isTarget;
+      if (lobby?.current_question && isTarget) return true;
+      // Spectators cannot chat during active game
+      return false;
     }
     
     return false;
@@ -183,13 +185,23 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const getInputPlaceholder = () => {
     if (lobby?.status === 'waiting') return "Chat with everyone...";
     if (lobby?.status === 'finished') return "Chat with everyone...";
-    if (!lobby?.selected_mode && isTarget) return "Select truth or dare above...";
-    if (!lobby?.selected_mode) return "Waiting for mode selection...";
-    if (lobby?.selected_mode && !lobby?.current_question) {
-      return isAsker ? `Ask a ${lobby.selected_mode} question...` : "Waiting for question...";
-    }
-    if (lobby?.current_question) {
-      return isTarget ? "Type your answer..." : "Waiting for answer...";
+    if (lobby?.status === 'active') {
+      if (!lobby?.selected_mode && isTarget) return "Select truth or dare above...";
+      if (!lobby?.selected_mode && !isTarget) return "Waiting for mode selection...";
+      if (lobby?.selected_mode && !lobby?.current_question && isAsker) {
+        return `Ask a ${lobby.selected_mode} question...`;
+      }
+      if (lobby?.selected_mode && !lobby?.current_question && !isAsker) {
+        return "Waiting for question...";
+      }
+      if (lobby?.current_question && isTarget) {
+        return "Type your answer...";
+      }
+      if (lobby?.current_question && !isTarget) {
+        return "Spectating - wait for next round...";
+      }
+      // Default for spectators
+      return "Spectating - chat disabled during game...";
     }
     return "Type a message...";
   };
@@ -232,8 +244,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
 
       <div className="relative z-10 h-screen flex flex-col">
-        {/* Top Header */}
-        <header className="flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/50 border-b border-slate-800/50">
+        {/* Top Header - STICKY */}
+        <header className="sticky top-0 z-20 flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/50 border-b border-slate-800/50">
           <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <button
@@ -290,6 +302,15 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 >
                   <StopCircle size={14} />
                   <span className="hidden sm:inline">End</span>
+                </button>
+              )}
+              {isHost && lobby.status === 'finished' && messages.length > 3 && (
+                <button
+                  onClick={handleStartGame}
+                  className="px-3 py-1.5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs font-bold hover:shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 flex items-center gap-1.5"
+                >
+                  <Play size={14} />
+                  <span className="hidden sm:inline">Play Again</span>
                 </button>
               )}
               <button
@@ -370,9 +391,21 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               ))}
 
               {/* Next Round Button - only shows after answer is given */}
-              {lobby.status === 'active' && lobby.current_question && isHost && 
-               messages.some(m => m.message_type === 'answer' && m.question_ref === messages.find(q => q.content === lobby.current_question)?.id) && (
-                <NextRoundButton onNextRound={handleNextRound} />
+              {lobby.status === 'active' && lobby.current_question && isHost && (
+                (() => {
+                  // Find the current question message
+                  const currentQuestionMsg = messages.find(m => 
+                    (m.message_type === 'truth' || m.message_type === 'dare') && 
+                    m.content === lobby.current_question
+                  );
+                  // Check if there's an answer for this question
+                  const hasAnswer = currentQuestionMsg && messages.some(m => 
+                    m.message_type === 'answer' && 
+                    m.question_ref === currentQuestionMsg.id
+                  );
+                  
+                  return hasAnswer ? <NextRoundButton onNextRound={handleNextRound} /> : null;
+                })()
               )}
 
               {lobby.status === 'finished' && (
@@ -383,7 +416,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   <h3 className="text-2xl font-bold text-white mb-2">Game Ended!</h3>
                   <p className="text-slate-400 text-sm mb-6">Thanks for playing!</p>
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                    {isHost && (
+                    {isHost && messages.length <= 3 && (
                       <button
                         onClick={handleStartGame}
                         className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 inline-flex items-center gap-2"
@@ -406,9 +439,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Mode Selector - Shows when target needs to select */}
+            {/* Mode Selector - Shows when target needs to select - STICKY */}
             {lobby.status === 'active' && !lobby.selected_mode && isTarget && (
-              <div className="flex-shrink-0 px-4 py-4 border-t border-slate-800/50 backdrop-blur-xl bg-slate-900/50">
+              <div className="sticky bottom-0 z-20 flex-shrink-0 px-4 py-4 border-t border-slate-800/50 backdrop-blur-xl bg-slate-900/50">
                 <ModeSelector
                   isTarget={isTarget}
                   targetUsername={targetUser?.profiles?.username}
@@ -419,7 +452,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             )}
 
             {/* Chat Input - STICKY AT BOTTOM */}
-            <div className="flex-shrink-0">
+            <div className="sticky bottom-0 z-10 flex-shrink-0">
               <ChatInput
                 canSend={canSendMessage()}
                 placeholder={getInputPlaceholder()}
