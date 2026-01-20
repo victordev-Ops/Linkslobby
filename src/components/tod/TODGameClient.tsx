@@ -49,9 +49,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     return messages.map(msg => {
       if (msg.message_type === 'truth' || msg.message_type === 'dare') {
         const answer = messages.find(m => m.message_type === 'answer' && m.question_ref === msg.id);
-        return { ...msg, answerMessage: answer };
+        return { ...msg, answerMessage: answer } as typeof msg & { answerMessage?: typeof msg };
       }
-      return msg;
+      return msg as typeof msg & { answerMessage?: typeof msg };
     });
   }, [messages]);
 
@@ -433,4 +433,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     </div>
   );
-  }
+}
