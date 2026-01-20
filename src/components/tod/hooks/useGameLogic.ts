@@ -86,11 +86,20 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         schema: 'public', 
         table: 'tod_messages', 
         filter: `lobby_id=eq.${lobbyId}` 
-      }, (payload) => {
-        setMessages(prev => {
-          if (prev.some(m => m.id === payload.new.id)) return prev;
-          return [...prev, { ...payload.new, status: 'sent' as const } as Message];
-        });
+      }, async (payload) => {
+        // Fetch the complete message with profile data
+        const { data } = await supabase
+          .from('tod_messages')
+          .select('*, profiles(username)')
+          .eq('id', payload.new.id)
+          .single();
+        
+        if (data) {
+          setMessages(prev => {
+            if (prev.some(m => m.id === data.id)) return prev;
+            return [...prev, { ...data, status: 'sent' as const } as Message];
+          });
+        }
       })
       .on('postgres_changes', { 
         event: '*', 
@@ -184,16 +193,20 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
     try {
       // Insert message
-      const { error } = await supabase.from('tod_messages').insert({
+      const { data, error } = await supabase.from('tod_messages').insert({
         lobby_id: lobbyId, 
         user_id: userId, 
         content, 
         image_url: imageUrl, 
         message_type: messageType,
         question_ref: questionRef
-      });
+      }).select('id').single();
 
       if (error) throw error;
+
+      // Remove optimistic message after successful insert
+      // The real message will come through the realtime subscription
+      setMessages(prev => prev.filter(m => m.id !== tempId));
 
       // If this is a question (truth/dare), update lobby with the question
       if ((messageType === 'truth' || messageType === 'dare') && userId === lobby.current_asker_id) {
