@@ -61,7 +61,7 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }:
                   </div>
                   <div>
                     <p className="text-white font-bold text-sm">
-                      {message.profiles?.username || 'Unknown'}
+                      {isOwn ? 'You' : (message.profiles?.username || 'Anonymous')}
                     </p>
                     <p className={`text-xs font-bold uppercase ${
                       message.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
@@ -103,7 +103,7 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }:
                       <CheckCheck size={12} className="text-white" />
                     </div>
                     <p className="text-xs font-bold text-green-400 uppercase">
-                      Answer from {answerMessage.profiles?.username}
+                      Answer from {answerMessage.profiles?.username || 'Anonymous'}
                     </p>
                   </div>
                   <p className="text-slate-200 text-sm leading-relaxed whitespace-pre-wrap break-words">
@@ -148,7 +148,7 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }:
 
       <div className={`max-w-xs sm:max-w-md flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
         <p className={`text-xs mb-1 ${isOwn ? 'text-slate-400' : 'text-slate-500'}`}>
-          {message.profiles?.username || 'Unknown'}
+          {isOwn ? 'You' : (message.profiles?.username || 'Anonymous')}
         </p>
         
         <div className={`rounded-2xl px-4 py-2 ${
@@ -194,3 +194,4 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }:
     </div>
   );
 };
+          
