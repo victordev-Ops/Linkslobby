@@ -1,6 +1,6 @@
 // src/components/tod/ui/MessageBubble.tsx
-import { User, CheckCheck, Clock, Image as ImageIcon } from 'lucide-react';
-import { useState } from 'react';
+import { User, CheckCheck, Clock, Image as ImageIcon, Reply, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 
 interface Message {
   id: string;
@@ -17,12 +17,74 @@ interface Message {
 interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
-  answerMessage?: Message; // The answer to this question, if any
+  answerMessage?: Message;
   onMessageClick?: (messageId: string) => void;
+  onReply?: (message: Message) => void;
+  replyingTo?: Message | null;
 }
 
-export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }: MessageBubbleProps) => {
+export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, onReply, replyingTo }: MessageBubbleProps) => {
   const [imageError, setImageError] = useState(false);
+  const [swipeDistance, setSwipeDistance] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const messageRef = useRef<HTMLDivElement>(null);
+
+  const SWIPE_THRESHOLD = 70; // pixels to trigger reply
+  const MAX_SWIPE = 100; // maximum swipe distance
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Don't allow swipe on system messages
+    if (message.message_type === 'system') return;
+    
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSwiping) return;
+
+    const touchCurrentX = e.touches[0].clientX;
+    const touchCurrentY = e.touches[0].clientY;
+    const deltaX = touchCurrentX - touchStartX.current;
+    const deltaY = touchCurrentY - touchStartY.current;
+
+    // Only allow horizontal swipe (not vertical scroll)
+    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      setIsSwiping(false);
+      setSwipeDistance(0);
+      return;
+    }
+
+    // Prevent vertical scrolling while swiping horizontally
+    if (Math.abs(deltaX) > 10) {
+      e.preventDefault();
+    }
+
+    // Swipe from right to left for own messages, left to right for others
+    const swipeDirection = isOwn ? -deltaX : deltaX;
+    
+    if (swipeDirection > 0) {
+      const clampedDistance = Math.min(swipeDirection, MAX_SWIPE);
+      setSwipeDistance(clampedDistance);
+    } else {
+      setSwipeDistance(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (swipeDistance > SWIPE_THRESHOLD && onReply) {
+      onReply(message);
+    }
+    setSwipeDistance(0);
+    setIsSwiping(false);
+  };
+
+  const swipeProgress = Math.min(swipeDistance / SWIPE_THRESHOLD, 1);
+  const replyIconOpacity = swipeProgress;
+  const replyIconScale = 0.5 + (swipeProgress * 0.5);
 
   // System messages
   if (message.message_type === 'system') {
@@ -47,8 +109,31 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }:
     return (
       <div 
         id={`message-${message.id}`}
-        className="flex flex-col gap-3 my-4 scroll-mt-20"
+        className="flex flex-col gap-3 my-4 scroll-mt-20 relative"
+        ref={messageRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          transform: `translateX(${isOwn ? -swipeDistance : swipeDistance}px)`,
+          transition: isSwiping ? 'none' : 'transform 0.3s ease-out'
+        }}
       >
+        {/* Reply Icon */}
+        {swipeDistance > 0 && (
+          <div 
+            className={`absolute top-1/2 -translate-y-1/2 ${isOwn ? 'left-4' : 'right-4'} z-10`}
+            style={{
+              opacity: replyIconOpacity,
+              transform: `translateY(-50%) scale(${replyIconScale})`
+            }}
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center">
+              <Reply size={20} className="text-slate-300" />
+            </div>
+          </div>
+        )}
+
         {/* Question Card */}
         <div className={`max-w-lg ${isOwn ? 'ml-auto' : 'mr-auto'} w-full`}>
           <div className={`bg-gradient-to-br ${modeGradient} p-0.5 rounded-2xl shadow-lg`}>
@@ -136,8 +221,31 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }:
   return (
     <div 
       id={`message-${message.id}`}
-      className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'} scroll-mt-20`}
+      className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'} scroll-mt-20 relative`}
+      ref={messageRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        transform: `translateX(${isOwn ? -swipeDistance : swipeDistance}px)`,
+        transition: isSwiping ? 'none' : 'transform 0.3s ease-out'
+      }}
     >
+      {/* Reply Icon */}
+      {swipeDistance > 0 && (
+        <div 
+          className={`absolute top-1/2 -translate-y-1/2 ${isOwn ? 'left-2' : 'right-2'} z-10`}
+          style={{
+            opacity: replyIconOpacity,
+            transform: `translateY(-50%) scale(${replyIconScale})`
+          }}
+        >
+          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+            <Reply size={16} className="text-slate-300" />
+          </div>
+        </div>
+      )}
+
       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
         isOwn 
           ? 'bg-gradient-to-br from-red-500 to-orange-500' 
