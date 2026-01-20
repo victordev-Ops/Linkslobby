@@ -24,6 +24,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<typeof messages[0] | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const previousMessageCount = useRef(0);
@@ -133,7 +134,18 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       }
     }
 
-    await sendMessage(content, imageUrl, messageType, profile?.username, questionRef);
+    // Add reply context to message if replying
+    let finalContent = content;
+    if (replyingTo) {
+      const replyUsername = replyingTo.profiles?.username || 'Someone';
+      const replyPreview = replyingTo.content.length > 50 
+        ? replyingTo.content.substring(0, 50) + '...' 
+        : replyingTo.content;
+      finalContent = `@${replyUsername}: ${replyPreview}\n\n${content}`;
+    }
+
+    await sendMessage(finalContent, imageUrl, messageType, profile?.username, questionRef);
+    setReplyingTo(null); // Clear reply after sending
     setTimeout(() => scrollToBottom(true), 100);
   };
 
@@ -164,6 +176,15 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     }
   };
 
+  const handleReply = (message: typeof messages[0]) => {
+    setReplyingTo(message);
+    // Focus on input (implement in ChatInput)
+  };
+
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
+
   const isTarget = profile?.id === lobby?.current_target_id;
   const isAsker = profile?.id === lobby?.current_asker_id;
   const isHost = profile?.id === lobby?.host_id;
@@ -173,13 +194,27 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     if (lobby?.status === 'waiting') return true;
     if (lobby?.status === 'finished') return true;
     
-    // During active game, only asker and target can send messages
+    // During active game
     if (lobby?.status === 'active') {
       // Asker can ask question after mode is selected
       if (lobby?.selected_mode && !lobby?.current_question && isAsker) return true;
       // Target can answer question
       if (lobby?.current_question && isTarget) return true;
-      // Spectators cannot chat during active game
+      
+      // After target answers, everyone can chat until next round
+      if (lobby?.current_question) {
+        const currentQuestionMsg = messages.find(m => 
+          (m.message_type === 'truth' || m.message_type === 'dare') && 
+          m.content === lobby.current_question
+        );
+        const hasAnswer = currentQuestionMsg && messages.some(m => 
+          m.message_type === 'answer' && 
+          m.question_ref === currentQuestionMsg.id
+        );
+        if (hasAnswer) return true; // Everyone can chat after answer
+      }
+      
+      // Otherwise spectators cannot chat
       return false;
     }
     
@@ -199,10 +234,30 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         return "Waiting for question...";
       }
       if (lobby?.current_question && isTarget) {
+        // Check if target already answered
+        const currentQuestionMsg = messages.find(m => 
+          (m.message_type === 'truth' || m.message_type === 'dare') && 
+          m.content === lobby.current_question
+        );
+        const hasAnswer = currentQuestionMsg && messages.some(m => 
+          m.message_type === 'answer' && 
+          m.question_ref === currentQuestionMsg.id
+        );
+        if (hasAnswer) return "Chat with everyone...";
         return "Type your answer...";
       }
       if (lobby?.current_question && !isTarget) {
-        return "Spectating - wait for next round...";
+        // Check if answer has been given
+        const currentQuestionMsg = messages.find(m => 
+          (m.message_type === 'truth' || m.message_type === 'dare') && 
+          m.content === lobby.current_question
+        );
+        const hasAnswer = currentQuestionMsg && messages.some(m => 
+          m.message_type === 'answer' && 
+          m.question_ref === currentQuestionMsg.id
+        );
+        if (hasAnswer) return "Chat with everyone...";
+        return "Waiting for answer...";
       }
       // Default for spectators
       return "Spectating - chat disabled during game...";
@@ -391,6 +446,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   message={msg}
                   isOwn={msg.user_id === profile?.id}
                   answerMessage={msg.answerMessage}
+                  onReply={handleReply}
+                  replyingTo={replyingTo}
                 />
               ))}
 
@@ -428,49 +485,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                         onClick={handleStartGame}
                         className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 inline-flex items-center gap-2"
                       >
-                        <Play size={20} />
-                        Play Again
-                      </button>
-                    )}
-                    <button
-                      onClick={handleLeaveLobby}
-                      className="bg-slate-800 border border-slate-700 text-white px-8 py-3 rounded-full font-bold hover:bg-slate-700 transition-all active:scale-95 inline-flex items-center gap-2"
-                    >
-                      <ArrowLeft size={20} />
-                      Back to Lobbies
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Mode Selector - Shows when target needs to select - STICKY */}
-            {lobby.status === 'active' && !lobby.selected_mode && isTarget && (
-              <div className="sticky bottom-0 z-20 flex-shrink-0 px-4 py-4 border-t border-slate-800/50 backdrop-blur-xl bg-slate-900/50">
-                <ModeSelector
-                  isTarget={isTarget}
-                  targetUsername={targetUser?.profiles?.username}
-                  onSelectMode={handleSelectMode}
-                  timeRemaining={timeRemaining}
-                />
-              </div>
-            )}
-
-            {/* Chat Input - STICKY AT BOTTOM */}
-            <div className="sticky bottom-0 z-10 flex-shrink-0">
-              <ChatInput
-                canSend={canSendMessage()}
-                placeholder={getInputPlaceholder()}
-                isUploading={isUploading}
-                onSend={handleSendMessage}
-                onUploadImage={handleUploadImage}
-              />
-            </div>
-          </main>
-        </div>
-      </div>
-    </div>
-  );
-}
+        
