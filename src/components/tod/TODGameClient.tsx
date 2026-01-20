@@ -44,21 +44,20 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     cleanup
   } = useGameLogic(lobbyId, profile?.id);
 
-  // Group messages with their answers
+  // Group messages with their answers - efficient O(n) with question_ref
   const messagesWithAnswers = useMemo(() => {
     return messages.map(msg => {
       if (msg.message_type === 'truth' || msg.message_type === 'dare') {
-        // Find answer: it's the next 'answer' type message after this question
-        const msgIndex = messages.findIndex(m => m.id === msg.id);
-        const answer = messages.slice(msgIndex + 1).find(m => 
+        // Find answer by question_ref foreign key - O(n) single pass
+        const answer = messages.find(m => 
           m.message_type === 'answer' && 
-          m.user_id === lobby?.current_target_id
+          m.question_ref === msg.id
         );
         return { ...msg, answerMessage: answer } as typeof msg & { answerMessage?: typeof msg };
       }
       return msg as typeof msg & { answerMessage?: typeof msg };
     });
-  }, [messages, lobby?.current_target_id]);
+  }, [messages]);
 
   // Smart scroll: only auto-scroll if user is near bottom
   const scrollToBottom = (force = false) => {
@@ -114,6 +113,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     const isTarget = profile?.id === lobby?.current_target_id;
     
     let messageType: 'chat' | 'truth' | 'dare' | 'system' | 'answer' = 'chat';
+    let questionRef: string | undefined;
 
     // Determine message type based on game state
     if (lobby?.status === 'active') {
@@ -124,10 +124,16 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       // If target is answering the question
       else if (isTarget && lobby?.current_question) {
         messageType = 'answer';
+        // Find the question message ID for the foreign key reference
+        const questionMsg = messages.find(m => 
+          (m.message_type === 'truth' || m.message_type === 'dare') && 
+          m.content === lobby.current_question
+        );
+        questionRef = questionMsg?.id;
       }
     }
 
-    await sendMessage(content, imageUrl, messageType, profile?.username);
+    await sendMessage(content, imageUrl, messageType, profile?.username, questionRef);
     setTimeout(() => scrollToBottom(true), 100);
   };
 
@@ -388,7 +394,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 />
               ))}
 
-              {/* Next Round Button - only shows after answer is given */}
+              {/* Next Round Button - efficiently checks for answer via question_ref */}
               {lobby.status === 'active' && lobby.current_question && isHost && (
                 (() => {
                   // Find the current question message
@@ -399,10 +405,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   
                   if (!currentQuestionMsg) return null;
                   
-                  // Find answer: look for 'answer' type message after the question
-                  const questionIndex = messages.findIndex(m => m.id === currentQuestionMsg.id);
-                  const hasAnswer = messages.slice(questionIndex + 1).some(m => 
-                    m.message_type === 'answer'
+                  // Check if there's an answer with matching question_ref - O(n) single pass
+                  const hasAnswer = messages.some(m => 
+                    m.message_type === 'answer' && 
+                    m.question_ref === currentQuestionMsg.id
                   );
                   
                   return hasAnswer ? <NextRoundButton onNextRound={handleNextRound} /> : null;
@@ -467,4 +473,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     </div>
   );
-      }
+}
