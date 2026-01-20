@@ -32,6 +32,7 @@ interface Message {
   created_at: string;
   status?: 'sending' | 'sent' | 'error';
   profiles?: { username: string };
+  question_ref?: string; // Foreign key to the question message
 }
 
 export const useGameLogic = (lobbyId: string, userId?: string) => {
@@ -170,7 +171,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     content: string, 
     imageUrl: string | null, 
     messageType: 'chat' | 'truth' | 'dare' | 'system' | 'answer', 
-    username?: string
+    username?: string,
+    questionRef?: string
   ) => {
     if (!userId || !lobby) return;
 
@@ -185,17 +187,19 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       message_type: messageType, 
       created_at: new Date().toISOString(), 
       status: 'sending',
-      profiles: { username: username || 'You' }
+      profiles: { username: username || 'You' },
+      question_ref: questionRef
     }]);
 
     try {
-      // Insert message (without question_ref since it doesn't exist in DB)
+      // Insert message with question_ref for answers
       const { data, error } = await supabase.from('tod_messages').insert({
         lobby_id: lobbyId, 
         user_id: userId, 
         content, 
         image_url: imageUrl, 
-        message_type: messageType
+        message_type: messageType,
+        question_ref: questionRef || null // Only set for answer messages
       }).select('id').single();
 
       if (error) throw error;
@@ -293,4 +297,3 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     cleanup
   };
 };
-  
