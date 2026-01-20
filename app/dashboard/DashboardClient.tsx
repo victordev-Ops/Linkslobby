@@ -1,28 +1,38 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { 
-  Copy, Check, MessageCircleQuestion, Loader2, Share2, 
+import {
+  Copy, Check, MessageCircleQuestion, Loader2, Share2,
   LayoutGrid, Lock, ChevronDown, Brain, X, Save,
   Dices, Sparkles, Flame
 } from "lucide-react"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation" 
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/AuthContext"
 import { createClient } from "@/lib/supabase/client"
 import XPBalance from "@/components/XPBalance"
 
-export default function DashboardClient() {
-  const { user, profile, loading } = useAuth()
+interface DashboardClientProps {
+  initialDykmQuestions?: any[]
+  serverProfile?: any
+}
+
+export default function DashboardClient({ initialDykmQuestions, serverProfile }: DashboardClientProps) {
+  const { user: authUser, profile: authProfile, loading: authLoading } = useAuth()
   const [supabase] = useState(() => createClient())
-  
+
+  // Use server data if available, otherwise fall back to auth context
+  // This allows immediate rendering while hydration happens
+  const profile = serverProfile || authProfile
+  const loading = !profile && authLoading
+
   // Link States
   const [heroCopied, setHeroCopied] = useState(false)
   const [dykmCopied, setDykmCopied] = useState(false)
   const [amaCopied, setAmaCopied] = useState(false)
   const [confessCopied, setConfessCopied] = useState(false)
   const [hotSeatCopied, setHotSeatCopied] = useState(false)
-  
+
   // Accordion States
   const [isAmaOpen, setIsAmaOpen] = useState(false)
   const [isConfessOpen, setIsConfessOpen] = useState(false)
@@ -31,45 +41,30 @@ export default function DashboardClient() {
   const [isHotSeatOpen, setIsHotSeatOpen] = useState(false)
 
   // DYKM Logic
-  const [hasDykm, setHasDykm] = useState(false)
+  const [hasDykm, setHasDykm] = useState(!!initialDykmQuestions)
   const [isDykmModalOpen, setIsDykmModalOpen] = useState(false)
   const [isSavingDykm, setIsSavingDykm] = useState(false)
-  const [dykmQuestions, setDykmQuestions] = useState([
+  const [dykmQuestions, setDykmQuestions] = useState(initialDykmQuestions || [
     { question: "", hint: "", answer: "" },
     { question: "", hint: "", answer: "" },
     { question: "", hint: "", answer: "" },
   ])
-  
+
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        router.push('/login')
-      } else if (!profile) {
-        router.push('/auth/setup')
-      } else {
-        checkDykmStatus()
-      }
+    if (!loading && !profile) {
+      // If not loading and no profile (neither server nor client), redirect
+      // But Middleware should have caught this generally.
+      router.push('/login')
     }
-  }, [user, profile, loading, router])
+  }, [profile, loading, router])
 
-  const checkDykmStatus = async () => {
-    if (!profile) return
-    const { data } = await supabase
-      .from('dykm_quizzes')
-      .select('user_id, questions')
-      .eq('user_id', profile.id)
-      .maybeSingle()
-    
-    if (data) {
-      setHasDykm(true)
-      setDykmQuestions(data.questions)
-    }
-  }
+  // Removed checkDykmStatus since we pass it from server
+  // or we could keep it as a re-verification if needed, but for speed we rely on server prop
 
   const handleSaveDykm = async () => {
-    if (dykmQuestions.some(q => !q.question || !q.answer)) {
+    if (dykmQuestions.some((q: any) => !q.question || !q.answer)) {
       toast.error("Please fill in all questions and answers")
       return
     }
@@ -148,7 +143,7 @@ export default function DashboardClient() {
       </nav>
 
       <main className="max-w-xl mx-auto px-4 py-8 space-y-8">
-        
+
         {/* Hero Section */}
         <section className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100">
           {/* Profile Section - Top Right */}
@@ -173,8 +168,8 @@ export default function DashboardClient() {
               <div className="pl-3 text-slate-400 shrink-0">
                 <Share2 size={16} />
               </div>
-              <input 
-                readOnly 
+              <input
+                readOnly
                 value={anonymousUrl}
                 className="flex-1 bg-transparent py-2 text-xs font-semibold text-slate-600 focus:outline-none truncate"
               />
@@ -196,10 +191,10 @@ export default function DashboardClient() {
           </div>
 
           <div className="grid grid-cols-1 gap-3">
-            
+
             {/* Truth or Dare Card */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
-              <div 
+              <div
                 onClick={() => setIsTodOpen(!isTodOpen)}
                 className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
               >
@@ -227,8 +222,8 @@ export default function DashboardClient() {
                       How it works: Create a lobby and share the link. Everyone takes turns asking or being the target. Real-time multiplayer fun!
                     </p>
                   </div>
-                  
-                  <button 
+
+                  <button
                     onClick={handleNavigateToTod}
                     className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition flex items-center justify-center gap-2"
                   >
@@ -241,65 +236,65 @@ export default function DashboardClient() {
 
             {/* DYKM Card */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
-               <div 
-                 onClick={() => setIsDykmOpen(!isDykmOpen)}
-                 className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
-               >
-                 <div className="w-12 h-12 shrink-0 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                   <Brain size={24} />
-                 </div>
-                 <div className="flex-1 min-w-0">
-                   <h3 className="font-bold text-slate-900 text-base">Do You Know Me?</h3>
-                   <p className="text-slate-400 text-xs line-clamp-1">Create a quiz to test your friends</p>
-                 </div>
-                 <ChevronDown size={18} className={`text-slate-300 transition-transform duration-300 ${isDykmOpen ? "rotate-180" : ""}`} />
-               </div>
+              <div
+                onClick={() => setIsDykmOpen(!isDykmOpen)}
+                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
+              >
+                <div className="w-12 h-12 shrink-0 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <Brain size={24} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-slate-900 text-base">Do You Know Me?</h3>
+                  <p className="text-slate-400 text-xs line-clamp-1">Create a quiz to test your friends</p>
+                </div>
+                <ChevronDown size={18} className={`text-slate-300 transition-transform duration-300 ${isDykmOpen ? "rotate-180" : ""}`} />
+              </div>
 
-               {isDykmOpen && (
-                 <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                   <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-                     <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
-                       How it works: Create 3 personal questions. Friends answer them to see how well they really know you.
-                     </p>
-                   </div>
-                   
-                   {!hasDykm ? (
-                     <button 
-                       onClick={() => setIsDykmModalOpen(true)}
-                       className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition"
-                     >
-                       Create My Quiz
-                     </button>
-                   ) : (
-                     <div className="space-y-3">
-                        <div className="flex items-center gap-2 p-1 bg-slate-50 border border-slate-200 rounded-xl">
-                         <input 
-                           readOnly 
-                           value={dykmUrl}
-                           className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 focus:outline-none truncate"
-                         />
-                         <button
-                           onClick={() => handleCopy(dykmUrl, 'dykm')}
-                           className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${dykmCopied ? "bg-green-500 border-green-500 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"}`}
-                         >
-                           {dykmCopied ? <Check size={14} /> : <Copy size={14} />}
-                         </button>
-                       </div>
-                       <button 
-                         onClick={() => setIsDykmModalOpen(true)}
-                         className="w-full py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-[10px] hover:bg-slate-50 transition"
-                       >
-                         Edit Questions
-                       </button>
-                     </div>
-                   )}
-                 </div>
-               )}
+              {isDykmOpen && (
+                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                    <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
+                      How it works: Create 3 personal questions. Friends answer them to see how well they really know you.
+                    </p>
+                  </div>
+
+                  {!hasDykm ? (
+                    <button
+                      onClick={() => setIsDykmModalOpen(true)}
+                      className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition"
+                    >
+                      Create My Quiz
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-1 bg-slate-50 border border-slate-200 rounded-xl">
+                        <input
+                          readOnly
+                          value={dykmUrl}
+                          className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 focus:outline-none truncate"
+                        />
+                        <button
+                          onClick={() => handleCopy(dykmUrl, 'dykm')}
+                          className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${dykmCopied ? "bg-green-500 border-green-500 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+                        >
+                          {dykmCopied ? <Check size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setIsDykmModalOpen(true)}
+                        className="w-full py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-[10px] hover:bg-slate-50 transition"
+                      >
+                        Edit Questions
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* AMA Sticker Card */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
-              <div 
+              <div
                 onClick={() => setIsAmaOpen(!isAmaOpen)}
                 className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
               >
@@ -320,10 +315,10 @@ export default function DashboardClient() {
                       How it works: Share this link on your Instagram story. Friends can tap it to ask you anything anonymously.
                     </p>
                   </div>
-                  
+
                   <div className="flex items-center gap-2 p-1 bg-slate-50 border border-slate-200 rounded-xl">
-                    <input 
-                      readOnly 
+                    <input
+                      readOnly
                       value={amaUrl}
                       className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 focus:outline-none truncate"
                     />
@@ -340,7 +335,7 @@ export default function DashboardClient() {
 
             {/* Confessions Card */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
-              <div 
+              <div
                 onClick={() => setIsConfessOpen(!isConfessOpen)}
                 className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
               >
@@ -361,10 +356,10 @@ export default function DashboardClient() {
                       How it works: Share this special link. Anyone can send you a secret message without you knowing who they are.
                     </p>
                   </div>
-                  
+
                   <div className="flex items-center gap-2 p-1 bg-slate-50 border border-slate-200 rounded-xl">
-                    <input 
-                      readOnly 
+                    <input
+                      readOnly
                       value={confessUrl}
                       className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 focus:outline-none truncate"
                     />
@@ -381,7 +376,7 @@ export default function DashboardClient() {
 
             {/* Hot Seat Card */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
-              <div 
+              <div
                 onClick={() => setIsHotSeatOpen(!isHotSeatOpen)}
                 className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 transition-colors"
               >
@@ -409,8 +404,8 @@ export default function DashboardClient() {
                       How it works: Join the hot seat and answer burning questions from your friends. Fast-paced and revealing!
                     </p>
                   </div>
-                  
-                  <button 
+
+                  <button
                     onClick={handleNavigateToHotSeat}
                     className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs hover:bg-amber-700 transition flex items-center justify-center gap-2"
                   >
@@ -421,7 +416,7 @@ export default function DashboardClient() {
               )}
             </div>
 
-            
+
           </div>
         </section>
 
@@ -435,14 +430,14 @@ export default function DashboardClient() {
           <div className="bg-white w-full max-w-lg rounded-[2rem] shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
               <h3 className="font-bold text-lg text-slate-900">Create Quiz</h3>
-              <button 
+              <button
                 onClick={() => setIsDykmModalOpen(false)}
                 className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition"
               >
                 <X size={18} />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-8">
               {dykmQuestions.map((q, idx) => (
                 <div key={idx} className="space-y-3">
@@ -452,9 +447,9 @@ export default function DashboardClient() {
                     </span>
                     <span className="text-sm font-bold text-slate-700">Question {idx + 1}</span>
                   </div>
-                  
+
                   <div className="space-y-2">
-                    <input 
+                    <input
                       placeholder="e.g. What is my favorite color?"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                       value={q.question}
@@ -464,7 +459,7 @@ export default function DashboardClient() {
                         setDykmQuestions(newQ);
                       }}
                     />
-                     <input 
+                    <input
                       placeholder="Hint (optional but recommended)"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                       value={q.hint}
@@ -474,7 +469,7 @@ export default function DashboardClient() {
                         setDykmQuestions(newQ);
                       }}
                     />
-                           <input 
+                    <input
                       placeholder="Correct Answer"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                       value={q.answer}
