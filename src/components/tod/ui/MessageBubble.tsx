@@ -194,4 +194,3 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }:
     </div>
   );
 };
-
