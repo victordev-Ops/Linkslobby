@@ -1,5 +1,5 @@
 import { defaultCache } from "@serwist/next/worker";
-import { Serwist, NetworkOnly } from "serwist";
+import { Serwist, NetworkOnly, StaleWhileRevalidate } from "serwist";
 
 // Use 'any' to bypass Next.js missing Service Worker global types
 declare const self: any;
@@ -14,6 +14,26 @@ const serwist = new Serwist({
       // Exclude Supabase/API calls from caching to ensure fresh data
       matcher: /^https:\/\/.*\.supabase\.co\/.*$/,
       handler: new NetworkOnly(),
+    },
+    {
+      // AGGRESSIVE CACHING: Navigation (Pages)
+      // Serve from cache immediately (0ms), then update in background.
+      // This gives the "Native App" feel of zero lag.
+      matcher: ({ request }) => request.mode === "navigate",
+      handler: new StaleWhileRevalidate({
+        cacheName: "pages-cache-v1",
+        plugins: [
+          // Ensure we don't cache 404s or error pages forever
+          {
+            cacheWillUpdate: async ({ response }) => {
+              if (response && response.status === 200) {
+                return response;
+              }
+              return null;
+            },
+          },
+        ],
+      }),
     },
     ...defaultCache,
   ],
@@ -44,21 +64,21 @@ self.addEventListener("push", (event: any) => {
 
   const options = {
     body: data.body || "Someone left a new confession!",
-    
+
     // 'icon' is the large image displayed in the notification body/shade
     icon: "/logo.png",
-    
+
     // 'badge' is the small monochrome icon in the Android status bar
     // IMPORTANT: Use a transparent PNG with only white pixels for this!
     // If you use a colored image here, Android may render it as a white square.
-    badge: "/logo-removebg-preview.png", 
-    
+    badge: "/logo-removebg-preview.png",
+
     vibrate: [100, 50, 100],
-    data: { 
+    data: {
       url: data.url || "/",
-      count: unreadCount 
+      count: unreadCount
     },
-    
+
     // FEATURE 2: Notification Actions (Buttons)
     actions: [
       {
@@ -70,7 +90,7 @@ self.addEventListener("push", (event: any) => {
         title: "Dismiss",
       }
     ],
-    
+
     // Group notifications so they don't spam the user (stack them)
     tag: "new-confession",
     renotify: true // Vibrate/Alert again even if a tag exists
@@ -101,7 +121,7 @@ self.addEventListener("notificationclick", (event: any) => {
   }
 
   const targetUrl = new URL(
-    event.notification.data?.url || "/", 
+    event.notification.data?.url || "/",
     self.location.origin
   ).href;
 
