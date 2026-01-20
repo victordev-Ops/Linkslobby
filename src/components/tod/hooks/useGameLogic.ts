@@ -1,24 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+// src/components/tod/hooks/useGameLogic.ts
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-
-export interface Message {
-  id: string;
-  lobby_id: string;
-  user_id: string;
-  content: string;
-  image_url?: string;
-  message_type: 'chat' | 'truth' | 'dare' | 'system';
-  created_at: string;
-  profiles?: { username: string };
-  status: 'sending' | 'sent' | 'error';
-}
-
-interface Participant {
-  user_id: string;
-  has_gone_this_round: boolean;
-  profiles?: { username: string };
-}
 
 interface Lobby {
   id: string;
@@ -29,6 +12,27 @@ interface Lobby {
   selected_mode?: 'truth' | 'dare';
   current_question?: string;
   turn_started_at?: string;
+  created_at: string;
+}
+
+interface Participant {
+  user_id: string;
+  lobby_id: string;
+  has_gone_this_round: boolean;
+  profiles?: { username: string };
+}
+
+interface Message {
+  id: string;
+  lobby_id: string;
+  user_id: string;
+  content: string;
+  image_url?: string;
+  message_type: 'chat' | 'truth' | 'dare' | 'system' | 'answer';
+  created_at: string;
+  status?: 'sending' | 'sent' | 'error';
+  profiles?: { username: string };
+  question_ref?: string; // Reference to the question message ID
 }
 
 export const useGameLogic = (lobbyId: string, userId?: string) => {
@@ -39,105 +43,244 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-  
-  const channelRef = useRef<any>(null);
 
   const fetchData = useCallback(async () => {
-    if (!lobbyId || lobbyId === 'undefined') return;
-    try {
-      const [lobbyRes, partsRes, msgsRes] = await Promise.all([
-        supabase.from('tod_lobbies').select('*').eq('id', lobbyId).single(),
-        supabase.from('tod_participants').select('*, profiles(username)').eq('lobby_id', lobbyId),
-        supabase.from('tod_messages').select('*, profiles(username)').eq('lobby_id', lobbyId).order('created_at', { ascending: true })
-      ]);
-      if (lobbyRes.error) throw lobbyRes.error;
-      setLobby(lobbyRes.data);
-      setParticipants(partsRes.data || []);
-      setMessages((msgsRes.data || []).map(m => ({ ...m, status: 'sent' })));
+    if (!lobbyId || lobbyId === 'undefined') {
+      setErrorStatus('Invalid lobby ID');
       setIsLoading(false);
-    } catch (err) {
-      setErrorStatus('Failed to load game');
-      setIsLoading(false);
+      return;
     }
+
+    const [lobbyRes, partsRes, msgsRes] = await Promise.all([
+      supabase.from('tod_lobbies').select('*').eq('id', lobbyId).single(),
+      supabase.from('tod_participants').select('*, profiles(username)').eq('lobby_id', lobbyId),
+      supabase.from('tod_messages').select('*, profiles(username)').eq('lobby_id', lobbyId).order('created_at', { ascending: true })
+    ]);
+
+    if (lobbyRes.error) {
+      setErrorStatus('Lobby not found');
+    } else if (lobbyRes.data) {
+      setLobby(lobbyRes.data);
+    }
+
+    if (partsRes.data) setParticipants(partsRes.data);
+    if (msgsRes.data) setMessages(msgsRes.data.map(m => ({ ...m, status: 'sent' as const })));
+    setIsLoading(false);
   }, [lobbyId, supabase]);
 
-  const startNextRound = useCallback(async () => {
-    await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
-  }, [lobbyId, supabase]);
-
-  // REALTIME SUBSCRIPTION
+  // Realtime subscriptions
   useEffect(() => {
     if (!lobbyId || lobbyId === 'undefined') return;
 
     const channel = supabase.channel(`game:${lobbyId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tod_lobbies', filter: `id=eq.${lobbyId}` }, 
-        (p) => setLobby(prev => ({ ...prev, ...p.new } as Lobby))
-      )
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tod_messages', filter: `lobby_id=eq.${lobbyId}` }, 
-        (p) => setMessages(prev => prev.some(m => m.id === p.new.id) ? prev : [...prev, { ...p.new, status: 'sent' } as Message])
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tod_participants', filter: `lobby_id=eq.${lobbyId}` }, 
-        () => fetchData()
-      )
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'tod_lobbies', 
+        filter: `id=eq.${lobbyId}` 
+      }, (payload) => {
+        setLobby(prev => ({ ...prev, ...payload.new } as Lobby));
+      })
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'tod_messages', 
+        filter: `lobby_id=eq.${lobbyId}` 
+      }, (payload) => {
+        setMessages(prev => {
+          if (prev.some(m => m.id === payload.new.id)) return prev;
+          return [...prev, { ...payload.new, status: 'sent' as const } as Message];
+        });
+      })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'tod_participants', 
+        filter: `lobby_id=eq.${lobbyId}` 
+      }, () => {
+        fetchData();
+      })
       .subscribe();
 
-    channelRef.current = channel;
     fetchData();
-    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [lobbyId, supabase, fetchData]);
 
-  // TIMER
+  // Timer for mode selection (target user has 60s to select truth or dare)
   useEffect(() => {
-    if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at) return;
+    if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at || lobby.selected_mode) return;
+
     const interval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - new Date(lobby.turn_started_at!).getTime()) / 1000);
       const remaining = Math.max(0, 60 - elapsed);
       setTimeRemaining(remaining);
-      if (remaining === 0 && userId === lobby.host_id) startNextRound();
+
+      // Auto-select random mode if time runs out
+      if (remaining === 0 && userId === lobby.host_id) {
+        const randomMode = Math.random() > 0.5 ? 'truth' : 'dare';
+        selectMode(randomMode);
+        toast.info(`Time's up! Randomly selected: ${randomMode}`);
+      }
     }, 1000);
+
     return () => clearInterval(interval);
-  }, [lobby?.turn_started_at, lobby?.status, lobby?.host_id, userId, startNextRound]);
+  }, [lobby?.turn_started_at, lobby?.status, lobby?.selected_mode, userId, lobby?.host_id]);
 
   const selectMode = async (mode: 'truth' | 'dare') => {
-    // Optimistic update to hide UI instantly
-    setLobby(prev => prev ? { ...prev, selected_mode: mode } : null);
-    const { error } = await supabase.from('tod_lobbies').update({ selected_mode: mode }).eq('id', lobbyId);
+    if (!lobby || !userId) return;
+
+    // Update lobby with selected mode
+    const { error } = await supabase
+      .from('tod_lobbies')
+      .update({ selected_mode: mode })
+      .eq('id', lobbyId);
+
     if (error) {
-      toast.error("Failed to select mode");
-      fetchData(); // Rollback
+      toast.error('Failed to select mode');
+      return;
+    }
+
+    // Get target username
+    const targetParticipant = participants.find(p => p.user_id === lobby.current_target_id);
+    const targetUsername = targetParticipant?.profiles?.username || 'Someone';
+
+    // Send system message notifying everyone
+    await supabase.from('tod_messages').insert({
+      lobby_id: lobbyId,
+      user_id: userId,
+      content: `${targetUsername} selected ${mode.toUpperCase()}! 🎯`,
+      message_type: 'system'
+    });
+
+    toast.success(`${mode.toUpperCase()} selected!`);
+  };
+
+  const sendMessage = useCallback(async (
+    content: string, 
+    imageUrl: string | null, 
+    messageType: 'chat' | 'truth' | 'dare' | 'system' | 'answer', 
+    username?: string,
+    questionRef?: string
+  ) => {
+    if (!userId || !lobby) return;
+
+    // Optimistic update
+    const tempId = `temp-${Date.now()}`;
+    setMessages(prev => [...prev, { 
+      id: tempId, 
+      lobby_id: lobbyId, 
+      user_id: userId, 
+      content, 
+      image_url: imageUrl || undefined,
+      message_type: messageType, 
+      created_at: new Date().toISOString(), 
+      status: 'sending',
+      profiles: { username: username || 'You' },
+      question_ref: questionRef
+    }]);
+
+    try {
+      // Insert message
+      const { error } = await supabase.from('tod_messages').insert({
+        lobby_id: lobbyId, 
+        user_id: userId, 
+        content, 
+        image_url: imageUrl, 
+        message_type: messageType,
+        question_ref: questionRef
+      });
+
+      if (error) throw error;
+
+      // If this is a question (truth/dare), update lobby with the question
+      if ((messageType === 'truth' || messageType === 'dare') && userId === lobby.current_asker_id) {
+        await supabase
+          .from('tod_lobbies')
+          .update({ current_question: content })
+          .eq('id', lobbyId);
+      }
+
+    } catch (err) {
+      toast.error("Message failed to send");
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    }
+  }, [lobbyId, userId, lobby, supabase]);
+
+  const startNextRound = async () => {
+    const { error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
+    if (error) {
+      toast.error("Failed to start next round");
+      console.error(error);
     }
   };
 
-  const sendMessage = useCallback(async (content: string, imageUrl: string | null, messageType: 'chat' | 'truth' | 'dare' | 'system') => {
-    if (!userId || !lobby) return;
+  const startGame = async () => {
+    const { error } = await supabase
+      .from('tod_lobbies')
+      .update({ status: 'active' })
+      .eq('id', lobbyId);
+
+    if (error) {
+      toast.error('Failed to start game');
+      return;
+    }
+
+    // Start first round
+    await startNextRound();
+  };
+
+  const endGame = async () => {
+    const { error } = await supabase
+      .from('tod_lobbies')
+      .update({ status: 'finished' })
+      .eq('id', lobbyId);
+
+    if (error) {
+      toast.error('Failed to end game');
+    }
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
     try {
-      const { error } = await supabase.from('tod_messages').insert({
-        lobby_id: lobbyId, user_id: userId, content, image_url: imageUrl, message_type: messageType
-      });
+      const path = `${lobbyId}/${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage
+        .from('tod-images')
+        .upload(path, file);
+
       if (error) throw error;
 
-      // If Asker, update lobby so system knows question is asked
-      if (messageType === 'truth' || messageType === 'dare') {
-        await supabase.from('tod_lobbies').update({ current_question: content }).eq('id', lobbyId);
-      }
-      // If Target, schedule next round
-      if (lobby.current_question && userId === lobby.current_target_id) {
-        setTimeout(startNextRound, 3000);
-      }
+      const { data } = supabase.storage
+        .from('tod-images')
+        .getPublicUrl(path);
+
+      return data.publicUrl;
     } catch (err) {
-      toast.error("Send failed");
+      toast.error('Failed to upload image');
+      return null;
     }
-  }, [lobbyId, userId, lobby, supabase, startNextRound]);
+  };
+
+  const cleanup = () => {
+    // Cleanup function for component unmount
+  };
 
   return {
-    lobby, participants, messages, isLoading, errorStatus, timeRemaining,
-    sendMessage, selectMode, startGame: startNextRound, startNextRound,
-    endGame: () => supabase.from('tod_lobbies').update({ status: 'finished' }).eq('id', lobbyId),
-    uploadImage: async (file: File) => {
-      const path = `${lobbyId}/${Date.now()}-${file.name}`;
-      await supabase.storage.from('tod-images').upload(path, file);
-      return supabase.storage.from('tod-images').getPublicUrl(path).data.publicUrl;
-    },
-    cleanup: () => { if (channelRef.current) supabase.removeChannel(channelRef.current); }
+    lobby,
+    participants,
+    messages,
+    isLoading,
+    errorStatus,
+    timeRemaining,
+    sendMessage,
+    selectMode,
+    startGame,
+    startNextRound,
+    endGame,
+    uploadImage,
+    cleanup
   };
 };

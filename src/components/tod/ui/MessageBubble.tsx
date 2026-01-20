@@ -1,109 +1,193 @@
-import { Check, Clock, Skull, Flame, AlertCircle } from 'lucide-react';
-import { Message } from '../hooks/useGameLogic'; // Ensure you import the interface
+// src/components/tod/ui/MessageBubble.tsx
+import { User, CheckCheck, Clock, Image as ImageIcon } from 'lucide-react';
+import { useState } from 'react';
+
+interface Message {
+  id: string;
+  content: string;
+  image_url?: string;
+  message_type: 'chat' | 'truth' | 'dare' | 'system' | 'answer';
+  created_at: string;
+  status?: 'sending' | 'sent' | 'error';
+  profiles?: { username: string };
+  user_id: string;
+  question_ref?: string;
+}
 
 interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
+  answerMessage?: Message; // The answer to this question, if any
+  onMessageClick?: (messageId: string) => void;
 }
 
-export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
-  const { message_type, content, image_url, profiles, created_at, status } = message;
+export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick }: MessageBubbleProps) => {
+  const [imageError, setImageError] = useState(false);
 
-  // SYSTEM MESSAGE
-  if (message_type === 'system') {
+  // System messages
+  if (message.message_type === 'system') {
     return (
-      <div className="flex justify-center px-4 my-2">
-        <div className="px-4 py-1.5 bg-slate-800/40 backdrop-blur-md rounded-full text-[11px] font-bold text-slate-400 border border-slate-700/30">
-          {content}
+      <div className="flex justify-center my-4">
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-full px-4 py-2 max-w-md">
+          <p className="text-xs text-slate-300 text-center font-medium">
+            {message.content}
+          </p>
         </div>
       </div>
     );
   }
 
-  // TRUTH OR DARE CARD
-  if (message_type === 'truth' || message_type === 'dare') {
+  // Truth or Dare cards (questions)
+  if (message.message_type === 'truth' || message.message_type === 'dare') {
+    const modeColor = message.message_type === 'truth' ? 'blue' : 'orange';
+    const modeGradient = message.message_type === 'truth' 
+      ? 'from-blue-500 to-cyan-500' 
+      : 'from-orange-500 to-red-500';
+
     return (
-      <div className="flex justify-center my-6 px-4">
-        <div className={`max-w-lg w-full p-6 rounded-3xl border backdrop-blur-xl shadow-2xl relative overflow-hidden ${
-            message_type === 'truth'
-              ? 'bg-gradient-to-br from-orange-500/10 to-amber-500/5 border-orange-500/30'
-              : 'bg-gradient-to-br from-red-600/10 to-rose-500/5 border-red-500/30'
-          }`}>
-          
-          {/* Decorative Icon Watermark */}
-          <div className="absolute -right-4 -top-4 opacity-5 pointer-events-none">
-             {message_type === 'truth' ? <Skull size={120} /> : <Flame size={120} />}
-          </div>
+      <div 
+        id={`message-${message.id}`}
+        className="flex flex-col gap-3 my-4 scroll-mt-20"
+      >
+        {/* Question Card */}
+        <div className={`max-w-lg ${isOwn ? 'ml-auto' : 'mr-auto'} w-full`}>
+          <div className={`bg-gradient-to-br ${modeGradient} p-0.5 rounded-2xl shadow-lg`}>
+            <div className="bg-slate-900 rounded-2xl p-4">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${modeGradient} flex items-center justify-center`}>
+                    <User size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-sm">
+                      {message.profiles?.username || 'Unknown'}
+                    </p>
+                    <p className={`text-xs font-bold uppercase ${
+                      message.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
+                    }`}>
+                      {message.message_type}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] text-slate-500">
+                  {new Date(message.created_at).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
 
-          <div className="flex items-center gap-2 mb-3 relative z-10">
-            {message_type === 'truth' ? (
-              <Skull size={18} className="text-orange-400" />
-            ) : (
-              <Flame size={18} className="text-red-400" />
-            )}
-            <span className={`text-xs font-black tracking-wider uppercase ${
-                message_type === 'truth' ? 'text-orange-400' : 'text-red-400'
-              }`}>
-              {message_type} Challenge
-            </span>
-          </div>
+              {/* Question Content */}
+              <div className="bg-slate-800/50 rounded-xl p-4 mb-3">
+                <p className="text-white text-sm leading-relaxed whitespace-pre-wrap break-words">
+                  {message.content}
+                </p>
+                {message.image_url && !imageError && (
+                  <div className="mt-3 rounded-lg overflow-hidden">
+                    <img
+                      src={message.image_url}
+                      alt="Attached"
+                      className="w-full max-h-64 object-cover"
+                      onError={() => setImageError(true)}
+                    />
+                  </div>
+                )}
+              </div>
 
-          <p className="text-lg sm:text-xl font-bold text-white/90 italic leading-relaxed relative z-10">
-            &quot;{content}&quot;
-          </p>
-
-          {image_url && (
-            <img src={image_url} alt="Challenge" className="mt-4 rounded-xl max-h-64 object-cover w-full shadow-lg border border-white/10 relative z-10" />
-          )}
-          
-          <div className="flex items-center justify-between mt-4 border-t border-white/5 pt-3">
-             <p className="text-xs text-slate-400 font-medium">from <span className="text-slate-300">{profiles?.username}</span></p>
-             <span className="text-[10px] text-slate-500">
-                {new Date(created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-             </span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // STANDARD CHAT MESSAGE
-  return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} items-end gap-2 px-2 group`}>
-      <div className={`relative max-w-[85%] sm:max-w-xs px-4 py-2.5 shadow-md rounded-2xl transition-all ${
-          isOwn
-            ? 'bg-gradient-to-br from-red-500 to-orange-600 text-white rounded-tr-sm'
-            : 'bg-slate-800/90 backdrop-blur-sm text-slate-100 border border-slate-700/50 rounded-tl-sm'
-        }`}>
-        
-        {!isOwn && (
-          <p className="text-[10px] font-bold text-orange-400/80 mb-1 ml-0.5">{profiles?.username}</p>
-        )}
-
-        {image_url && (
-          <img src={image_url} alt="Shared" className="rounded-lg mb-2 max-h-48 object-cover w-full border border-black/10" />
-        )}
-
-        <p className="text-sm leading-relaxed">{content}</p>
-
-        {/* Footer: Time & Status */}
-        <div className="flex items-center justify-end gap-1.5 mt-1 select-none">
-          <p className={`text-[10px] ${isOwn ? 'text-red-100/70' : 'text-slate-500'}`}>
-            {new Date(created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </p>
-          
-          {isOwn && (
-            <div className="flex items-center ml-0.5" title={status}>
-              {status === 'sending' && (
-                <Clock size={11} className="text-white/70 animate-pulse" />
-              )}
-              {status === 'sent' && (
-                <Check size={12} className="text-white/90" strokeWidth={3} />
-              )}
-              {status === 'error' && (
-                <AlertCircle size={12} className="text-red-900" />
+              {/* Answer Section */}
+              {answerMessage && (
+                <div className="bg-slate-800/80 border border-slate-700/50 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                      <CheckCheck size={12} className="text-white" />
+                    </div>
+                    <p className="text-xs font-bold text-green-400 uppercase">
+                      Answer from {answerMessage.profiles?.username}
+                    </p>
+                  </div>
+                  <p className="text-slate-200 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                    {answerMessage.content}
+                  </p>
+                  {answerMessage.image_url && (
+                    <div className="mt-2 rounded-lg overflow-hidden">
+                      <img
+                        src={answerMessage.image_url}
+                        alt="Answer"
+                        className="w-full max-h-48 object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render standalone answer messages (they're shown inside question cards)
+  if (message.message_type === 'answer') {
+    return null;
+  }
+
+  // Regular chat messages
+  return (
+    <div 
+      id={`message-${message.id}`}
+      className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'} scroll-mt-20`}
+    >
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+        isOwn 
+          ? 'bg-gradient-to-br from-red-500 to-orange-500' 
+          : 'bg-slate-700'
+      }`}>
+        <User size={14} className="text-white" />
+      </div>
+
+      <div className={`max-w-xs sm:max-w-md flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+        <p className={`text-xs mb-1 ${isOwn ? 'text-slate-400' : 'text-slate-500'}`}>
+          {message.profiles?.username || 'Unknown'}
+        </p>
+        
+        <div className={`rounded-2xl px-4 py-2 ${
+          isOwn 
+            ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
+            : 'bg-slate-800 text-slate-100 border border-slate-700'
+        }`}>
+          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+            {message.content}
+          </p>
+          
+          {message.image_url && !imageError && (
+            <div className="mt-2 rounded-lg overflow-hidden">
+              <img
+                src={message.image_url}
+                alt="Attached"
+                className="w-full max-h-48 object-cover"
+                onError={() => setImageError(true)}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 mt-1">
+          <span className="text-[10px] text-slate-500">
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </span>
+          {isOwn && message.status && (
+            <>
+              {message.status === 'sending' && (
+                <Clock size={10} className="text-slate-500" />
+              )}
+              {message.status === 'sent' && (
+                <CheckCheck size={10} className="text-green-500" />
+              )}
+            </>
           )}
         </div>
       </div>
