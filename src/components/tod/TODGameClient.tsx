@@ -48,12 +48,17 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const messagesWithAnswers = useMemo(() => {
     return messages.map(msg => {
       if (msg.message_type === 'truth' || msg.message_type === 'dare') {
-        const answer = messages.find(m => m.message_type === 'answer' && m.question_ref === msg.id);
+        // Find answer: it's the next 'answer' type message after this question
+        const msgIndex = messages.findIndex(m => m.id === msg.id);
+        const answer = messages.slice(msgIndex + 1).find(m => 
+          m.message_type === 'answer' && 
+          m.user_id === lobby?.current_target_id
+        );
         return { ...msg, answerMessage: answer } as typeof msg & { answerMessage?: typeof msg };
       }
       return msg as typeof msg & { answerMessage?: typeof msg };
     });
-  }, [messages]);
+  }, [messages, lobby?.current_target_id]);
 
   // Smart scroll: only auto-scroll if user is near bottom
   const scrollToBottom = (force = false) => {
@@ -109,7 +114,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     const isTarget = profile?.id === lobby?.current_target_id;
     
     let messageType: 'chat' | 'truth' | 'dare' | 'system' | 'answer' = 'chat';
-    let questionRef: string | undefined;
 
     // Determine message type based on game state
     if (lobby?.status === 'active') {
@@ -120,16 +124,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       // If target is answering the question
       else if (isTarget && lobby?.current_question) {
         messageType = 'answer';
-        // Find the question message ID
-        const questionMsg = messages.find(m => 
-          (m.message_type === 'truth' || m.message_type === 'dare') && 
-          m.content === lobby.current_question
-        );
-        questionRef = questionMsg?.id;
       }
     }
 
-    await sendMessage(content, imageUrl, messageType, profile?.username, questionRef);
+    await sendMessage(content, imageUrl, messageType, profile?.username);
     setTimeout(() => scrollToBottom(true), 100);
   };
 
@@ -398,10 +396,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                     (m.message_type === 'truth' || m.message_type === 'dare') && 
                     m.content === lobby.current_question
                   );
-                  // Check if there's an answer for this question
-                  const hasAnswer = currentQuestionMsg && messages.some(m => 
-                    m.message_type === 'answer' && 
-                    m.question_ref === currentQuestionMsg.id
+                  
+                  if (!currentQuestionMsg) return null;
+                  
+                  // Find answer: look for 'answer' type message after the question
+                  const questionIndex = messages.findIndex(m => m.id === currentQuestionMsg.id);
+                  const hasAnswer = messages.slice(questionIndex + 1).some(m => 
+                    m.message_type === 'answer'
                   );
                   
                   return hasAnswer ? <NextRoundButton onNextRound={handleNextRound} /> : null;
@@ -466,4 +467,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     </div>
   );
-}
+      }
