@@ -2,56 +2,43 @@
 
 import Link from "next/link"
 import { motion, useScroll, useTransform } from "framer-motion"
-import { MessageCircle, ArrowRight, Instagram, Ghost, Dices, Brain, Lock, MessageCircleQuestion, Flame, ChevronRight } from "lucide-react"
+import { Dices, Brain, Lock, MessageCircleQuestion, Flame, ChevronRight, Ghost, Instagram } from "lucide-react"
 import { useRef } from "react"
 
 const features = [
   {
-    title: "Anonymous Messenger",
-    desc: "Get honest messages from your friends on Instagram.",
+    title: "anonymous msgs 👻",
+    desc: "get honest thoughts from your friends. no cap.",
     icon: Ghost,
-    color: "from-purple-500 to-indigo-600",
-    shadow: "shadow-purple-500/20",
+    color: "bg-white/10",
     href: "/signup"
   },
   {
-    title: "Truth or Dare",
-    desc: "Play live multiplayer truth or dare with friends.",
+    title: "truth or dare 🎲",
+    desc: "play live w/ besties. spill tea or do the dare.",
     icon: Dices,
-    color: "from-rose-500 to-pink-600",
-    shadow: "shadow-rose-500/20",
+    color: "bg-white/10",
     href: "/signup"
   },
   {
-    title: "Do You Know Me?",
-    desc: "Create a quiz and see who knows you best.",
+    title: "do you know me? 🧠",
+    desc: "create your quiz. see who's a real one.",
     icon: Brain,
-    color: "from-blue-500 to-cyan-600",
-    shadow: "shadow-blue-500/20",
+    color: "bg-white/10",
     href: "/signup"
   },
   {
-    title: "Confessions",
-    desc: "Receive secret confessions anonymously.",
+    title: "confessions 🔒",
+    desc: "send/receive secret notes. total privacy.",
     icon: Lock,
-    color: "from-violet-500 to-purple-600",
-    shadow: "shadow-violet-500/20",
+    color: "bg-white/10",
     href: "/signup"
   },
   {
-    title: "AMA Sticker",
-    desc: "Ask Me Anything sticker for your Story.",
-    icon: MessageCircleQuestion,
-    color: "from-orange-500 to-amber-600",
-    shadow: "shadow-orange-500/20",
-    href: "/signup"
-  },
-  {
-    title: "Hot Seat",
-    desc: "Answer rapid-fire questions under pressure.",
+    title: "hot seat 🔥",
+    desc: "rapid fire questions. can you handle the heat?",
     icon: Flame,
-    color: "from-amber-500 to-red-600",
-    shadow: "shadow-amber-500/20",
+    color: "bg-white/10",
     href: "/signup"
   }
 ]
@@ -59,25 +46,25 @@ const features = [
 function FeatureCard({ feature, index }: { feature: typeof features[0], index: number }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 50 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, scale: 0.9, y: 20 }}
+      whileInView={{ opacity: 1, scale: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      transition={{ delay: index * 0.1, type: "spring", stiffness: 50 }}
-      className="relative group"
+      transition={{ delay: index * 0.05, type: "spring", stiffness: 200, damping: 20 }}
     >
-      <Link href={feature.href} className="block">
-        <div className={`relative overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 rounded-[2rem] p-6 hover:bg-white/15 transition-all duration-300 transform active:scale-95 hover:scale-[1.02] ${feature.shadow} shadow-xl`}>
-          <div className="flex items-start justify-between">
-            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-lg mb-4`}>
-              <feature.icon size={28} />
+      <Link href={feature.href} className="block group">
+        <div className="relative overflow-hidden bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-5 active:scale-95 transition-all duration-200 hover:bg-white/10">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform">
+              <feature.icon size={24} />
             </div>
-            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/50 group-hover:bg-white/20 group-hover:text-white transition-colors">
-              <ChevronRight size={18} />
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-black text-white leading-tight mb-0.5 lowercase tracking-tight">{feature.title}</h3>
+              <p className="text-white/60 text-xs font-medium leading-snug truncate">{feature.desc}</p>
+            </div>
+            <div className="text-white/30 group-hover:text-white group-hover:translate-x-1 transition-all">
+              <ChevronRight size={20} />
             </div>
           </div>
-
-          <h3 className="text-xl font-black text-white mb-2 tracking-tight">{feature.title}</h3>
-          <p className="text-white/70 text-sm font-medium leading-relaxed">{feature.desc}</p>
         </div>
       </Link>
     </motion.div>
@@ -86,96 +73,105 @@ function FeatureCard({ feature, index }: { feature: typeof features[0], index: n
 
 export default function LandingPage() {
   const containerRef = useRef(null)
-  const { scrollYProgress } = useScroll({ target: containerRef })
-  const y = useTransform(scrollYProgress, [0, 1], [0, -50])
 
   return (
-    <div ref={containerRef} className="min-h-screen relative bg-gradient-to-br from-[#5D00B3] via-[#85006C] to-[#C90076] text-white selection:bg-white/30">
+    <div ref={containerRef} className="min-h-screen relative bg-[#0f0a1e] text-white selection:bg-purple-500/30 overflow-x-hidden font-sans">
 
-      {/* Background Ambience */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-500 rounded-full mix-blend-overlay filter blur-[128px] opacity-40 animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-fuchsia-500 rounded-full mix-blend-overlay filter blur-[128px] opacity-40 animate-pulse" style={{ animationDelay: '2s' }} />
+      {/* Reduced Gradient Background - Focused Purple Ascent */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[80vw] h-[80vw] bg-purple-900/40 rounded-full blur-[100px] animate-pulse" />
+        <div className="absolute top-[40%] right-[-10%] w-[60vw] h-[60vw] bg-indigo-900/30 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[20%] w-[70vw] h-[70vw] bg-violet-900/30 rounded-full blur-[100px]" />
       </div>
 
-      <div className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col">
+      <div className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col pb-24">
 
         {/* Navbar */}
         <nav className="p-6 flex items-center justify-between">
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20 shadow-xl"
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-10 h-10 bg-white/5 backdrop-blur-xl rounded-xl flex items-center justify-center border border-white/10"
           >
-            <span className="text-xl font-black italic">S</span>
+            <span className="text-xl font-black italic tracking-tighter">s.</span>
           </motion.div>
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            <Link href="/login" className="px-5 py-2 bg-black/20 hover:bg-black/30 backdrop-blur-sm border border-white/10 rounded-full text-sm font-bold transition">
-              Log In
+            <Link href="/login" className="px-5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs font-bold transition uppercase tracking-widest">
+              Login
             </Link>
           </motion.div>
         </nav>
 
         {/* Hero Section */}
-        <div className="flex-1 flex flex-col px-6 pt-8 pb-12 overflow-hidden">
+        <div className="flex-1 flex flex-col px-6 pt-4">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: "spring", bounce: 0.5 }}
-            className="text-center space-y-6 mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center space-y-2 mb-10"
           >
-            <h1 className="text-7xl font-black tracking-tighter drop-shadow-sm">
+            <h1 className="text-8xl font-black tracking-tighter leading-none bg-gradient-to-br from-white via-white to-white/50 bg-clip-text text-transparent drop-shadow-2xl">
               say.
-              <span className="text-4xl align-top ml-2">🤫</span>
             </h1>
-            <p className="text-xl font-bold text-white/90 leading-relaxed max-w-[280px] mx-auto">
-              The ultimate social game app for friends.
+            <p className="text-lg font-bold text-white/50 lowercase tracking-wide">
+              the social app for <span className="text-purple-400">real ones</span> 👾
             </p>
           </motion.div>
 
           {/* Social Proof / 3D Card */}
           <motion.div
-            initial={{ opacity: 0, y: 30, rotateX: 10 }}
-            animate={{ opacity: 1, y: 0, rotateX: 0 }}
-            transition={{ delay: 0.2, type: "spring" }}
-            className="mb-16 perspective-1000 relative z-20"
+            initial={{ opacity: 0, rotateX: 20, y: 40 }}
+            animate={{ opacity: 1, rotateX: 0, y: 0 }}
+            transition={{ type: "spring", bounce: 0.4 }}
+            className="mb-12 perspective-1000 relative z-20"
           >
-            <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 p-6 rounded-[2.5rem] shadow-2xl transform -rotate-3 hover:rotate-0 transition-transform duration-500">
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-white/20 rounded-full" />
-              <div className="mt-4 space-y-4 text-center">
-                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-400 to-rose-400 px-4 py-1.5 rounded-full shadow-lg">
-                  <Instagram size={14} />
-                  <span className="text-xs font-bold">story sticker</span>
+            <div className="relative w-full aspect-[4/3] bg-gradient-to-br from-purple-500/20 to-indigo-500/20 backdrop-blur-2xl border border-white/20 p-6 rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(124,58,237,0.2)] transform rotate-[-2deg] hover:rotate-0 transition-transform duration-500 flex flex-col items-center justify-center text-center group">
+
+              {/* Simulated Sticker */}
+              <motion.div
+                animate={{ y: [0, -10, 0] }}
+                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+                className="bg-white text-black p-5 rounded-3xl shadow-2xl max-w-[240px] w-full transform rotate-2 group-hover:rotate-0 transition-all"
+              >
+                <div className="flex items-center gap-2 mb-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                  <div className="w-6 h-6 bg-gradient-to-tr from-yellow-400 to-fuchsia-600 rounded-lg flex items-center justify-center text-white"><Instagram size={14} /></div>
+                  ask me anything
                 </div>
-                <h3 className="text-2xl font-black leading-tight">send me anonymous<br />messages!</h3>
-                <div className="h-2 bg-white/20 rounded-full w-12 mx-auto" />
+                <div className="text-xl font-black leading-tight tracking-tight mb-2">
+                  send me anonymous messages! 👇
+                </div>
+              </motion.div>
+
+              <div className="mt-8 text-xs font-bold text-white/40 uppercase tracking-[0.2em] animate-pulse">
+                tap to start
               </div>
             </div>
           </motion.div>
 
           {/* Features Grid */}
-          <div className="space-y-4 pb-24">
-            <div className="flex items-center gap-2 mb-4 opacity-80 pl-2">
-              <Dices size={16} />
-              <span className="text-xs font-black tracking-widest uppercase">Game Collection</span>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between px-2 opacity-60">
+              <span className="text-[10px] font-black tracking-[0.2em] uppercase text-white">features_v2.0</span>
+              <span className="text-[10px] font-bold">✨</span>
             </div>
 
-            {features.map((feature, idx) => (
-              <FeatureCard key={idx} feature={feature} index={idx} />
-            ))}
+            <div className="space-y-3">
+              {features.map((feature, idx) => (
+                <FeatureCard key={idx} feature={feature} index={idx} />
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Floating CTA */}
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#C90076] via-[#C90076] to-transparent z-40">
+        <div className="fixed bottom-6 left-6 right-6 z-40">
           <Link
             href="/signup"
-            className="block w-full max-w-md mx-auto bg-white text-[#C90076] text-center font-black text-lg py-4 rounded-2xl shadow-xl shadow-purple-900/20 active:scale-95 transition-transform"
+            className="block w-full bg-white text-black text-center font-black text-lg py-4 rounded-[2rem] shadow-xl shadow-purple-900/20 active:scale-95 transition-transform border border-white/50 hover:bg-slate-50"
           >
-            Get Started
+            Get Started 🚀
           </Link>
         </div>
 
