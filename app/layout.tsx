@@ -1,10 +1,9 @@
-// app/layout.tsx
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import type { Metadata, Viewport } from "next";
 import { GeistSans, GeistMono } from "geist/font";
 import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
-// Removed Script import
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const geistSans = GeistSans;
 const geistMono = GeistMono;
@@ -29,17 +28,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="say" />
       </head>
-      {/* Remove className="loading" and the Script tag */}
-      <body className="bg-slate-50"> 
-         <SpeedInsights/>
-        <ClientLayout>{children}</ClientLayout>
-        {/* PWA prompt is inside ClientLayout or handled there */}
+      <body>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SpeedInsights />
+          <ClientLayout>{children}</ClientLayout>
+        </ThemeProvider>
       </body>
     </html>
   );
