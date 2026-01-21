@@ -2,25 +2,17 @@
 
 import { Home, MessageSquare, Bell, User, Settings } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useNotifications } from '@/context/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState, useTransition, useEffect } from 'react'
+import { useState } from 'react'
 
 export default function BottomNavbar() {
   const pathname = usePathname()
-  const router = useRouter()
   const { unreadCount } = useNotifications()
-  const [isPending, startTransition] = useTransition()
-  const [pendingPath, setPendingPath] = useState<string | null>(null)
 
   // Mock notification count - replace with your actual notification state
-  const [notificationCount, setNotificationCount] = useState(3)
-
-  // FIX: Reset pending path when the route actually changes
-  useEffect(() => {
-    setPendingPath(null)
-  }, [pathname])
+  const [notificationCount] = useState(3)
 
   const navItems = [
     { name: 'Home', href: '/dashboard', icon: Home },
@@ -30,44 +22,26 @@ export default function BottomNavbar() {
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
-  const handleNavClick = (href: string, e: React.MouseEvent) => {
-    e.preventDefault()
-    
-    // Don't trigger navigation if we are already there
-    if (pathname === href) return
-
-    setPendingPath(href)
-    startTransition(() => {
-      router.push(href)
-    })
-  }
-
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 z-50 pb-[env(safe-area-inset-bottom)]">
       <div className="max-w-md mx-auto px-4 h-16 flex justify-around items-center">
         {navItems.map((item) => {
-          // Logic: Active if strictly matched OR if it's the pending target
-          const isActivePath = pathname === item.href || (item.href === '/inbox' && pathname.startsWith('/inbox'))
-          const isPendingThis = pendingPath === item.href
-          
-          // Visual: Highlight if it's the current path (and not navigating away) OR if it's the target
-          const shouldHighlight = (isActivePath && !pendingPath) || isPendingThis
+          // Logic: Active if strictly matched or if it's the inbox subpath
+          const isActive = pathname === item.href || (item.href === '/inbox' && pathname.startsWith('/inbox'))
 
           return (
-            <Link 
-              key={item.name} 
+            <Link
+              key={item.name}
               href={item.href}
-              onClick={(e) => handleNavClick(item.href, e)}
-              className={`relative flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-                shouldHighlight ? 'text-purple-600' : 'text-gray-400 hover:text-purple-400'
-              }`}
+              className={`relative flex flex-col items-center justify-center flex-1 h-full transition-colors active:scale-95 ${isActive ? 'text-purple-600' : 'text-gray-400 hover:text-purple-400'
+                }`}
             >
               <div className="relative p-1">
-                <item.icon size={22} strokeWidth={shouldHighlight ? 2.5 : 2} />
-                
+                <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+
                 <AnimatePresence>
                   {item.badge !== undefined && item.badge > 0 && (
-                    <motion.span 
+                    <motion.span
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       exit={{ scale: 0 }}
@@ -78,14 +52,14 @@ export default function BottomNavbar() {
                   )}
                 </AnimatePresence>
               </div>
-              
+
               {/* Label */}
-              <span className={`text-[9px] font-medium mt-0.5 transition-opacity ${shouldHighlight ? 'opacity-100' : 'opacity-70'}`}>
+              <span className={`text-[9px] font-medium mt-0.5 transition-opacity ${isActive ? 'opacity-100' : 'opacity-70'}`}>
                 {item.name}
               </span>
-              
-              {shouldHighlight && (
-                <motion.div 
+
+              {isActive && (
+                <motion.div
                   layoutId="nav-indicator"
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   className="absolute -top-0.5 w-8 h-1 bg-purple-600 rounded-b-full"

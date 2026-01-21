@@ -1,9 +1,9 @@
 // src/context/AuthContext.tsx
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client"; 
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { User, Session } from "@supabase/supabase-js"; 
+import { User, Session } from "@supabase/supabase-js";
 
 type Profile = {
   id: string;
@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   const router = useRouter();
   const [supabase] = useState(() => createClient());
 
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select("id, username, slug")
         .eq("id", userId)
         .maybeSingle();
-      
+
       if (error) {
         console.error("Error fetching profile:", error.message);
         return null;
@@ -52,10 +52,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleSession = async (session: Session | null) => {
       const currentUser = session?.user ?? null;
-      
+
       if (mounted) {
         setUser(currentUser);
-        
+
         if (currentUser) {
           const profileData = await fetchProfile(currentUser.id);
           if (mounted) setProfile(profileData);
@@ -75,11 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       handleSession(session);
-      
+
       if (_event === 'SIGNED_OUT') {
-         router.replace('/login');
-         setProfile(null);
-         setUser(null);
+        router.replace('/login');
+        setProfile(null);
+        setUser(null);
       }
     });
 
@@ -91,7 +91,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Optimistic Logout: Clear state immediately
+    setProfile(null);
+    setUser(null);
+    router.replace('/login');
+
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
   };
 
   const refreshProfile = async () => {
@@ -115,4 +124,4 @@ export const useAuth = () => {
   }
   return context;
 };
-    
+
