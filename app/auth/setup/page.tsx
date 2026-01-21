@@ -8,6 +8,7 @@ import AuthForm from '@/components/AuthForm'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { showXPNotification } from '@/components/XPNotification'
+import { User, Loader2, Check, X, ArrowRight } from 'lucide-react'
 
 export default function SetupUsername() {
   const [username, setUsername] = useState('')
@@ -41,7 +42,7 @@ export default function SetupUsername() {
       const res = await checkUsernameAvailability(debouncedUsername)
       setIsAvailable(res.available)
       setSuggestions(res.suggestions)
-      setMessage(res.available ? '' : 'Username already taken')
+      setMessage(res.available ? '' : 'username already taken')
       setIsChecking(false)
     }
     validate()
@@ -50,29 +51,29 @@ export default function SetupUsername() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isAvailable || loading) return
-    
+
     setLoading(true)
     setMessage('')
-    
+
     try {
       const result = await setupProfile(username)
-      
+
       if (result?.error) {
         setMessage(result.error)
         setLoading(false)
         return
       }
-      
+
       if (result?.success) {
         // Show welcome notification
         showXPNotification(100, 'Welcome to Say! 🎉')
-        
+
         // Refresh profile context
         await refreshProfile()
-        
+
         // Allow notification animation to play
         await new Promise(resolve => setTimeout(resolve, 1500))
-        
+
         // Navigate to dashboard
         window.location.href = '/dashboard'
       }
@@ -86,10 +87,10 @@ export default function SetupUsername() {
   // Loading state
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-[#0f0a1e] text-white">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-500">Loading...</p>
+          <Loader2 className="w-10 h-10 text-purple-500 animate-spin mx-auto mb-4" />
+          <p className="text-white/40 text-sm font-medium lowercase">loading...</p>
         </div>
       </div>
     )
@@ -99,88 +100,107 @@ export default function SetupUsername() {
   if (!user) return null
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <AuthForm>
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-slate-900">Claim your handle</h1>
-          <p className="text-slate-500 mt-2">Pick a username to get started.</p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-[#0f0a1e] text-white selection:bg-purple-500/30">
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Username Input */}
-          <div className="relative">
-            <input
-              className={`w-full px-5 py-4 rounded-2xl border-2 outline-none transition-all text-lg
-                ${isAvailable === true ? 'border-emerald-500 bg-emerald-50/30' : 
-                  isAvailable === false ? 'border-rose-400 bg-rose-50/30' : 
-                  'border-slate-100 bg-slate-50 focus:border-violet-500'}
-              `}
-              placeholder="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              disabled={loading}
-              autoFocus
-            />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-              {isChecking && (
-                <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-              )}
-              {!isChecking && isAvailable === true && (
-                <span className="text-emerald-500 font-bold">✓</span>
-              )}
-            </div>
+      {/* Background Ambience */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]" />
+      </div>
+
+      <AuthForm>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="space-y-8"
+        >
+          {/* Header */}
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl font-black tracking-tight lowercase">claim handle 🏷️</h1>
+            <p className="text-white/40 text-sm font-medium lowercase">pick a username to get started</p>
           </div>
 
-          {/* Username Suggestions */}
-          <AnimatePresence>
-            {!isAvailable && suggestions.length > 0 && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-3"
-              >
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                  Suggestions:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestions.map(s => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setUsername(s)}
-                      className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm 
-                        hover:border-violet-500 hover:text-violet-600 transition-all shadow-sm"
-                    >
-                      {s}
-                    </button>
-                  ))}
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-white/30 ml-2">Username</label>
+              <div className="relative group">
+                <User className="absolute left-4 top-3.5 w-5 h-5 text-white/20 group-focus-within:text-purple-400 transition-colors" />
+                <input
+                  className={`w-full bg-white/5 border rounded-2xl py-3 pl-11 pr-10 outline-none transition-all placeholder:text-white/20 text-sm font-medium
+                    ${isAvailable === true ? 'border-green-500/50 bg-green-500/5 focus:border-green-500/50' :
+                      isAvailable === false ? 'border-red-500/50 bg-red-500/5 focus:border-red-500/50' :
+                        'border-white/10 focus:border-purple-500/50 focus:bg-white/10'}
+                  `}
+                  placeholder="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={loading}
+                  autoFocus
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  {isChecking && (
+                    <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
+                  )}
+                  {!isChecking && isAvailable === true && (
+                    <Check className="w-4 h-4 text-green-400" />
+                  )}
+                  {!isChecking && isAvailable === false && (
+                    <X className="w-4 h-4 text-red-400" />
+                  )}
                 </div>
-              </motion.div>
+              </div>
+            </div>
+
+            {/* Username Suggestions */}
+            <AnimatePresence>
+              {!isAvailable && suggestions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden"
+                >
+                  <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest ml-2">
+                    suggestions
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions.map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setUsername(s)}
+                        className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs font-medium text-white/60
+                          hover:border-purple-500/50 hover:text-purple-300 hover:bg-purple-500/10 transition-all"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Error Message */}
+            {message && (
+              <div className={`p-3 rounded-xl border text-xs font-medium text-center ${message.includes('Welcome') ? 'bg-green-500/10 border-green-500/20 text-green-200' : 'bg-red-500/10 border-red-500/20 text-red-200'
+                }`}>
+                {message}
+              </div>
             )}
-          </AnimatePresence>
 
-          {/* Error Message */}
-          {message && (
-            <p className={`text-sm font-medium ${
-              message.includes('Success') ? 'text-emerald-500' : 'text-rose-500'
-            }`}>
-              {message}
-            </p>
-          )}
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={!isAvailable || loading || isChecking}
-            className="w-full py-4 bg-violet-600 text-white rounded-2xl font-bold text-lg 
-              hover:bg-violet-700 disabled:opacity-30 transition-all shadow-lg shadow-violet-200"
-          >
-            {loading ? 'Setting things up...' : 'Complete Signup'}
-          </button>
-        </form>
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={!isAvailable || loading || isChecking}
+              className="w-full bg-white text-black py-3.5 rounded-2xl font-black text-sm uppercase tracking-wide hover:bg-gray-100 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
+            >
+              {loading ? 'Setting up...' : 'Start Playing'}
+              {!loading && <ArrowRight size={16} />}
+            </button>
+          </form>
+        </motion.div>
       </AuthForm>
     </div>
   )
