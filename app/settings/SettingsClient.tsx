@@ -2,7 +2,7 @@
 
 import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
-import { User, Mail, ArrowLeft, LogIn, Bell, Moon } from "lucide-react"
+import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home } from "lucide-react"
 import PushToggle from "@/components/PushToggle"
 import { ThemeToggle } from "@/components/ThemeToggle"
 
@@ -28,16 +28,15 @@ export default function SettingsClient({
       </div>
 
       {/* Header */}
-      <div className="bg-white dark:bg-[#1a1429] border-b dark:border-white/10 sticky top-0 z-10 transition-colors">
+      <div className="bg-white/80 dark:bg-[#0f0a1e]/80 backdrop-blur-md border-b border-gray-100 dark:border-white/10 sticky top-0 z-40 transition-all duration-300">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link
             href="/dashboard"
-            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all active:scale-90"
           >
             <ArrowLeft className="h-5 w-5" />
-            <span className="hidden sm:inline">Back to Dashboard</span>
           </Link>
-          <h1 className="text-2xl font-bold flex-1 dark:text-white">Settings</h1>
+          <h1 className="text-xl font-bold dark:text-white tracking-tight">Settings</h1>
         </div>
       </div>
 
@@ -47,34 +46,53 @@ export default function SettingsClient({
           <div className="md:col-span-2 space-y-6">
 
             {/* Profile Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 p-6 transition-colors">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 dark:text-white">
-                <User className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                Profile
-              </h2>
-              <div className="flex flex-col items-center text-center py-6">
-                <div className="w-24 h-24 bg-purple-100 dark:bg-purple-500/20 rounded-full flex items-center justify-center mb-4">
-                  <User className="h-12 w-12 text-purple-600 dark:text-purple-400" />
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all hover:shadow-md">
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="relative">
+                  <div className="w-24 h-24 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg ring-4 ring-white dark:ring-[#1a1429]">
+                    <span className="text-3xl font-black italic">
+                      {user && username ? username.charAt(0).toUpperCase() : "?"}
+                    </span>
+                  </div>
+                  {user && (
+                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 rounded-full border-4 border-white dark:border-[#1a1429] flex items-center justify-center">
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                    </div>
+                  )}
                 </div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {user ? username : "Guest"}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  {user ? "Your display name" : "Log in to customize your profile"}
-                </p>
+
+                <div className="text-center sm:text-left">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+                    {user ? `@${username}` : "Guest Explorer"}
+                  </h2>
+                  <p className="text-gray-500 dark:text-gray-400 font-medium">
+                    {user ? user.email : "Log in to save your settings"}
+                  </p>
+                  {!user && (
+                    <Link href="/login" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 transition">
+                      Join now <LogIn size={16} />
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Appearance Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 p-6 transition-colors">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 dark:text-white">
-                <Moon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                Appearance
-              </h2>
-              <div className="flex items-center justify-between">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                  <Moon size={20} />
+                </div>
                 <div>
-                  <p className="font-medium dark:text-white">Theme</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Customize how the app looks</p>
+                  <h3 className="font-bold text-gray-900 dark:text-white">Appearance</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">Customization</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
+                <div>
+                  <p className="font-bold dark:text-white text-sm">Theme Mode</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Choose between light, dark, or system preference</p>
                 </div>
                 <ThemeToggle />
               </div>
@@ -82,48 +100,67 @@ export default function SettingsClient({
 
             {/* Notifications Card */}
             {user && (
-              <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 p-6 transition-colors">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 dark:text-white">
-                  <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                  Notifications
-                </h2>
-                <PushToggle userId={user.id} />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
-                  Enable push notifications to get instant alerts when someone sends you a confession.
-                </p>
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <Bell size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white">Stay Updated</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">Notifications</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <PushToggle userId={user.id} />
+                  <div className="p-3 bg-blue-50/50 dark:bg-blue-500/5 rounded-xl border border-blue-100/50 dark:border-blue-500/10">
+                    <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed font-medium">
+                      Receive instant alerts on your device whenever someone sends you an anonymous confession.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Account Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 p-6 transition-colors">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 dark:text-white">
-                <Mail className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                Account
-              </h2>
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-white">
+                  <Mail size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-white">Account</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">Security & Auth</p>
+                </div>
+              </div>
+
               <div className="space-y-6">
                 {user ? (
                   <>
-                    <div className="dark:text-gray-300">
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
-                      <p className="font-medium text-gray-900 dark:text-white">{user.email}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
+                        <p className="text-[10px] uppercase tracking-widest font-black text-gray-400 dark:text-gray-500 mb-1">Email Address</p>
+                        <p className="font-bold text-gray-900 dark:text-white truncate">{user.email}</p>
+                      </div>
+                      <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
+                        <p className="text-[10px] uppercase tracking-widest font-black text-gray-400 dark:text-gray-500 mb-1">Public Handle</p>
+                        <p className="font-bold text-gray-900 dark:text-white">@{username}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Username</p>
-                      <p className="font-medium text-gray-900 dark:text-white">@{username}</p>
-                    </div>
-                    <div className="pt-4 border-t dark:border-white/10">
+
+                    <div className="pt-6 border-t dark:border-white/10">
                       <LogoutButton />
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-600 dark:text-gray-400 mb-6">
-                      Log in to access your account settings
+                  <div className="text-center py-6">
+                    <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                      Sync your data and access personalized features by logging in.
                     </p>
-                    <Link href="/login">
-                      <button className="flex w-full items-center justify-center gap-3 rounded-lg px-6 py-3 font-medium text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <LogIn className="h-5 w-5" />
-                        Log in
+                    <Link href="/login" className="block">
+                      <button className="w-full h-14 bg-slate-900 dark:bg-white text-white dark:text-black font-black uppercase tracking-widest text-xs rounded-2xl active:scale-95 transition-all shadow-xl shadow-slate-200 dark:shadow-none flex items-center justify-center gap-3">
+                        <LogIn size={18} />
+                        Get Started
                       </button>
                     </Link>
                   </div>
@@ -134,33 +171,38 @@ export default function SettingsClient({
 
           {/* Sidebar */}
           <div className="md:col-span-1">
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 p-6 sticky top-24 transition-colors">
-              <h3 className="font-medium text-gray-900 dark:text-white mb-3">Quick links</h3>
-              <ul className="space-y-3 text-sm">
-                <li>
-                  <Link href="/dashboard" className="text-purple-600 dark:text-purple-400 hover:underline">
-                    Dashboard
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2rem] shadow-sm border border-gray-100 dark:border-white/10 p-6 sticky top-28 transition-all">
+              <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4">Quick Navigation</h3>
+              <div className="space-y-2">
+                {[
+                  { name: 'Dashboard', href: '/dashboard', label: 'Home' },
+                  { name: 'Inbox', href: '/inbox', label: 'Confessions' },
+                  { name: 'Profile', href: '/profile', label: 'View Public' },
+                ].map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-all group"
+                  >
+                    <span className="font-bold text-gray-700 dark:text-gray-300 group-hover:text-purple-600 dark:group-hover:text-purple-400">{link.name}</span>
+                    <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">{link.label}</span>
                   </Link>
-                </li>
-                <li>
-                  <Link href="/inbox" className="text-purple-600 dark:text-purple-400 hover:underline">
-                    Inbox
-                  </Link>
-                </li>
-                <li className="text-gray-500 dark:text-gray-500">Privacy (soon)</li>
-              </ul>
+                ))}
+                <div className="mt-4 pt-4 border-t dark:border-white/5">
+                  <p className="text-[10px] font-bold text-gray-300 dark:text-gray-600 italic">More settings coming soon...</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Mobile-only back button */}
-        <div className="fixed bottom-6 left-6 right-6 sm:hidden z-20">
+        {/* Mobile-only back button - Redesigned to be less intrusive */}
+        <div className="fixed bottom-24 left-6 right-6 sm:hidden z-20 pointer-events-none">
           <Link
             href="/dashboard"
-            className="w-full bg-white dark:bg-[#1a1429] shadow-lg rounded-xl px-6 py-4 flex items-center justify-center gap-2 font-medium text-gray-900 dark:text-white border border-gray-200 dark:border-white/10"
+            className="pointer-events-auto float-right w-14 h-14 bg-white dark:bg-[#1a1429] shadow-2xl rounded-2xl flex items-center justify-center text-gray-900 dark:text-white border border-gray-100 dark:border-white/10 active:scale-95 transition-all"
           >
-            <ArrowLeft className="h-5 w-5" />
-            Back to Dashboard
+            <Home className="h-6 w-6" />
           </Link>
         </div>
       </div>
