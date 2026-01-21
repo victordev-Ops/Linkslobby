@@ -11,10 +11,10 @@ type NotificationContextType = {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
 
-export function NotificationProvider({ 
-  children, 
-  profileId 
-}: { 
+export function NotificationProvider({
+  children,
+  profileId
+}: {
   children: React.ReactNode
   profileId?: string | null
 }) {
@@ -28,18 +28,25 @@ export function NotificationProvider({
       return
     }
 
-    const { count, error } = await supabase
-      .from('confessions')
-      .select('*', { count: 'exact', head: true })
-      .eq('profile_id', profileId)
-      .eq('is_read', false)
-    
-    if (error) {
-      console.error('Error fetching unread count:', error)
+    const [confRes, dykmRes] = await Promise.all([
+      supabase
+        .from('confessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('profile_id', profileId)
+        .eq('is_read', false),
+      supabase
+        .from('dykm_scores')
+        .select('*', { count: 'exact', head: true })
+        .eq('quiz_owner_id', profileId)
+        .eq('is_read', false)
+    ])
+
+    if (confRes.error || dykmRes.error) {
+      console.error('Error fetching unread counts:', confRes.error || dykmRes.error)
       return
     }
-    
-    setUnreadCount(count || 0)
+
+    setUnreadCount((confRes.count || 0) + (dykmRes.count || 0))
   }, [profileId, supabase])
 
   useEffect(() => {
@@ -53,37 +60,20 @@ export function NotificationProvider({
     const channel = supabase
       .channel(`notifications-${profileId}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
       }, () => {
-        setUnreadCount(prev => prev + 1)
+        refreshUnreadCount()
       })
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
-        table: 'confessions',
-        filter: `profile_id=eq.${profileId}`
-      }, (payload) => {
-        const newData = payload.new as { is_read?: boolean }
-        const oldData = payload.old as { is_read?: boolean }
-        
-        if (newData.is_read && !oldData.is_read) {
-          setUnreadCount(prev => Math.max(0, prev - 1))
-        }
-      })
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'confessions',
-        filter: `profile_id=eq.${profileId}`
-      }, (payload) => {
-        const oldData = payload.old as { is_read?: boolean }
-        
-        if (!oldData.is_read) {
-          setUnreadCount(prev => Math.max(0, prev - 1))
-        }
+        table: 'dykm_scores',
+        filter: `quiz_owner_id=eq.${profileId}`
+      }, () => {
+        refreshUnreadCount()
       })
       .subscribe()
 

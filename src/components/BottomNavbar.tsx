@@ -5,19 +5,21 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useNotifications } from '@/context/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function BottomNavbar() {
   const pathname = usePathname()
   const { unreadCount } = useNotifications()
+  const [mounted, setMounted] = useState(false)
 
-  // Mock notification count - replace with your actual notification state
-  const [notificationCount] = useState(3)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const navItems = [
     { name: 'Home', href: '/dashboard', icon: Home },
-    { name: 'Messages', href: '/inbox', icon: MessageSquare, badge: unreadCount },
-    { name: 'Notifications', href: '/notifications', icon: Bell, badge: notificationCount },
+    { name: 'Messages', href: '/inbox', icon: MessageSquare, badge: 0 }, // Confessions are now in Notifications too, but kept for legacy
+    { name: 'Notifications', href: '/notifications', icon: Bell, badge: unreadCount },
     { name: 'Profile', href: '/profile', icon: User },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
@@ -39,18 +41,14 @@ export default function BottomNavbar() {
               <div className="relative p-1">
                 <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
 
-                <AnimatePresence>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <motion.span
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      exit={{ scale: 0 }}
-                      className="absolute -top-1 -right-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-[#1a1429]"
-                    >
-                      {item.badge > 99 ? '99+' : item.badge}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                {mounted && item.badge !== undefined && item.badge > 0 && (
+                  <span
+                    suppressHydrationWarning
+                    className="absolute -top-1 -right-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-[#1a1429]"
+                  >
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
               </div>
 
               {/* Label */}

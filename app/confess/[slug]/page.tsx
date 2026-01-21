@@ -28,6 +28,7 @@ export async function sendConfessionAction(profileId: string, formData: FormData
     .insert({
       profile_id: profileId,
       message,
+      message_type: 'confession'
     })
 
   if (insertError) {
@@ -57,7 +58,7 @@ export default async function ConfessPage({ params }: PageProps) {
 
   return (
     <div className="relative min-h-[100dvh] w-full flex items-center justify-center overflow-hidden bg-neutral-950 text-neutral-200">
-      
+
       {/* Background Ambience (Mobile Optimized Orbs) */}
       <div className="absolute top-[-10%] left-[-10%] w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-purple-900/20 rounded-full blur-[80px] md:blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[250px] md:w-[400px] h-[250px] md:h-[400px] bg-indigo-900/10 rounded-full blur-[70px] md:blur-[100px] pointer-events-none" />
@@ -65,7 +66,7 @@ export default async function ConfessPage({ params }: PageProps) {
       <div className="z-10 w-full max-w-lg px-4 py-8">
         {/* Glassmorphic Card */}
         <div className="relative backdrop-blur-2xl bg-white/[0.03] border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden ring-1 ring-white/10">
-          
+
           {/* Header */}
           <div className="p-8 pb-2 text-center">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-purple-500/10 mb-6 border border-purple-500/20 shadow-inner">
@@ -81,9 +82,9 @@ export default async function ConfessPage({ params }: PageProps) {
 
           {/* Form Container */}
           <div className="p-8 pt-6">
-            <ConfessionForm 
-              profileId={profile.id} 
-              action={sendConfessionAction} 
+            <ConfessionForm
+              profileId={profile.id}
+              action={sendConfessionAction}
             />
           </div>
         </div>

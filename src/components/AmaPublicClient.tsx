@@ -7,12 +7,12 @@ import { createClient } from '@/lib/supabase/client'
 
 const MAX_CHARS = 100 // Limit for AMA questions
 
-export default function AmaPublicClient({ 
-  profileId, 
-  username 
-}: { 
-  profileId: string, 
-  username: string 
+export default function AmaPublicClient({
+  profileId,
+  username
+}: {
+  profileId: string,
+  username: string
 }) {
   const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -21,7 +21,7 @@ export default function AmaPublicClient({
 
   const handleSubmit = async () => {
     if (!message.trim() || message.length > MAX_CHARS) return
-    
+
     setIsSending(true)
     try {
       const { error } = await supabase
@@ -29,7 +29,8 @@ export default function AmaPublicClient({
         .insert({
           profile_id: profileId,
           message: message.trim(),
-          is_read: false
+          is_read: false,
+          message_type: 'ama'
         })
 
       if (error) throw error
@@ -43,14 +44,14 @@ export default function AmaPublicClient({
   }
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
     >
       <AnimatePresence mode="wait">
         {!sent ? (
-          <motion.div 
+          <motion.div
             key="form"
             exit={{ opacity: 0, y: -20 }}
             className="p-8 flex flex-col items-center"
@@ -58,7 +59,7 @@ export default function AmaPublicClient({
             <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
               <span className="text-2xl">📝</span>
             </div>
-            
+
             <h1 className="text-xl font-black text-gray-800 text-center mb-1">
               Ask @{username}
             </h1>
@@ -87,7 +88,7 @@ export default function AmaPublicClient({
             </button>
           </motion.div>
         ) : (
-          <motion.div 
+          <motion.div
             key="success"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -100,7 +101,7 @@ export default function AmaPublicClient({
             <p className="text-gray-500 font-medium mb-8">
               Your anonymous question is waiting for @{username}
             </p>
-            <button 
+            <button
               onClick={() => { setSent(false); setMessage(''); }}
               className="text-purple-600 font-bold text-sm"
             >
@@ -111,5 +112,5 @@ export default function AmaPublicClient({
       </AnimatePresence>
     </motion.div>
   )
-        }
-      
+}
+

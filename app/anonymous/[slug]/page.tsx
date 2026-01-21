@@ -28,6 +28,7 @@ export async function sendConfessionAction(profileId: string, formData: FormData
     .insert({
       profile_id: profileId,
       message,
+      message_type: 'anonymous'
     })
 
   if (insertError) {
@@ -58,7 +59,7 @@ export default async function ConfessPage({ params }: PageProps) {
   return (
     // Background: Dark minimal with a subtle purple gradient glow
     <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-neutral-950 text-neutral-200">
-      
+
       {/* Background Ambience (Purple Orb) */}
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/30 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-indigo-900/20 rounded-full blur-[100px] pointer-events-none" />
@@ -66,7 +67,7 @@ export default async function ConfessPage({ params }: PageProps) {
       <div className="z-10 w-full max-w-lg px-4">
         {/* Glassmorphic Card */}
         <div className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl shadow-2xl overflow-hidden ring-1 ring-white/5">
-          
+
           {/* Header */}
           <div className="p-8 pb-2 text-center">
             <div className="inline-block p-3 rounded-full bg-purple-500/10 mb-4 border border-purple-500/20">
@@ -82,9 +83,9 @@ export default async function ConfessPage({ params }: PageProps) {
 
           {/* Form Container */}
           <div className="p-8 pt-6">
-            <ConfessionForm 
-              profileId={profile.id} 
-              action={sendConfessionAction} 
+            <ConfessionForm
+              profileId={profile.id}
+              action={sendConfessionAction}
             />
           </div>
         </div>
