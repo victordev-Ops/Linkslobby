@@ -20,6 +20,8 @@ body {
   width: 100%;
 }
 
+/* Apply to both to handle overscroll areas */
+.dark html,
 .dark body {
   background-color: #0f0a1e;
   color: white;

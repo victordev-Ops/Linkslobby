@@ -72,7 +72,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     <AuthProvider>
       <NotificationProvider profileId={profileId}>
         <XPNotificationProvider>
-          <div className="min-h-screen pb-24 transition-all">
+          <div className="min-h-screen transition-all">
             <main>{children}</main>
             <Suspense fallback={null}>
               <NavbarWrapper />

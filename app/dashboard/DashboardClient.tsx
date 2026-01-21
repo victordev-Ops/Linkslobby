@@ -129,7 +129,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300">
+    <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24">
 
       {/* Background Ambience (Dark Mode only) - Pinned from layout/settings style */}
       <div className="fixed inset-0 pointer-events-none hidden dark:block">
