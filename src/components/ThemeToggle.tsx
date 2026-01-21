@@ -13,6 +13,17 @@ export function ThemeToggle() {
         setMounted(true)
     }, [])
 
+    // Debug: Log current theme
+    React.useEffect(() => {
+        console.log('🎨 Current theme:', theme)
+
+        // Check if dark class is actually on HTML
+        const htmlElement = document.documentElement
+        const hasDarkClass = htmlElement.classList.contains('dark')
+        console.log('📋 HTML classList:', htmlElement.className)
+        console.log('🌙 Has dark class:', hasDarkClass)
+    }, [theme])
+
     if (!mounted) {
         return (
             <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-full w-fit">
@@ -38,7 +49,10 @@ export function ThemeToggle() {
                 return (
                     <button
                         key={mode.name}
-                        onClick={() => setTheme(mode.name)}
+                        onClick={() => {
+                            console.log('🔘 Clicked:', mode.name)
+                            setTheme(mode.name)
+                        }}
                         className={`
               relative p-2 rounded-full transition-all duration-200
               ${isActive
