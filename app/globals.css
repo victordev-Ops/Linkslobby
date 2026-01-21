@@ -21,8 +21,8 @@ body {
 }
 
 /* Apply to both to handle overscroll areas */
-.dark html,
-.dark body {
+html.dark,
+html.dark body {
   background-color: #0f0a1e;
   color: white;
 }
