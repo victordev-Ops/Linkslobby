@@ -18,6 +18,7 @@ type Confession = {
   created_at: string
   is_read: boolean
   profile_id: string
+  message_type: 'confession' | 'ama' | 'anonymous' | 'direct_message'
 }
 
 // --- HELPERS ---
@@ -71,6 +72,7 @@ export default function InboxClient({
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'All' | 'Confessions' | 'AMA' | 'Anonymous' | 'DMs'>('All')
 
   // NEW: State for the instant preview overlay
   const [selectedConfession, setSelectedConfession] = useState<Confession | null>(null)
@@ -99,7 +101,7 @@ export default function InboxClient({
     try {
       const { data, error: supabaseError } = await supabase
         .from('confessions')
-        .select('id, message, created_at, is_read, profile_id')
+        .select('id, message, created_at, is_read, profile_id, message_type')
         .eq('profile_id', userId)
         .order('created_at', { ascending: false })
         .limit(100)
@@ -183,6 +185,17 @@ export default function InboxClient({
     fetchLatest(true)
   }, [fetchLatest])
 
+  const filteredConfessions = useMemo(() => {
+    if (activeTab === 'All') return confessions
+    return confessions.filter(c => {
+      if (activeTab === 'Confessions') return c.message_type === 'confession'
+      if (activeTab === 'AMA') return c.message_type === 'ama'
+      if (activeTab === 'Anonymous') return c.message_type === 'anonymous'
+      if (activeTab === 'DMs') return c.message_type === 'direct_message'
+      return true
+    })
+  }, [confessions, activeTab])
+
   const openMessage = useCallback(async (confession: Confession) => {
     // 1. INSTANTLY OPEN (State update = ~0ms delay)
     setSelectedConfession(confession)
@@ -227,10 +240,28 @@ export default function InboxClient({
         </button>
       </div>
 
+      {/* Grouping Tabs */}
+      <div className="px-6 pb-4 overflow-x-auto no-scrollbar">
+        <div className="flex bg-gray-50 dark:bg-white/5 p-1 rounded-2xl border border-gray-100 dark:border-white/10 w-max min-w-full">
+          {(['All', 'Confessions', 'AMA', 'Anonymous', 'DMs'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === tab
+                  ? 'bg-white dark:bg-purple-600 text-purple-600 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Message List */}
       <div className="divide-y divide-gray-50 dark:divide-white/5">
         <AnimatePresence mode="popLayout" initial={false}>
-          {confessions.length === 0 ? (
+          {filteredConfessions.length === 0 ? (
             <motion.div
               key="empty"
               initial={{ opacity: 0 }}
@@ -240,54 +271,59 @@ export default function InboxClient({
               <EmptyState />
             </motion.div>
           ) : (
-            confessions.map((c) => (
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                key={c.id}
-                onClick={() => openMessage(c)}
-                className="w-full text-left px-6 py-5 flex items-start gap-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors active:bg-gray-100 dark:active:bg-white/10 group"
-              >
-                {/* Message Icon */}
-                <div className="relative flex-shrink-0">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm transition-all duration-300 ${c.is_read
+            filteredConfessions.map((c) => {
+              const isSecret = !c.is_read && (c.message_type === 'confession' || c.message_type === 'anonymous')
+              const displayMessage = isSecret ? 'Locked message - Tap to reveal' : (c.message.length > 80 ? c.message.slice(0, 80) + '...' : c.message)
+
+              return (
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  key={c.id}
+                  onClick={() => openMessage(c)}
+                  className="w-full text-left px-6 py-5 flex items-start gap-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors active:bg-gray-100 dark:active:bg-white/10 group"
+                >
+                  {/* Message Icon */}
+                  <div className="relative flex-shrink-0">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm transition-all duration-300 ${c.is_read
                       ? 'bg-gray-100 dark:bg-white/10 grayscale dark:grayscale-0 dark:opacity-50'
                       : 'bg-gradient-to-tr from-purple-500 to-pink-500 shadow-purple-200 dark:shadow-purple-900/20'
-                    }`}>
-                    💌
-                  </div>
-                  {!c.is_read && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-[#0f0a1e]" />
-                  )}
-                </div>
-
-                {/* Message Content */}
-                <div className="flex-1 min-w-0 pt-0.5">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <p className={`text-[10px] tracking-widest uppercase font-black ${c.is_read ? 'text-gray-400 dark:text-gray-500' : 'text-purple-600 dark:text-purple-400'
                       }`}>
-                      {c.is_read ? 'Opened' : 'New Message'}
-                    </p>
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
-                      {formatRelativeTime(c.created_at)}
-                    </span>
+                      {c.message_type === 'ama' ? '❓' : c.message_type === 'direct_message' ? '💬' : '💌'}
+                    </div>
+                    {!c.is_read && (
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-[#0f0a1e]" />
+                    )}
                   </div>
-                  <p className={`text-base line-clamp-2 leading-relaxed ${c.is_read
-                      ? 'text-gray-500 dark:text-gray-400'
-                      : 'text-gray-900 dark:text-white font-semibold'
-                    }`}>
-                    {c.message.length > 80 ? c.message.slice(0, 80) + '...' : c.message}
-                  </p>
-                </div>
 
-                <ChevronRight
-                  size={18}
-                  className="text-gray-300 dark:text-gray-600 mt-5 group-hover:translate-x-1 transition-transform"
-                />
-              </motion.button>
-            ))
+                  {/* Message Content */}
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <div className="flex justify-between items-baseline mb-1">
+                      <p className={`text-[10px] tracking-widest uppercase font-black ${c.is_read ? 'text-gray-400 dark:text-gray-500' : 'text-purple-600 dark:text-purple-400'
+                        }`}>
+                        {c.is_read ? c.message_type : `New ${c.message_type}`}
+                      </p>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+                        {formatRelativeTime(c.created_at)}
+                      </span>
+                    </div>
+                    <p className={`text-base line-clamp-2 leading-relaxed ${c.is_read
+                      ? 'text-gray-500 dark:text-gray-400'
+                      : isSecret ? 'text-purple-400 dark:text-purple-600 font-medium italic' : 'text-gray-900 dark:text-white font-semibold'
+                      }`}>
+                      {displayMessage}
+                    </p>
+                  </div>
+
+                  <ChevronRight
+                    size={18}
+                    className="text-gray-300 dark:text-gray-600 mt-5 group-hover:translate-x-1 transition-transform"
+                  />
+                </motion.button>
+              )
+            })
           )}
         </AnimatePresence>
       </div>

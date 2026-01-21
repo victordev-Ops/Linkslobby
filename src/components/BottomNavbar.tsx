@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react'
 
 export default function BottomNavbar() {
   const pathname = usePathname()
-  const { unreadCount } = useNotifications()
+  const { unreadCount, unreadMessagesCount } = useNotifications()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export default function BottomNavbar() {
 
   const navItems = [
     { name: 'Home', href: '/dashboard', icon: Home },
-    { name: 'Messages', href: '/inbox', icon: MessageSquare, badge: 0 }, // Confessions are now in Notifications too, but kept for legacy
+    { name: 'Messages', href: '/inbox', icon: MessageSquare, badge: unreadMessagesCount },
     { name: 'Notifications', href: '/notifications', icon: Bell, badge: unreadCount },
     { name: 'Profile', href: '/profile', icon: User },
     { name: 'Settings', href: '/settings', icon: Settings },

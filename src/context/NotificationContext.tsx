@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 
 type NotificationContextType = {
   unreadCount: number
+  unreadMessagesCount: number
   setUnreadCount: React.Dispatch<React.SetStateAction<number>>
+  setUnreadMessagesCount: React.Dispatch<React.SetStateAction<number>>
   refreshUnreadCount: () => Promise<void>
 }
 
@@ -19,6 +21,7 @@ export function NotificationProvider({
   profileId?: string | null
 }) {
   const [unreadCount, setUnreadCount] = useState(0)
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
 
@@ -47,6 +50,7 @@ export function NotificationProvider({
     }
 
     setUnreadCount((confRes.count || 0) + (dykmRes.count || 0))
+    setUnreadMessagesCount(confRes.count || 0)
   }, [profileId, supabase])
 
   useEffect(() => {
@@ -83,7 +87,13 @@ export function NotificationProvider({
   }, [profileId, refreshUnreadCount])
 
   return (
-    <NotificationContext.Provider value={{ unreadCount, setUnreadCount, refreshUnreadCount }}>
+    <NotificationContext.Provider value={{
+      unreadCount,
+      unreadMessagesCount,
+      setUnreadCount,
+      setUnreadMessagesCount,
+      refreshUnreadCount
+    }}>
       {children}
     </NotificationContext.Provider>
   )

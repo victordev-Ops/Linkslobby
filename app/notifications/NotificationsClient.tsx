@@ -11,6 +11,8 @@ import Link from "next/link"
 import { formatDistanceToNow } from "@/lib/utils"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
+import { markConfessionAsRead } from "app/actions/confessions"
+import { useRouter } from "next/navigation"
 
 interface NotificationsClientProps {
     initialConfessions: any[]
@@ -33,6 +35,14 @@ export default function NotificationsClient({
     const [revealedScores, setRevealedScores] = useState<Record<string, boolean>>({})
     const [isRevealing, setIsRevealing] = useState<string | null>(null)
     const supabase = createClient()
+    const router = useRouter()
+
+    const handleSelectMessage = async (item: any) => {
+        if (item.type === 'message' && !item.is_read) {
+            await markConfessionAsRead(item.id)
+        }
+        router.push(item.type === 'message' ? `/inbox/${item.id}` : '#')
+    }
 
     // Combine and sort notifications
     const allNotifications = [
@@ -186,12 +196,12 @@ export default function NotificationsClient({
                                             )}
 
                                             {item.type === 'message' && (
-                                                <Link
-                                                    href={`/inbox/${item.id}`}
+                                                <button
+                                                    onClick={() => handleSelectMessage(item)}
                                                     className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline"
                                                 >
                                                     View Full Message <ChevronRight size={12} />
-                                                </Link>
+                                                </button>
                                             )}
                                         </div>
                                     </div>
