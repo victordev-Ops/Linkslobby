@@ -50,10 +50,10 @@ async function ConfessionsLoader({
   if (confessionsRes.error) {
     console.error('Error fetching confessions:', confessionsRes.error)
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="min-h-screen bg-white dark:bg-[#0f0a1e] flex items-center justify-center p-6 transition-colors">
         <div className="text-center">
-          <p className="text-gray-600 font-medium">Failed to load confessions</p>
-          <p className="text-sm text-gray-400 mb-4">Please check your connection.</p>
+          <p className="text-gray-600 dark:text-gray-300 font-medium">Failed to load confessions</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mb-4">Please check your connection.</p>
         </div>
       </div>
     )
