@@ -33,7 +33,7 @@ const GRADIENTS = [
 export default function MessageViewClient({ confession, username, onClose }: Props) {
   const router = useRouter()
   const shareWrapperRef = useRef<HTMLDivElement>(null)
-  
+
   const [colorIndex, setColorIndex] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
@@ -49,14 +49,14 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
       router.push('/inbox')
     }
   }
-  
+
   const generateImage = async () => {
     if (!shareWrapperRef.current) return null
     try {
       // Small delay to ensure DOM is ready
       await new Promise(resolve => setTimeout(resolve, 100))
-      return await toPng(shareWrapperRef.current, { 
-        cacheBust: true, 
+      return await toPng(shareWrapperRef.current, {
+        cacheBust: true,
         pixelRatio: 3, // Higher quality for sharing
         quality: 1,
         backgroundColor: '#F9FAFB',
@@ -127,17 +127,17 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
   const textSizeClass = isLongMessage ? "text-xl leading-relaxed" : "text-2xl leading-tight"
 
   return (
-    <div className="fixed inset-0 bg-gray-50 font-sans overflow-y-auto z-[60]">
+    <div className="fixed inset-0 bg-gray-50 dark:bg-[#0f0a1e] font-sans overflow-y-auto z-[60] transition-colors">
       {/* Background layer */}
-      <div className="fixed inset-x-0 top-0 h-96 bg-gradient-to-b from-pink-100/50 to-transparent pointer-events-none" />
+      <div className="fixed inset-x-0 top-0 h-96 bg-gradient-to-b from-pink-100/50 dark:from-purple-900/20 to-transparent pointer-events-none" />
 
       {/* Top Bar - Fixed and always clickable */}
       <div className="sticky top-0 px-6 pt-6 pb-4 flex items-center justify-end z-[70]">
-        <button 
-          onClick={handleClose} 
-          className="p-3 bg-white shadow-xl rounded-full border border-gray-100 active:scale-90 transition-all"
+        <button
+          onClick={handleClose}
+          className="p-3 bg-white dark:bg-[#1a1429] shadow-xl rounded-full border border-gray-100 dark:border-white/10 active:scale-90 transition-all group"
         >
-          <X size={24} className="text-gray-900" />
+          <X size={24} className="text-gray-900 dark:text-white group-hover:rotate-90 transition-transform" />
         </button>
       </div>
 
@@ -149,6 +149,7 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
         >
           {/* THE CAPTURE AREA */}
           <div ref={shareWrapperRef} className="p-4 bg-transparent">
+            {/* Kept as white for sharing consistency, but you could offer dark mode variants later if requested */}
             <div className="w-full rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border border-gray-100">
               <div className={`${GRADIENTS[colorIndex]} px-8 py-12 text-center transition-colors duration-500`}>
                 <h1 className="text-white text-lg font-black tracking-tighter uppercase italic">
@@ -172,32 +173,32 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
           {/* Interaction Controls */}
           <div className="flex justify-center gap-8 mt-8">
             <ControlBtn onClick={handleNextColor} label="Theme">
-               <div className={`w-10 h-10 rounded-full ${GRADIENTS[colorIndex]} shadow-inner`} />
+              <div className={`w-10 h-10 rounded-full ${GRADIENTS[colorIndex]} shadow-inner ring-2 ring-white dark:ring-[#1a1429]`} />
             </ControlBtn>
-            
+
             <ControlBtn onClick={handleSaveImage} label="Save" disabled={isSaving}>
-               {isSaving ? <Loader2 className="animate-spin text-purple-600" /> : <Camera size={26} className="text-gray-800" />}
+              {isSaving ? <Loader2 className="animate-spin text-purple-600 dark:text-purple-400" /> : <Camera size={26} className="text-gray-800 dark:text-white" />}
             </ControlBtn>
           </div>
 
           {/* Footer Actions */}
           <div className="mt-12 space-y-4">
-              <button 
-                onClick={handleReveal}
-                className="w-full bg-white border-2 border-purple-100 text-purple-600 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
-              >
-                <Lock size={18} />
-                <span>Reveal Sender</span>
-              </button>
+            <button
+              onClick={handleReveal}
+              className="w-full bg-white dark:bg-[#1a1429] border-2 border-purple-100 dark:border-white/10 text-purple-600 dark:text-purple-400 py-4 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+            >
+              <Lock size={18} />
+              <span>Reveal Sender</span>
+            </button>
 
-              <button 
-                onClick={handleShare}
-                disabled={isSharing}
-                className="w-full bg-black text-white font-bold text-lg py-5 rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 active:scale-[0.97] transition-all disabled:opacity-70"
-              >
-                {isSharing ? <Loader2 className="animate-spin" size={24} /> : <Share2 size={24} />}
-                <span>Share to Story</span>
-              </button>
+            <button
+              onClick={handleShare}
+              disabled={isSharing}
+              className="w-full bg-black dark:bg-white text-white dark:text-black font-bold text-lg py-5 rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 active:scale-[0.97] transition-all disabled:opacity-70 icon-bounce"
+            >
+              {isSharing ? <Loader2 className="animate-spin" size={24} /> : <Share2 size={24} />}
+              <span>Share to Story</span>
+            </button>
           </div>
         </motion.div>
       </div>
@@ -205,22 +206,22 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
   )
 }
 
-function ControlBtn({ children, onClick, label, disabled = false }: { 
+function ControlBtn({ children, onClick, label, disabled = false }: {
   children: React.ReactNode
   onClick: (e: React.MouseEvent) => void
   label: string
   disabled?: boolean
 }) {
   return (
-    <button 
-      onClick={onClick} 
-      disabled={disabled} 
+    <button
+      onClick={onClick}
+      disabled={disabled}
       className="flex flex-col items-center gap-2 group disabled:opacity-50"
     >
-      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg group-active:scale-90 transition-all border border-gray-50">
+      <div className="w-16 h-16 bg-white dark:bg-[#1a1429] rounded-2xl flex items-center justify-center shadow-lg group-active:scale-90 transition-all border border-gray-50 dark:border-white/10 text-gray-900 dark:text-white">
         {children}
       </div>
-      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
+      <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">{label}</span>
     </button>
   )
 }

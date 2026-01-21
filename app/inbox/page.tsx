@@ -9,7 +9,7 @@ export const revalidate = 0
 
 export default async function InboxPage() {
   const supabase = await createSupabaseServerClient()
-  
+
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
@@ -17,7 +17,7 @@ export default async function InboxPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-[#0f0a1e] transition-colors duration-300">
       <Suspense fallback={<InboxSkeleton />}>
         <ConfessionsLoader userId={user.id} supabase={supabase} />
       </Suspense>
@@ -25,10 +25,10 @@ export default async function InboxPage() {
   )
 }
 
-async function ConfessionsLoader({ 
-  userId, 
-  supabase 
-}: { 
+async function ConfessionsLoader({
+  userId,
+  supabase
+}: {
   userId: string
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
 }) {
@@ -71,4 +71,4 @@ async function ConfessionsLoader({
   )
 }
 
-  
+

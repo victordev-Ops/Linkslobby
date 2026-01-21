@@ -23,7 +23,7 @@ export default function BottomNavbar() {
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 z-50 pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-[#1a1429]/90 backdrop-blur-lg border-t border-gray-100 dark:border-white/10 z-50 pb-[env(safe-area-inset-bottom)] transition-colors">
       <div className="max-w-md mx-auto px-4 h-16 flex justify-around items-center">
         {navItems.map((item) => {
           // Logic: Active if strictly matched or if it's the inbox subpath
@@ -33,7 +33,7 @@ export default function BottomNavbar() {
             <Link
               key={item.name}
               href={item.href}
-              className={`relative flex flex-col items-center justify-center flex-1 h-full transition-colors active:scale-95 ${isActive ? 'text-purple-600' : 'text-gray-400 hover:text-purple-400'
+              className={`relative flex flex-col items-center justify-center flex-1 h-full transition-colors active:scale-95 ${isActive ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-white/30 hover:text-purple-400'
                 }`}
             >
               <div className="relative p-1">
@@ -45,7 +45,7 @@ export default function BottomNavbar() {
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       exit={{ scale: 0 }}
-                      className="absolute -top-1 -right-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-white"
+                      className="absolute -top-1 -right-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-[#1a1429]"
                     >
                       {item.badge > 99 ? '99+' : item.badge}
                     </motion.span>
@@ -62,7 +62,7 @@ export default function BottomNavbar() {
                 <motion.div
                   layoutId="nav-indicator"
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                  className="absolute -top-0.5 w-8 h-1 bg-purple-600 rounded-b-full"
+                  className="absolute -top-0.5 w-8 h-1 bg-purple-600 dark:bg-purple-400 rounded-b-full"
                 />
               )}
             </Link>
