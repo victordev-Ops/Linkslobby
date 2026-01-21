@@ -1,8 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import BottomNavbar from "./BottomNavbar";
+import { useEffect, useState, Suspense } from "react";
+import NavbarWrapper from "./NavbarWrapper";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { XPNotificationProvider } from "@/components/XPNotificationProvider";
@@ -36,14 +36,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     return () => subscription.unsubscribe();
   }, [supabase]);
-  
+
   // 2. Clear Badges
   useEffect(() => {
     if ('clearAppBadge' in navigator) {
       (navigator as any).clearAppBadge();
     }
   }, []);
-      
+
   // 3. Service Worker Registration
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -68,38 +68,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // 4. Navbar Visibility Logic - Updated for /anonymous/ prefix
-  const shouldHideNavbar = useMemo(() => {
-    const hideNavbarPaths = [
-      "/login",
-      "/signup",
-      "/onboarding",
-      "/welcome",
-      "/auth/setup",
-      "/auth",
-      "/fullscreen",
-      "/tod",
-    ];
-
-    const isExactMatch = hideNavbarPaths.includes(pathname);
-    
-    // Prefix checks for dynamic routes or sub-folders
-    const isPrefixMatch = 
-      pathname.startsWith("/confess/") || 
-      pathname.startsWith("/auth/") ||
-      pathname.startsWith("/tod/") ||
-      pathname.startsWith("/anonymous/"); // <--- Added this
-
-    return isExactMatch || isPrefixMatch;
-  }, [pathname]);
-
   return (
-    <AuthProvider> 
+    <AuthProvider>
       <NotificationProvider profileId={profileId}>
         <XPNotificationProvider>
-          <div className={`min-h-screen transition-all ${shouldHideNavbar ? "pb-0" : "pb-24"}`}>
+          <div className="min-h-screen pb-24 transition-all">
             <main>{children}</main>
-            {!shouldHideNavbar && <BottomNavbar />}
+            <Suspense fallback={null}>
+              <NavbarWrapper />
+            </Suspense>
             <Toaster position="top-center" richColors />
           </div>
         </XPNotificationProvider>

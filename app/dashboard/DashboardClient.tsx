@@ -7,7 +7,7 @@ import {
   Dices, Sparkles, Flame
 } from "lucide-react"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/context/AuthContext"
 import { createClient } from "@/lib/supabase/client"
 import XPBalance from "@/components/XPBalance"
@@ -42,7 +42,8 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
   // DYKM Logic
   const [hasDykm, setHasDykm] = useState(!!initialDykmQuestions)
-  const [isDykmModalOpen, setIsDykmModalOpen] = useState(false)
+  const searchParams = useSearchParams()
+  const isDykmModalOpen = searchParams.get('modal') === 'dykm'
   const [isSavingDykm, setIsSavingDykm] = useState(false)
   const [dykmQuestions, setDykmQuestions] = useState(initialDykmQuestions || [
     { question: "", hint: "", answer: "" },
@@ -80,7 +81,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
       toast.success("Quiz saved successfully!")
       setHasDykm(true)
-      setIsDykmModalOpen(false)
+      router.push('/dashboard', { scroll: false })
     } catch (err) {
       toast.error("Failed to save quiz")
       console.error(err)
@@ -260,7 +261,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
                   {!hasDykm ? (
                     <button
-                      onClick={() => setIsDykmModalOpen(true)}
+                      onClick={() => router.push('/dashboard?modal=dykm', { scroll: false })}
                       className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition"
                     >
                       Create My Quiz
@@ -281,7 +282,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                         </button>
                       </div>
                       <button
-                        onClick={() => setIsDykmModalOpen(true)}
+                        onClick={() => router.push('/dashboard?modal=dykm', { scroll: false })}
                         className="w-full py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-[10px] hover:bg-slate-50 transition"
                       >
                         Edit Questions
@@ -431,7 +432,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
             <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
               <h3 className="font-bold text-lg text-slate-900">Create Quiz</h3>
               <button
-                onClick={() => setIsDykmModalOpen(false)}
+                onClick={() => router.push('/dashboard', { scroll: false })}
                 className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition"
               >
                 <X size={18} />
