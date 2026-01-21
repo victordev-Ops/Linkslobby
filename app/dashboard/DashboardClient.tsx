@@ -226,7 +226,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
                   <button
                     onClick={handleNavigateToTod}
-                    className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-rose-200"
                   >
                     <Sparkles size={16} />
                     View Game Lobbies
@@ -262,7 +262,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                   {!hasDykm ? (
                     <button
                       onClick={() => router.push('/dashboard?modal=dykm', { scroll: false })}
-                      className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition"
+                      className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition-all active:scale-95 hover:scale-[1.02] shadow-lg shadow-blue-200"
                     >
                       Create My Quiz
                     </button>
@@ -283,7 +283,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                       </div>
                       <button
                         onClick={() => router.push('/dashboard?modal=dykm', { scroll: false })}
-                        className="w-full py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-[10px] hover:bg-slate-50 transition"
+                        className="w-full py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-[10px] hover:bg-slate-50 transition-all active:scale-95 hover:scale-[1.02]"
                       >
                         Edit Questions
                       </button>
@@ -408,7 +408,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
                   <button
                     onClick={handleNavigateToHotSeat}
-                    className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs hover:bg-amber-700 transition flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs hover:bg-amber-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-amber-200"
                   >
                     <Sparkles size={16} />
                     Join Hot Seat
@@ -433,7 +433,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
               <h3 className="font-bold text-lg text-slate-900">Create Quiz</h3>
               <button
                 onClick={() => router.push('/dashboard', { scroll: false })}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition"
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-all active:scale-90 hover:rotate-90"
               >
                 <X size={18} />
               </button>
