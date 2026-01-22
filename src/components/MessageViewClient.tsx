@@ -13,6 +13,7 @@ type Confession = {
   created_at: string
   is_read: boolean
   profile_id: string
+  message_type: 'confession' | 'ama' | 'anonymous' | 'direct_message'
 }
 
 type Props = {
@@ -102,7 +103,7 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: 'Anonymous Message',
+          title: getDisplayName(confession.message_type),
         })
       } else {
         // Fallback to download if Web Share API isn't supported
@@ -121,6 +122,15 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
 
   const handleReveal = () => {
     toast.info("Reveal Sender feature coming soon!")
+  }
+
+  const getDisplayName = (type: Confession['message_type']) => {
+    switch (type) {
+      case 'confession': return 'Confession'
+      case 'ama': return 'AMA Message'
+      case 'direct_message': return 'Direct Message'
+      default: return 'Anonymous Message'
+    }
   }
 
   const isLongMessage = confession.message.length > 150
@@ -153,7 +163,7 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
             <div className="w-full rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border border-gray-100">
               <div className={`${GRADIENTS[colorIndex]} px-8 py-12 text-center transition-colors duration-500`}>
                 <h1 className="text-white text-lg font-black tracking-tighter uppercase italic">
-                  Anonymous Message
+                  {getDisplayName(confession.message_type)}
                 </h1>
               </div>
 

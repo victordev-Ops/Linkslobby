@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import {
     Bell, MessageSquare, Brain, Users, Lock,
     ArrowLeft, ChevronRight, Trophy, Sparkles,
-    Eye, EyeOff, Loader2
+    Eye, EyeOff, Loader2, X
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
@@ -38,6 +38,7 @@ export default function NotificationsClient({
     const [activeTab, setActiveTab] = useState<Tab>("All")
     const [revealedScores, setRevealedScores] = useState<Record<string, boolean>>({})
     const [isRevealing, setIsRevealing] = useState<string | null>(null)
+    const [showProCard, setShowProCard] = useState(true)
     const supabase = createClient()
     const router = useRouter()
 
@@ -202,7 +203,7 @@ export default function NotificationsClient({
 
                                             {item.type === 'message' && (
                                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 italic">
-                                                    "{item.message}"
+                                                    {item.message_type === 'ama' ? `"${item.message}"` : "Click to view message"}
                                                 </p>
                                             )}
 
@@ -267,9 +268,15 @@ export default function NotificationsClient({
                 </div>
             </main>
 
-            {!isPro && (
+            {!isPro && showProCard && (
                 <div className="fixed bottom-28 left-4 right-4 max-w-xl mx-auto">
-                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-2xl shadow-xl shadow-purple-500/20 text-white flex items-center justify-between gap-4">
+                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-2xl shadow-xl shadow-purple-500/20 text-white flex items-center justify-between gap-4 relative">
+                        <button
+                            onClick={() => setShowProCard(false)}
+                            className="absolute -top-2 -right-2 w-8 h-8 bg-white dark:bg-[#1a1429] text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center shadow-lg border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                        >
+                            <X size={16} />
+                        </button>
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                                 <Sparkles size={20} />
