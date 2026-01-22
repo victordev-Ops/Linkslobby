@@ -26,7 +26,7 @@ export default async function MessageViewPage({
 
   const { data: confession, error } = await supabase
     .from('confessions')
-    .select('id, message, created_at, is_read, profile_id')
+    .select('id, message, created_at, is_read, profile_id, message_type')
     .eq('id', id) // 3. Use the awaited 'id' variable here
     .eq('profile_id', user.id)
     .single()
