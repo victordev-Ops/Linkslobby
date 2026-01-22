@@ -28,13 +28,16 @@ export default function SettingsClient({
       </div>
 
       {/* Header */}
-      <div className="bg-white/80 dark:bg-[#0f0a1e]/80 backdrop-blur-md border-b border-gray-100 dark:border-white/10 sticky top-0 z-40 transition-all duration-300">
+      <div className="bg-white dark:bg-[#1a1429] border-b dark:border-white/10 sticky top-0 z-10 transition-colors duration-300">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link
             href="/dashboard"
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all active:scale-90"
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all active:scale-90 group"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <div className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 transition-all">
+              <ArrowLeft className="h-5 w-5" />
+            </div>
+            <span className="hidden sm:inline font-bold text-sm">Dashboard</span>
           </Link>
           <h1 className="text-xl font-bold dark:text-white tracking-tight">Settings</h1>
         </div>

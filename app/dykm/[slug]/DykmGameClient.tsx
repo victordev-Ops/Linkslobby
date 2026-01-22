@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Lightbulb, Check, X, Trophy } from "lucide-react"
 import { toast } from "sonner"
@@ -23,6 +24,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
   const [responderName, setResponderName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const supabase = createClient()
+  const router = useRouter()
 
   const currentQ = questions[currentIndex]
 
@@ -78,7 +80,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
       if (error) throw error
 
       toast.success("Score saved!")
-      window.location.href = "/"
+      router.push("/")
     } catch (err) {
       console.error(err)
       toast.error("Failed to save score")

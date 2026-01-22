@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 
 type NotificationContextType = {
   unreadCount: number
@@ -64,7 +65,39 @@ export function NotificationProvider({
     const channel = supabase
       .channel(`notifications-${profileId}`)
       .on('postgres_changes', {
-        event: '*',
+        event: 'INSERT',
+        schema: 'public',
+        table: 'confessions',
+        filter: `profile_id=eq.${profileId}`
+      }, (payload) => {
+        refreshUnreadCount()
+        const msg = payload.new
+        toast('New message! 💌', {
+          description: msg.message_type === 'ama' ? 'Someone asked you a question!' : 'You received a new secret message.',
+          action: {
+            label: 'View',
+            onClick: () => window.location.href = '/inbox'
+          }
+        })
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'dykm_scores',
+        filter: `quiz_owner_id=eq.${profileId}`
+      }, (payload) => {
+        refreshUnreadCount()
+        const score = payload.new
+        toast('Quiz result! 🏆', {
+          description: `${score.responder_name} scored ${score.score}/${score.total_questions} on your quiz!`,
+          action: {
+            label: 'View',
+            onClick: () => window.location.href = '/notifications'
+          }
+        })
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
         schema: 'public',
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
@@ -72,7 +105,23 @@ export function NotificationProvider({
         refreshUnreadCount()
       })
       .on('postgres_changes', {
-        event: '*',
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'dykm_scores',
+        filter: `quiz_owner_id=eq.${profileId}`
+      }, () => {
+        refreshUnreadCount()
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'confessions',
+        filter: `profile_id=eq.${profileId}`
+      }, () => {
+        refreshUnreadCount()
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
         schema: 'public',
         table: 'dykm_scores',
         filter: `quiz_owner_id=eq.${profileId}`
