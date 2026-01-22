@@ -4,7 +4,7 @@ import { Home, MessageSquare, Bell, User, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useNotifications } from '@/context/NotificationContext'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 
 export default function BottomNavbar() {
@@ -41,14 +41,15 @@ export default function BottomNavbar() {
               <div className="relative p-1">
                 <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
 
-                {mounted && item.badge !== undefined && item.badge > 0 && (
-                  <span
-                    suppressHydrationWarning
-                    className="absolute -top-1 -right-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-[#1a1429]"
-                  >
-                    {item.badge > 99 ? '99+' : item.badge}
-                  </span>
-                )}
+                <span
+                  suppressHydrationWarning
+                  className={`absolute -top-1 -right-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-[#1a1429] transition-all duration-300 origin-center ${mounted && item.badge && item.badge > 0
+                    ? 'opacity-100 scale-100'
+                    : 'opacity-0 scale-0'
+                    }`}
+                >
+                  {mounted && item.badge !== undefined && item.badge > 0 ? (item.badge > 99 ? '99+' : item.badge) : ''}
+                </span>
               </div>
 
               {/* Label */}

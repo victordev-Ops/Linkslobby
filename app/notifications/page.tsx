@@ -63,6 +63,7 @@ export default async function NotificationsPage() {
             initialLobbyEvents={lobbyEvents}
             isPro={profileRes.data?.is_pro || false}
             username={profileRes.data?.username || ""}
+            profileId={user.id}
         />
     )
 }

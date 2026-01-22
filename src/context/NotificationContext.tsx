@@ -102,6 +102,15 @@ export function NotificationProvider({
 export const useNotifications = () => {
   const context = useContext(NotificationContext)
   if (!context) {
+    if (typeof window === 'undefined') {
+      return {
+        unreadCount: 0,
+        unreadMessagesCount: 0,
+        setUnreadCount: () => { },
+        setUnreadMessagesCount: () => { },
+        refreshUnreadCount: async () => { }
+      }
+    }
     throw new Error('useNotifications must be used within NotificationProvider')
   }
   return context

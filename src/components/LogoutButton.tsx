@@ -6,17 +6,18 @@ import { LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export default function LogoutButton() {
-  const { signOut } = useAuth()
+  const auth = useAuth()
+  const signOut = auth?.signOut
   const [isLoading, setIsLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
   const handleLogout = async () => {
     setIsLoading(true)
-    
+
     try {
       // Force logout regardless of any pending operations
       await Promise.race([
-        signOut(),
+        signOut ? signOut() : Promise.resolve(),
         new Promise((resolve) => setTimeout(resolve, 3000)) // 3 second max wait
       ])
     } catch (error) {
@@ -49,7 +50,7 @@ export default function LogoutButton() {
       </button>
 
       {showConfirm && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
           onClick={(e) => {
             if (e.target === e.currentTarget && !isLoading) {

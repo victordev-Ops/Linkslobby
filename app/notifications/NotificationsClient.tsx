@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
     Bell, MessageSquare, Brain, Users, Lock,
     ArrowLeft, ChevronRight, Trophy, Sparkles,
@@ -29,13 +29,58 @@ export default function NotificationsClient({
     initialDykmScores,
     initialLobbyEvents,
     isPro,
-    username
-}: NotificationsClientProps) {
+    username,
+    profileId
+}: NotificationsClientProps & { profileId: string }) {
+    const [confessions, setConfessions] = useState(initialConfessions)
+    const [dykmScores, setDykmScores] = useState(initialDykmScores)
+    const [lobbyEvents, setLobbyEvents] = useState(initialLobbyEvents)
     const [activeTab, setActiveTab] = useState<Tab>("All")
     const [revealedScores, setRevealedScores] = useState<Record<string, boolean>>({})
     const [isRevealing, setIsRevealing] = useState<string | null>(null)
     const supabase = createClient()
     const router = useRouter()
+
+    // Real-time updates for the list
+    useEffect(() => {
+        if (!profileId) return
+
+        const channel = supabase
+            .channel(`notifications-list-${profileId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'confessions',
+                filter: `profile_id=eq.${profileId}`
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setConfessions(prev => [payload.new, ...prev])
+                } else if (payload.eventType === 'UPDATE') {
+                    setConfessions(prev => prev.map(c => c.id === payload.new.id ? payload.new : c))
+                } else if (payload.eventType === 'DELETE') {
+                    setConfessions(prev => prev.filter(c => c.id !== payload.old.id))
+                }
+            })
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'dykm_scores',
+                filter: `quiz_owner_id=eq.${profileId}`
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setDykmScores(prev => [payload.new, ...prev])
+                } else if (payload.eventType === 'UPDATE') {
+                    setDykmScores(prev => prev.map(s => s.id === payload.new.id ? payload.new : s))
+                } else if (payload.eventType === 'DELETE') {
+                    setDykmScores(prev => prev.filter(s => s.id !== payload.old.id))
+                }
+            })
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [profileId, supabase])
 
     const handleSelectMessage = async (item: any) => {
         if (item.type === 'message' && !item.is_read) {
@@ -46,9 +91,9 @@ export default function NotificationsClient({
 
     // Combine and sort notifications
     const allNotifications = [
-        ...initialConfessions.map(c => ({ ...c, type: 'message', category: 'Messages' })),
-        ...initialDykmScores.map(s => ({ ...s, type: 'dykm', category: 'Games' })),
-        ...initialLobbyEvents.map(e => ({ ...e, type: 'lobby', category: 'Lobbies' }))
+        ...confessions.map(c => ({ ...c, type: 'message', category: 'Messages' })),
+        ...dykmScores.map(s => ({ ...s, type: 'dykm', category: 'Games' })),
+        ...lobbyEvents.map(e => ({ ...e, type: 'lobby', category: 'Lobbies' }))
     ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     const filteredNotifications = allNotifications.filter(n =>
