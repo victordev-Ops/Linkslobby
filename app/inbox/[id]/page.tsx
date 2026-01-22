@@ -9,10 +9,10 @@ export const dynamic = 'force-dynamic'
 export default async function MessageViewPage({
   params,
 }: {
-  params: Promise<{ id: string }> 
+  params: Promise<{ id: string }>
 }) {
   // 2. Await the params to get the actual ID
-  const { id } = await params 
+  const { id } = await params
 
   const supabase = await createSupabaseServerClient()
 
@@ -35,7 +35,7 @@ export default async function MessageViewPage({
     redirect('/inbox')
   }
 
-  
+
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -51,5 +51,5 @@ export default async function MessageViewPage({
       username={username}
     />
   )
-    }
-    
+}
+
