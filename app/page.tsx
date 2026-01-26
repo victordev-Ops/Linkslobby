@@ -138,26 +138,28 @@ export default function LandingPage() {
       <div className="relative z-10 max-w-lg mx-auto min-h-screen flex flex-col">
 
         {/* Navbar */}
-        <nav className="sticky top-0 p-6 flex items-center justify-between z-50 bg-[#0f0a1e]/80 backdrop-blur-xl border-b border-white/5 mx-[-1.5rem] px-[1.5rem]">
-          <motion.div
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-10 h-10 bg-white/5 backdrop-blur-xl rounded-xl flex items-center justify-center border border-white/10"
-          >
-            <span className="text-xl font-black italic tracking-tighter">s.</span>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Link href="/login" className="px-5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs font-bold transition uppercase tracking-widest">
-              Login
-            </Link>
-          </motion.div>
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0f0a1e]/80 backdrop-blur-xl border-b border-white/5 mx-auto">
+          <div className="max-w-lg mx-auto p-6 flex items-center justify-between">
+            <motion.div
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-10 h-10 bg-white/5 backdrop-blur-xl rounded-xl flex items-center justify-center border border-white/10"
+            >
+              <span className="text-xl font-black italic tracking-tighter">s.</span>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Link href="/login" className="px-5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs font-bold transition uppercase tracking-widest">
+                Login
+              </Link>
+            </motion.div>
+          </div>
         </nav>
 
         {/* Hero Section */}
-        <div className="px-6 py-8">
+        <div className="px-6 pt-28 pb-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

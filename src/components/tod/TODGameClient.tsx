@@ -50,8 +50,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     return messages.map(msg => {
       if (msg.message_type === 'truth' || msg.message_type === 'dare') {
         // Find answer by question_ref foreign key - O(n) single pass
-        const answer = messages.find(m => 
-          m.message_type === 'answer' && 
+        const answer = messages.find(m =>
+          m.message_type === 'answer' &&
           m.question_ref === msg.id
         );
         return { ...msg, answerMessage: answer } as typeof msg & { answerMessage?: typeof msg };
@@ -112,7 +112,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const handleSendMessage = async (content: string, imageUrl: string | null) => {
     const isAsker = profile?.id === lobby?.current_asker_id;
     const isTarget = profile?.id === lobby?.current_target_id;
-    
+
     let messageType: 'chat' | 'truth' | 'dare' | 'system' | 'answer' = 'chat';
     let questionRef: string | undefined;
 
@@ -126,8 +126,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       else if (isTarget && lobby?.current_question) {
         messageType = 'answer';
         // Find the question message ID for the foreign key reference
-        const questionMsg = messages.find(m => 
-          (m.message_type === 'truth' || m.message_type === 'dare') && 
+        const questionMsg = messages.find(m =>
+          (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
         questionRef = questionMsg?.id;
@@ -138,9 +138,17 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     let finalContent = content;
     if (replyingTo) {
       const replyUsername = replyingTo.profiles?.username || 'Someone';
-      const replyPreview = replyingTo.content.length > 50 
-        ? replyingTo.content.substring(0, 50) + '...' 
-        : replyingTo.content;
+
+      // If the message being replied to is already a reply, strip the grandparent context
+      // This ensures we only show the immediate parent message in the reply preview
+      let contentToPreview = replyingTo.content;
+      if (contentToPreview.startsWith('@') && contentToPreview.includes('\n\n')) {
+        contentToPreview = contentToPreview.split('\n\n').slice(1).join('\n\n');
+      }
+
+      const replyPreview = contentToPreview.length > 50
+        ? contentToPreview.substring(0, 50) + '...'
+        : contentToPreview;
       finalContent = `@${replyUsername}: ${replyPreview}\n\n${content}`;
     }
 
@@ -193,31 +201,31 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     // Allow chat in waiting and finished states for everyone
     if (lobby?.status === 'waiting') return true;
     if (lobby?.status === 'finished') return true;
-    
+
     // During active game
     if (lobby?.status === 'active') {
       // Asker can ask question after mode is selected
       if (lobby?.selected_mode && !lobby?.current_question && isAsker) return true;
       // Target can answer question
       if (lobby?.current_question && isTarget) return true;
-      
+
       // After target answers, everyone can chat until next round
       if (lobby?.current_question) {
-        const currentQuestionMsg = messages.find(m => 
-          (m.message_type === 'truth' || m.message_type === 'dare') && 
+        const currentQuestionMsg = messages.find(m =>
+          (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
-        const hasAnswer = currentQuestionMsg && messages.some(m => 
-          m.message_type === 'answer' && 
+        const hasAnswer = currentQuestionMsg && messages.some(m =>
+          m.message_type === 'answer' &&
           m.question_ref === currentQuestionMsg.id
         );
         if (hasAnswer) return true; // Everyone can chat after answer
       }
-      
+
       // Otherwise spectators cannot chat
       return false;
     }
-    
+
     return false;
   };
 
@@ -235,12 +243,12 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       }
       if (lobby?.current_question && isTarget) {
         // Check if target already answered
-        const currentQuestionMsg = messages.find(m => 
-          (m.message_type === 'truth' || m.message_type === 'dare') && 
+        const currentQuestionMsg = messages.find(m =>
+          (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
-        const hasAnswer = currentQuestionMsg && messages.some(m => 
-          m.message_type === 'answer' && 
+        const hasAnswer = currentQuestionMsg && messages.some(m =>
+          m.message_type === 'answer' &&
           m.question_ref === currentQuestionMsg.id
         );
         if (hasAnswer) return "Chat with everyone...";
@@ -248,12 +256,12 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       }
       if (lobby?.current_question && !isTarget) {
         // Check if answer has been given
-        const currentQuestionMsg = messages.find(m => 
-          (m.message_type === 'truth' || m.message_type === 'dare') && 
+        const currentQuestionMsg = messages.find(m =>
+          (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
-        const hasAnswer = currentQuestionMsg && messages.some(m => 
-          m.message_type === 'answer' && 
+        const hasAnswer = currentQuestionMsg && messages.some(m =>
+          m.message_type === 'answer' &&
           m.question_ref === currentQuestionMsg.id
         );
         if (hasAnswer) return "Chat with everyone...";
@@ -339,14 +347,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 askerUsername={askerUser?.profiles?.username}
                 targetUsername={targetUser?.profiles?.username}
               />
-              
+
               {/* Timer only shows when target needs to select mode */}
               {lobby.status === 'active' && !lobby.selected_mode && timeRemaining !== null && (
-                <div className={`px-3 py-1 rounded-full border flex items-center gap-1.5 ${
-                  timeRemaining <= 10 
-                    ? 'bg-red-500/20 border-red-500/50 text-red-300 animate-pulse' 
+                <div className={`px-3 py-1 rounded-full border flex items-center gap-1.5 ${timeRemaining <= 10
+                    ? 'bg-red-500/20 border-red-500/50 text-red-300 animate-pulse'
                     : 'bg-slate-800/80 border-slate-700/50 text-slate-300'
-                }`}>
+                  }`}>
                   <Timer size={12} />
                   <span className="text-xs font-bold">{timeRemaining}s</span>
                 </div>
@@ -427,7 +434,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
           {/* Chat Area */}
           <main className="flex-1 flex flex-col overflow-hidden">
-            <div 
+            <div
               ref={messagesContainerRef}
               className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
             >
@@ -455,19 +462,19 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               {lobby.status === 'active' && lobby.current_question && isHost && (
                 (() => {
                   // Find the current question message
-                  const currentQuestionMsg = messages.find(m => 
-                    (m.message_type === 'truth' || m.message_type === 'dare') && 
+                  const currentQuestionMsg = messages.find(m =>
+                    (m.message_type === 'truth' || m.message_type === 'dare') &&
                     m.content === lobby.current_question
                   );
-                  
+
                   if (!currentQuestionMsg) return null;
-                  
+
                   // Check if there's an answer with matching question_ref - O(n) single pass
-                  const hasAnswer = messages.some(m => 
-                    m.message_type === 'answer' && 
+                  const hasAnswer = messages.some(m =>
+                    m.message_type === 'answer' &&
                     m.question_ref === currentQuestionMsg.id
                   );
-                  
+
                   return hasAnswer ? <NextRoundButton onNextRound={handleNextRound} /> : null;
                 })()
               )}

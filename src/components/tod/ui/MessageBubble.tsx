@@ -23,6 +23,33 @@ interface MessageBubbleProps {
   replyingTo?: Message | null;
 }
 
+const parseReply = (content: string) => {
+  const replyRegex = /^@([^:]+): ([\s\S]*?)\n\n([\s\S]*)$/;
+  const match = content.match(replyRegex);
+  if (match) {
+    return {
+      username: match[1],
+      replyContent: match[2],
+      mainContent: match[3]
+    };
+  }
+  return null;
+};
+
+const ReplyPreview = ({ username, content, isOwn }: { username: string, content: string, isOwn: boolean }) => (
+  <div className={`mb-2 rounded-lg overflow-hidden flex border-l-4 ${isOwn ? 'border-red-400 bg-white/10' : 'border-red-500 bg-slate-900/40'
+    } backdrop-blur-md`}>
+    <div className="flex-1 p-2 py-1.5 min-w-0">
+      <p className={`text-[10px] font-bold ${isOwn ? 'text-red-200' : 'text-red-400'} truncate`}>
+        {username}
+      </p>
+      <p className="text-xs text-slate-200 truncate leading-tight">
+        {content}
+      </p>
+    </div>
+  </div>
+);
+
 export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, onReply, replyingTo }: MessageBubbleProps) => {
   const [imageError, setImageError] = useState(false);
   const [swipeDistance, setSwipeDistance] = useState(0);
@@ -37,7 +64,7 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
   const handleTouchStart = (e: React.TouchEvent) => {
     // Don't allow swipe on system messages
     if (message.message_type === 'system') return;
-    
+
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
     setIsSwiping(true);
@@ -65,7 +92,7 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
 
     // Swipe from right to left for own messages, left to right for others
     const swipeDirection = isOwn ? -deltaX : deltaX;
-    
+
     if (swipeDirection > 0) {
       const clampedDistance = Math.min(swipeDirection, MAX_SWIPE);
       setSwipeDistance(clampedDistance);
@@ -102,12 +129,12 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
   // Truth or Dare cards (questions)
   if (message.message_type === 'truth' || message.message_type === 'dare') {
     const modeColor = message.message_type === 'truth' ? 'blue' : 'orange';
-    const modeGradient = message.message_type === 'truth' 
-      ? 'from-blue-500 to-cyan-500' 
+    const modeGradient = message.message_type === 'truth'
+      ? 'from-blue-500 to-cyan-500'
       : 'from-orange-500 to-red-500';
 
     return (
-      <div 
+      <div
         id={`message-${message.id}`}
         className="flex flex-col gap-3 my-4 scroll-mt-20 relative"
         ref={messageRef}
@@ -121,7 +148,7 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
       >
         {/* Reply Icon */}
         {swipeDistance > 0 && (
-          <div 
+          <div
             className={`absolute top-1/2 -translate-y-1/2 ${isOwn ? 'left-4' : 'right-4'} z-10`}
             style={{
               opacity: replyIconOpacity,
@@ -148,9 +175,8 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
                     <p className="text-white font-bold text-sm">
                       {isOwn ? 'You' : (message.profiles?.username || 'Anonymous')}
                     </p>
-                    <p className={`text-xs font-bold uppercase ${
-                      message.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
-                    }`}>
+                    <p className={`text-xs font-bold uppercase ${message.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
+                      }`}>
                       {message.message_type}
                     </p>
                   </div>
@@ -165,9 +191,28 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
 
               {/* Question Content */}
               <div className="bg-slate-800/50 rounded-xl p-4 mb-3">
-                <p className="text-white text-sm leading-relaxed whitespace-pre-wrap break-words">
-                  {message.content}
-                </p>
+                {(() => {
+                  const replyData = parseReply(message.content);
+                  if (replyData) {
+                    return (
+                      <>
+                        <ReplyPreview
+                          username={replyData.username}
+                          content={replyData.replyContent}
+                          isOwn={isOwn}
+                        />
+                        <p className="text-white text-sm leading-relaxed whitespace-pre-wrap break-words">
+                          {replyData.mainContent}
+                        </p>
+                      </>
+                    );
+                  }
+                  return (
+                    <p className="text-white text-sm leading-relaxed whitespace-pre-wrap break-words">
+                      {message.content}
+                    </p>
+                  );
+                })()}
                 {message.image_url && !imageError && (
                   <div className="mt-3 rounded-lg overflow-hidden">
                     <img
@@ -219,7 +264,7 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
 
   // Regular chat messages
   return (
-    <div 
+    <div
       id={`message-${message.id}`}
       className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'} scroll-mt-20 relative`}
       ref={messageRef}
@@ -233,7 +278,7 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
     >
       {/* Reply Icon */}
       {swipeDistance > 0 && (
-        <div 
+        <div
           className={`absolute top-1/2 -translate-y-1/2 ${isOwn ? 'left-2' : 'right-2'} z-10`}
           style={{
             opacity: replyIconOpacity,
@@ -246,11 +291,10 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
         </div>
       )}
 
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-        isOwn 
-          ? 'bg-gradient-to-br from-red-500 to-orange-500' 
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isOwn
+          ? 'bg-gradient-to-br from-red-500 to-orange-500'
           : 'bg-slate-700'
-      }`}>
+        }`}>
         <User size={14} className="text-white" />
       </div>
 
@@ -258,16 +302,34 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
         <p className={`text-xs mb-1 ${isOwn ? 'text-slate-400' : 'text-slate-500'}`}>
           {isOwn ? 'You' : (message.profiles?.username || 'Anonymous')}
         </p>
-        
-        <div className={`rounded-2xl px-4 py-2 ${
-          isOwn 
-            ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
-            : 'bg-slate-800 text-slate-100 border border-slate-700'
-        }`}>
-          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-            {message.content}
-          </p>
-          
+
+        <div className={`rounded-2xl px-4 py-2 ${isOwn
+            ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-lg shadow-red-500/10'
+            : 'bg-slate-800 text-slate-100 border border-slate-700 shadow-lg shadow-black/20'
+          }`}>
+          {(() => {
+            const replyData = parseReply(message.content);
+            if (replyData) {
+              return (
+                <>
+                  <ReplyPreview
+                    username={replyData.username}
+                    content={replyData.replyContent}
+                    isOwn={isOwn}
+                  />
+                  <p className="text-sm whitespace-pre-wrap break-words leading-relaxed brightness-110">
+                    {replyData.mainContent}
+                  </p>
+                </>
+              );
+            }
+            return (
+              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                {message.content}
+              </p>
+            );
+          })()}
+
           {message.image_url && !imageError && (
             <div className="mt-2 rounded-lg overflow-hidden">
               <img
