@@ -9,11 +9,13 @@ import { ThemeToggle } from "@/components/ThemeToggle"
 interface SettingsClientProps {
   initialUser: any
   initialUsername: string
+  initialPushEnabled: boolean
 }
 
 export default function SettingsClient({
   initialUser,
   initialUsername,
+  initialPushEnabled,
 }: SettingsClientProps) {
   const user = initialUser
   const username = initialUsername
@@ -27,8 +29,8 @@ export default function SettingsClient({
         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]" />
       </div>
 
-      {/* Header */}
-      <div className="bg-white dark:bg-[#1a1429] border-b dark:border-white/10 sticky top-0 z-10 transition-colors duration-300">
+      {/* Header - Fixed/Sticky and ensured to be on top */}
+      <div className="bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-xl border-b dark:border-white/10 sticky top-0 z-50 transition-all duration-300">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link
             href="/dashboard"
@@ -115,7 +117,7 @@ export default function SettingsClient({
                 </div>
 
                 <div className="space-y-4">
-                  <PushToggle userId={user.id} />
+                  <PushToggle userId={user.id} initialPushEnabled={initialPushEnabled} />
                   <div className="p-3 bg-blue-50/50 dark:bg-blue-500/5 rounded-xl border border-blue-100/50 dark:border-blue-500/10">
                     <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed font-medium">
                       Receive instant alerts on your device whenever someone sends you an anonymous confession.

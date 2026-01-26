@@ -138,7 +138,7 @@ export default function LandingPage() {
       <div className="relative z-10 max-w-lg mx-auto min-h-screen flex flex-col">
 
         {/* Navbar */}
-        <nav className="p-6 flex items-center justify-between">
+        <nav className="sticky top-0 p-6 flex items-center justify-between z-50 bg-[#0f0a1e]/80 backdrop-blur-xl border-b border-white/5 mx-[-1.5rem] px-[1.5rem]">
           <motion.div
             initial={{ opacity: 0, scale: 0 }}
             animate={{ opacity: 1, scale: 1 }}

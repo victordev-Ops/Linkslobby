@@ -8,24 +8,27 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   let username = 'Anonymous'
+  let initialPushEnabled = false
 
-  // DIRECT FETCH: Get the username directly
+  // DIRECT FETCH: Get the username and push status directly
   if (user) {
     const { data } = await supabase
       .from('profiles')
-      .select('username')
+      .select('username, push_subscription')
       .eq('id', user.id)
       .single()
-    
+
     if (data?.username) {
       username = data.username
     }
+    initialPushEnabled = !!data?.push_subscription
   }
 
   return (
     <SettingsClient
       initialUser={user}
       initialUsername={username}
+      initialPushEnabled={initialPushEnabled}
     />
   )
 }

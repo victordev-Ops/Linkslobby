@@ -15,25 +15,31 @@ function cn(...inputs: ClassValue[]) {
 
 const CHECK_TIMEOUT = 5000 // 5 second timeout for checking status
 
-export default function PushToggle({ userId }: { userId: string }) {
+export default function PushToggle({
+  userId,
+  initialPushEnabled = false
+}: {
+  userId: string,
+  initialPushEnabled?: boolean
+}) {
   const { subscribe, unsubscribe, syncSubscription } = usePushSubscription()
-  const [isEnabled, setIsEnabled] = useState(false)
+  const [isEnabled, setIsEnabled] = useState(initialPushEnabled)
   const [loading, setLoading] = useState(true)
   const [isSupported, setIsSupported] = useState(true)
-  
+
   const supabase = useRef(createClient()).current
   const mountedRef = useRef(true)
   const hasCheckedRef = useRef(false)
- // const timeoutRef = useRef<NodeJS.Timeout>()
-const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
+  // const timeoutRef = useRef<NodeJS.Timeout>()
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   useEffect(() => {
     mountedRef.current = true
-    
+
     // Prevent multiple checks
     if (hasCheckedRef.current) return
     hasCheckedRef.current = true
-    
+
     const checkStatus = async () => {
       try {
         // Set a timeout to prevent infinite loading
@@ -56,30 +62,39 @@ const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
         const hasPermission = Notification.permission === "granted"
 
+        // If we already have the initial state from server, and it matches browser permission, 
+        // we can finish loading early
+        if (initialPushEnabled && hasPermission && mountedRef.current) {
+          setIsEnabled(true)
+          setLoading(false)
+          // Still sync in background
+          syncSubscription(userId).catch(console.error)
+          return
+        }
+
         // If permission granted, sync subscription in background
         if (hasPermission) {
           // Don't await this - let it run in background
           syncSubscription(userId).catch(console.error)
         }
 
-        // Check DB subscription status
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("push_subscription")
-          .eq("id", userId)
-          .single()
+        // Check DB subscription status ONLY if we don't have initialPushEnabled or if it's false
+        // (to verify if it was enabled elsewhere)
+        let hasSubscription = initialPushEnabled
 
-        if (error) {
-          console.error("Error checking subscription:", error)
-          // Don't fail completely - just show as disabled
-          if (mountedRef.current) {
-            setIsEnabled(false)
-            setLoading(false)
+        if (!initialPushEnabled) {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("push_subscription")
+            .eq("id", userId)
+            .single()
+
+          if (error) {
+            console.error("Error checking subscription:", error)
+          } else {
+            hasSubscription = !!data?.push_subscription
           }
-          return
         }
-
-        const hasSubscription = !!data?.push_subscription
 
         if (mountedRef.current) {
           setIsEnabled(hasPermission && hasSubscription)
@@ -111,10 +126,10 @@ const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const handleToggle = async () => {
     if (loading) return
     setLoading(true)
-    
+
     try {
       let success = false
-      
+
       if (isEnabled) {
         success = await unsubscribe(userId)
         if (success && mountedRef.current) {
@@ -163,10 +178,10 @@ const timeoutRef = useRef<NodeJS.Timeout | null>(null)
         <div>
           <p className="text-sm font-medium text-gray-900">Push Notifications</p>
           <p className="text-xs text-gray-600">
-            {loading 
-              ? "Checking..." 
-              : isEnabled 
-                ? "You'll receive notifications" 
+            {loading
+              ? "Checking..."
+              : isEnabled
+                ? "You'll receive notifications"
                 : "Get notified of new confessions"
             }
           </p>
@@ -184,7 +199,7 @@ const timeoutRef = useRef<NodeJS.Timeout | null>(null)
           isEnabled ? "bg-green-600" : "bg-gray-300",
           loading && "opacity-50"
         )} />
-        
+
         <motion.div
           className="absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-md"
           animate={{ x: isEnabled ? 20 : 0 }}
@@ -195,4 +210,4 @@ const timeoutRef = useRef<NodeJS.Timeout | null>(null)
       </button>
     </div>
   )
-      }
+}
