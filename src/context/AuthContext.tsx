@@ -91,15 +91,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    // Optimistic Logout: Clear state immediately
-    setProfile(null);
-    setUser(null);
-    router.replace('/login');
-
     try {
+      // 1. Await Supabase sign out to ensure cookies/session are cleared
       await supabase.auth.signOut();
+
+      // 2. Clear local state
+      setProfile(null);
+      setUser(null);
+
+      // 3. Force a hard redirect or router replace to the login page
+      // We use replace to avoid the user going 'back' into a logged-out state
+      router.replace('/login');
+
     } catch (error) {
       console.error("Error signing out:", error);
+      // Fallback: Clear state and redirect even if Supabase call fails
+      setProfile(null);
+      setUser(null);
+      router.replace('/login');
     }
   };
 
