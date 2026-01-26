@@ -205,9 +205,9 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
       if (error) throw error;
 
-      // Remove optimistic message after successful insert
-      // The real message will come through the realtime subscription
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      // Update optimistic message with real ID and sent status
+      // This ensures the double tick shows immediately and prevents flickering
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: data.id, status: 'sent' as const } : m));
 
       // If this is a question (truth/dare), update lobby with the question
       if ((messageType === 'truth' || messageType === 'dare') && userId === lobby.current_asker_id) {

@@ -181,12 +181,24 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] text-slate-500">
-                  {new Date(message.created_at).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-500">
+                    {new Date(message.created_at).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                  {isOwn && message.status && (
+                    <div className="flex items-center">
+                      {message.status === 'sending' && (
+                        <Clock size={10} className="text-slate-500" />
+                      )}
+                      {message.status === 'sent' && (
+                        <CheckCheck size={10} className="text-green-500" />
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Question Content */}
@@ -292,8 +304,8 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
       )}
 
       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isOwn
-          ? 'bg-gradient-to-br from-red-500 to-orange-500'
-          : 'bg-slate-700'
+        ? 'bg-gradient-to-br from-red-500 to-orange-500'
+        : 'bg-slate-700'
         }`}>
         <User size={14} className="text-white" />
       </div>
@@ -304,8 +316,8 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
         </p>
 
         <div className={`rounded-2xl px-4 py-2 ${isOwn
-            ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-lg shadow-red-500/10'
-            : 'bg-slate-800 text-slate-100 border border-slate-700 shadow-lg shadow-black/20'
+          ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-lg shadow-red-500/10'
+          : 'bg-slate-800 text-slate-100 border border-slate-700 shadow-lg shadow-black/20'
           }`}>
           {(() => {
             const replyData = parseReply(message.content);
