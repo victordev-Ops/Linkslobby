@@ -240,6 +240,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
   const canSendMessage = () => {
     if (!isJoined) return false;
+
+    // Host can always chat if they are joined
+    if (isHost) return true;
+
     // Allow chat in waiting and finished states for everyone
     if (lobby?.status === 'waiting') return true;
     if (lobby?.status === 'finished') return true;
@@ -253,13 +257,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
       // After target answers, everyone can chat until next round
       if (lobby?.current_question) {
-        const currentQuestionMsg = messages.find(m =>
-          (m.message_type === 'truth' || m.message_type === 'dare') &&
-          m.content === lobby.current_question
-        );
-        const hasAnswer = currentQuestionMsg && messages.some(m =>
+        const hasAnswer = messages.some(m =>
           m.message_type === 'answer' &&
-          m.question_ref === currentQuestionMsg.id
+          m.question_ref && // Message is an answer
+          messages.some(q => q.id === m.question_ref && q.content === lobby.current_question)
         );
         if (hasAnswer) return true; // Everyone can chat after answer
       }
