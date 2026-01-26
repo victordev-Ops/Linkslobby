@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight } from 'lucide-react';
+import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface Lobby {
     id: string;
     host_id: string;
+    name?: string;
+    category?: string;
+    is_private?: boolean;
     status: 'waiting' | 'active' | 'finished';
     created_at: string;
     host_profile?: {
@@ -17,17 +20,28 @@ export interface Lobby {
     };
     participant_count?: number;
     is_participant?: boolean;
+    user_status?: 'pending' | 'joined';
 }
 
 interface LobbyListClientProps {
     initialLobbies: Lobby[]
     currentUserId?: string
+    isPro: boolean
 }
 
-export default function LobbyListClient({ initialLobbies, currentUserId }: LobbyListClientProps) {
+const CATEGORIES = ["Casual", "Deep", "Spicy", "Extreme"];
+
+export default function LobbyListClient({ initialLobbies, currentUserId, isPro }: LobbyListClientProps) {
     // We use initialLobbies as the starting state
     const [lobbies, setLobbies] = useState<Lobby[]>(initialLobbies);
     const [isCreating, setIsCreating] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+
+    // Creation Form State
+    const [lobbyName, setLobbyName] = useState("");
+    const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
+    const [isPrivate, setIsPrivate] = useState(false);
+
     // We can skip the initial full-screen loading state since we have data
     const [isLoading, setIsLoading] = useState(false);
 
@@ -67,10 +81,14 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
                 .select(`
           id,
           host_id,
+          name,
+          category,
+          is_private,
           status,
           created_at,
           profiles:host_id (username)
         `)
+                .order('category', { ascending: true })
                 .order('created_at', { ascending: false })
                 .limit(20);
 
@@ -85,11 +103,13 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
 
             const lobbiesWithDetails = lobbyData?.map(lobby => {
                 const participants = participantData?.filter(p => p.lobby_id === lobby.id) || [];
+                const userPart = effectiveUserId ? participants.find(p => p.user_id === effectiveUserId) : null;
                 return {
                     ...lobby,
                     host_profile: lobby.profiles,
                     participant_count: participants.length,
-                    is_participant: effectiveUserId ? participants.some(p => p.user_id === effectiveUserId) : false
+                    is_participant: !!userPart,
+                    user_status: userPart?.status
                 };
             }) || [];
 
@@ -104,26 +124,41 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
 
     const createNewLobby = async () => {
         if (!profile?.id) return;
+        if (!lobbyName.trim()) {
+            toast.error("Please enter a lobby name");
+            return;
+        }
 
         setIsCreating(true);
         try {
             // Create lobby
             const { data: lobby, error: lobbyError } = await supabase
                 .from('tod_lobbies')
-                .insert({ host_id: profile.id, status: 'waiting' })
+                .insert({
+                    host_id: profile.id,
+                    status: 'waiting',
+                    name: lobbyName.trim(),
+                    category: selectedCategory,
+                    is_private: isPrivate
+                })
                 .select()
                 .single();
 
             if (lobbyError) throw lobbyError;
 
-            // Auto-join as participant
+            // Auto-join as participant (already 'joined' status since you are host)
             const { error: joinError } = await supabase
                 .from('tod_participants')
-                .insert({ lobby_id: lobby.id, user_id: profile.id });
+                .insert({
+                    lobby_id: lobby.id,
+                    user_id: profile.id,
+                    status: 'joined'
+                });
 
             if (joinError) throw joinError;
 
             toast.success('Lobby created! 🎉');
+            setShowCreateModal(false);
             router.push(`/tod/${lobby.id}`);
         } catch (error: any) {
             console.error('Error creating lobby:', error);
@@ -133,7 +168,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
         }
     };
 
-    const joinLobby = async (lobbyId: string) => {
+    const joinLobby = async (lobby: Lobby) => {
         if (!profile?.id) {
             toast.error("Please log in to join");
             return;
@@ -143,20 +178,37 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
             // Check if already a participant
             const { data: existing } = await supabase
                 .from('tod_participants')
-                .select('id')
-                .eq('lobby_id', lobbyId)
+                .select('id, status')
+                .eq('lobby_id', lobby.id)
                 .eq('user_id', profile.id)
-                .single();
+                .maybeSingle();
 
             if (!existing) {
+                // For private lobbies, request to join (status = 'pending')
+                // For public lobbies, join immediately (status = 'joined')
+                const initialStatus = lobby.is_private ? 'pending' : 'joined';
+
                 const { error } = await supabase
                     .from('tod_participants')
-                    .insert({ lobby_id: lobbyId, user_id: profile.id });
+                    .insert({
+                        lobby_id: lobby.id,
+                        user_id: profile.id,
+                        status: initialStatus
+                    });
 
                 if (error) throw error;
+
+                if (lobby.is_private) {
+                    toast.success('Request sent! Waiting for host approval ⏳');
+                    fetchLobbies();
+                    return;
+                }
+            } else if (existing.status === 'pending') {
+                toast.info('Your request is still pending approval ⏳');
+                return;
             }
 
-            router.push(`/tod/${lobbyId}`);
+            router.push(`/tod/${lobby.id}`);
         } catch (error: any) {
             console.error('Error joining lobby:', error);
             toast.error('Failed to join lobby');
@@ -217,22 +269,101 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
 
                     {/* Create Button */}
                     <button
-                        onClick={createNewLobby}
-                        disabled={isCreating}
-                        className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white p-6 rounded-2xl font-bold shadow-xl hover:shadow-red-500/50 transition-all active:scale-95 flex items-center justify-center gap-3 mb-8 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => setShowCreateModal(true)}
+                        className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white p-6 rounded-2xl font-bold shadow-xl hover:shadow-red-500/50 transition-all active:scale-95 flex items-center justify-center gap-3 mb-8"
                     >
-                        {isCreating ? (
-                            <>
-                                <Loader2 className="animate-spin" size={24} />
-                                Creating Lobby...
-                            </>
-                        ) : (
-                            <>
-                                <Plus size={24} />
-                                Create New Game
-                            </>
-                        )}
+                        <Plus size={24} />
+                        Create New Game
                     </button>
+
+                    {/* Create Lobby Modal */}
+                    {showCreateModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                            <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                                <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+                                    <h3 className="text-xl font-bold text-white">New Game</h3>
+                                    <button
+                                        onClick={() => setShowCreateModal(false)}
+                                        className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+
+                                <div className="p-6 space-y-5">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Lobby Name</label>
+                                        <input
+                                            type="text"
+                                            value={lobbyName}
+                                            onChange={(e) => setLobbyName(e.target.value)}
+                                            placeholder="Friday Night Fun..."
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Category</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {CATEGORIES.map(cat => (
+                                                <button
+                                                    key={cat}
+                                                    onClick={() => setSelectedCategory(cat)}
+                                                    className={`py-3 rounded-xl text-sm font-bold border transition ${selectedCategory === cat
+                                                        ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30'
+                                                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
+                                                        }`}
+                                                >
+                                                    {cat}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Privacy</label>
+                                        <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                                            <button
+                                                onClick={() => setIsPrivate(false)}
+                                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${!isPrivate ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400'}`}
+                                            >
+                                                Public
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (isPro) {
+                                                        setIsPrivate(true);
+                                                    } else {
+                                                        toast.error("Private lobbies are a Pro feature! 💎");
+                                                    }
+                                                }}
+                                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${isPrivate ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400'}`}
+                                            >
+                                                {!isPro && <Lock size={12} className="text-amber-500" />}
+                                                Private
+                                            </button>
+                                        </div>
+                                        {!isPro && (
+                                            <p className="text-[10px] text-slate-500 mt-2 italic ml-1">
+                                                Only host-approved players can join private lobbies.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="p-6 bg-slate-900/50 border-t border-slate-800">
+                                    <button
+                                        onClick={createNewLobby}
+                                        disabled={isCreating}
+                                        className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 rounded-xl font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        {isCreating ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
+                                        {isCreating ? 'Creating...' : 'Start Game'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Active Lobbies Section */}
                     {lobbies.length > 0 && (
@@ -248,7 +379,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
                                 {lobbies.map((lobby) => (
                                     <div
                                         key={lobby.id}
-                                        onClick={() => joinLobby(lobby.id)}
+                                        onClick={() => joinLobby(lobby)}
                                         className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 hover:border-red-500/50 transition-all cursor-pointer group"
                                     >
                                         <div className="flex items-start justify-between mb-3">
@@ -259,9 +390,13 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
                                                 <div>
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <p className="text-white font-bold">
-                                                            {lobby.participant_count || 0} Player{lobby.participant_count !== 1 ? 's' : ''}
+                                                            {lobby.name || (lobby.participant_count ? `${lobby.participant_count} Player${lobby.participant_count !== 1 ? 's' : ''}` : 'New Lobby')}
                                                         </p>
                                                         {getStatusBadge(lobby.status)}
+                                                        {lobby.is_private && <Lock size={12} className="text-amber-500" />}
+                                                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                                                            {lobby.category || 'Casual'}
+                                                        </span>
                                                     </div>
                                                     <p className="text-xs text-slate-400">
                                                         Hosted by{' '}
@@ -288,7 +423,9 @@ export default function LobbyListClient({ initialLobbies, currentUserId }: Lobby
 
                                             <div className="flex items-center gap-2 text-red-400 group-hover:text-red-300 transition-colors">
                                                 <span className="text-sm font-bold">
-                                                    {lobby.is_participant ? 'Rejoin' : 'Join'}
+                                                    {lobby.user_status === 'joined' ? 'Rejoin' :
+                                                        lobby.user_status === 'pending' ? 'Pending Approval' :
+                                                            lobby.is_private ? 'Request to Join' : 'Join'}
                                                 </span>
                                                 <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                                             </div>

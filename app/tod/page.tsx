@@ -16,10 +16,14 @@ export default async function TODLobbyList() {
     .select(`
       id,
       host_id,
+      name,
+      category,
+      is_private,
       status,
       created_at,
       profiles:host_id (username)
     `)
+    .order('category', { ascending: true })
     .order('created_at', { ascending: false })
     .limit(20);
 
@@ -34,24 +38,34 @@ export default async function TODLobbyList() {
     const lobbyIds = lobbyData.map(l => l.id);
     const { data: participantData } = await supabase
       .from('tod_participants')
-      .select('lobby_id, user_id')
+      .select('lobby_id, user_id, status')
       .in('lobby_id', lobbyIds);
 
     lobbiesWithDetails = lobbyData.map(lobby => {
       const participants = participantData?.filter(p => p.lobby_id === lobby.id) || [];
+      const userPart = user ? participants.find(p => p.user_id === user.id) : null;
       return {
         ...lobby,
         host_profile: lobby.profiles, // mapped from join
         participant_count: participants.length,
-        is_participant: user ? participants.some(p => p.user_id === user.id) : false
+        is_participant: !!userPart,
+        user_status: userPart?.status
       } as unknown as Lobby; // Type assertion needed due to join structure
     });
   }
+
+  // 4. Fetch user's pro status
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('is_pro')
+    .eq('id', user.id)
+    .single();
 
   return (
     <LobbyListClient
       initialLobbies={lobbiesWithDetails}
       currentUserId={user?.id}
+      isPro={profileData?.is_pro || false}
     />
   );
 }

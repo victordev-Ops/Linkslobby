@@ -19,6 +19,7 @@ interface Participant {
   user_id: string;
   lobby_id: string;
   has_gone_this_round: boolean;
+  status: 'pending' | 'joined';
   profiles?: { username: string };
 }
 
@@ -73,19 +74,19 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     if (!lobbyId || lobbyId === 'undefined') return;
 
     const channel = supabase.channel(`game:${lobbyId}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'tod_lobbies', 
-        filter: `id=eq.${lobbyId}` 
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tod_lobbies',
+        filter: `id=eq.${lobbyId}`
       }, (payload) => {
         setLobby(prev => ({ ...prev, ...payload.new } as Lobby));
       })
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'tod_messages', 
-        filter: `lobby_id=eq.${lobbyId}` 
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'tod_messages',
+        filter: `lobby_id=eq.${lobbyId}`
       }, async (payload) => {
         // Fetch the complete message with profile data
         const { data } = await supabase
@@ -93,7 +94,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
           .select('*, profiles(username)')
           .eq('id', payload.new.id)
           .single();
-        
+
         if (data) {
           setMessages(prev => {
             if (prev.some(m => m.id === data.id)) return prev;
@@ -101,11 +102,11 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
           });
         }
       })
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'tod_participants', 
-        filter: `lobby_id=eq.${lobbyId}` 
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tod_participants',
+        filter: `lobby_id=eq.${lobbyId}`
       }, () => {
         fetchData();
       })
@@ -168,9 +169,9 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   };
 
   const sendMessage = useCallback(async (
-    content: string, 
-    imageUrl: string | null, 
-    messageType: 'chat' | 'truth' | 'dare' | 'system' | 'answer', 
+    content: string,
+    imageUrl: string | null,
+    messageType: 'chat' | 'truth' | 'dare' | 'system' | 'answer',
     username?: string,
     questionRef?: string
   ) => {
@@ -178,14 +179,14 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
     // Optimistic update
     const tempId = `temp-${Date.now()}`;
-    setMessages(prev => [...prev, { 
-      id: tempId, 
-      lobby_id: lobbyId, 
-      user_id: userId, 
-      content, 
+    setMessages(prev => [...prev, {
+      id: tempId,
+      lobby_id: lobbyId,
+      user_id: userId,
+      content,
       image_url: imageUrl || undefined,
-      message_type: messageType, 
-      created_at: new Date().toISOString(), 
+      message_type: messageType,
+      created_at: new Date().toISOString(),
       status: 'sending',
       profiles: { username: username || 'You' },
       question_ref: questionRef
@@ -194,10 +195,10 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     try {
       // Insert message with question_ref for answers
       const { data, error } = await supabase.from('tod_messages').insert({
-        lobby_id: lobbyId, 
-        user_id: userId, 
-        content, 
-        image_url: imageUrl, 
+        lobby_id: lobbyId,
+        user_id: userId,
+        content,
+        image_url: imageUrl,
         message_type: messageType,
         question_ref: questionRef || null // Only set for answer messages
       }).select('id').single();
@@ -277,6 +278,51 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   };
 
+  const approveRequest = async (targetUserId: string) => {
+    if (!lobby || userId !== lobby.host_id) return;
+
+    const { error } = await supabase
+      .from('tod_participants')
+      .update({ status: 'joined' })
+      .eq('lobby_id', lobbyId)
+      .eq('user_id', targetUserId);
+
+    if (error) {
+      toast.error('Failed to approve request');
+      return;
+    }
+
+    // Notify others
+    const targetUser = participants.find(p => p.user_id === targetUserId);
+    await supabase.from('tod_messages').insert({
+      lobby_id: lobbyId,
+      user_id: userId,
+      content: `${targetUser?.profiles?.username || 'Someone'} has joined the game! 🎉`,
+      message_type: 'system'
+    });
+
+    toast.success('Player approved!');
+    fetchData();
+  };
+
+  const declineRequest = async (targetUserId: string) => {
+    if (!lobby || userId !== lobby.host_id) return;
+
+    const { error } = await supabase
+      .from('tod_participants')
+      .delete()
+      .eq('lobby_id', lobbyId)
+      .eq('user_id', targetUserId);
+
+    if (error) {
+      toast.error('Failed to decline request');
+      return;
+    }
+
+    toast.info('Request declined');
+    fetchData();
+  };
+
   const cleanup = () => {
     // Cleanup function for component unmount
   };
@@ -294,6 +340,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     startNextRound,
     endGame,
     uploadImage,
-    cleanup
+    cleanup,
+    approveRequest,
+    declineRequest
   };
 };

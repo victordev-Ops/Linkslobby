@@ -4,7 +4,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer } from "lucide-react";
+import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
@@ -42,8 +42,14 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     startNextRound,
     endGame,
     uploadImage,
-    cleanup
+    cleanup,
+    approveRequest,
+    declineRequest
   } = useGameLogic(lobbyId, profile?.id);
+
+  const currentUserParticipant = participants.find(p => p.user_id === profile?.id);
+  const isJoined = currentUserParticipant?.status === 'joined';
+  const pendingRequests = participants.filter(p => p.status === 'pending');
 
   // Group messages with their answers - efficient O(n) with question_ref
   const messagesWithAnswers = useMemo(() => {
@@ -198,6 +204,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const isHost = profile?.id === lobby?.host_id;
 
   const canSendMessage = () => {
+    if (!isJoined) return false;
     // Allow chat in waiting and finished states for everyone
     if (lobby?.status === 'waiting') return true;
     if (lobby?.status === 'finished') return true;
@@ -310,6 +317,25 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500 rounded-full blur-[120px]" />
       </div>
 
+      {!isJoined && !isLoading && (
+        <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
+          <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 animate-pulse border border-amber-500/50">
+            <Clock size={32} className="text-amber-400" />
+          </div>
+          <h2 className="text-3xl font-black text-white mb-4 italic">Waiting for Approval</h2>
+          <p className="text-slate-400 max-w-md leading-relaxed mb-8">
+            This is a private lobby. Your request to join has been sent to the host.
+            Please wait while they review your request.
+          </p>
+          <button
+            onClick={handleLeaveLobby}
+            className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
+          >
+            Go Back
+          </button>
+        </div>
+      )}
+
       <div className="relative z-10 h-screen flex flex-col">
         {/* Top Header - STICKY */}
         <header className="sticky top-0 z-20 flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/50 border-b border-slate-800/50">
@@ -351,8 +377,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               {/* Timer only shows when target needs to select mode */}
               {lobby.status === 'active' && !lobby.selected_mode && timeRemaining !== null && (
                 <div className={`px-3 py-1 rounded-full border flex items-center gap-1.5 ${timeRemaining <= 10
-                    ? 'bg-red-500/20 border-red-500/50 text-red-300 animate-pulse'
-                    : 'bg-slate-800/80 border-slate-700/50 text-slate-300'
+                  ? 'bg-red-500/20 border-red-500/50 text-red-300 animate-pulse'
+                  : 'bg-slate-800/80 border-slate-700/50 text-slate-300'
                   }`}>
                   <Timer size={12} />
                   <span className="text-xs font-bold">{timeRemaining}s</span>
@@ -438,6 +464,43 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               ref={messagesContainerRef}
               className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
             >
+              {isHost && pendingRequests.length > 0 && (
+                <div className="mb-6 bg-slate-900 shadow-xl rounded-2xl border border-slate-800 overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-800/50 border-b border-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <UserPlus size={16} className="text-red-400" />
+                      <h4 className="text-sm font-bold text-white">Join Requests ({pendingRequests.length})</h4>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-slate-800">
+                    {pendingRequests.map((req) => (
+                      <div key={req.user_id} className="p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-white text-sm">
+                            {(req.profiles?.username || 'U')[0].toUpperCase()}
+                          </div>
+                          <span className="text-white font-bold">{req.profiles?.username || 'Anonymous'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => declineRequest(req.user_id)}
+                            className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:bg-slate-700 transition"
+                          >
+                            <X size={18} />
+                          </button>
+                          <button
+                            onClick={() => approveRequest(req.user_id)}
+                            className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition active:scale-95"
+                          >
+                            Approve
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {lobby.status === 'waiting' && (
                 <WaitingRoom
                   isHost={isHost}
