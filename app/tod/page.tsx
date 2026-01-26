@@ -25,7 +25,7 @@ export default async function TODLobbyList() {
     `)
     .order('category', { ascending: true })
     .order('created_at', { ascending: false })
-    .limit(20);
+    .limit(10);
 
   if (lobbyError) {
     console.error("Error fetching lobbies server-side:", lobbyError);

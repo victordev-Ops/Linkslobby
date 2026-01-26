@@ -11,6 +11,7 @@ export interface Lobby {
     id: string;
     host_id: string;
     name?: string;
+    slug?: string;
     category?: string;
     is_private?: boolean;
     status: 'waiting' | 'active' | 'finished';
@@ -22,6 +23,16 @@ export interface Lobby {
     is_participant?: boolean;
     user_status?: 'pending' | 'joined';
 }
+
+const slugify = (text: string) => {
+    return text
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')     // Replace spaces with -
+        .replace(/[^\w-]+/g, '')   // Remove all non-word chars
+        .replace(/--+/g, '-');      // Replace multiple - with single -
+};
 
 interface LobbyListClientProps {
     initialLobbies: Lobby[]
@@ -44,6 +55,9 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
     // We can skip the initial full-screen loading state since we have data
     const [isLoading, setIsLoading] = useState(false);
+    const [hasMoreLobbies, setHasMoreLobbies] = useState(initialLobbies.length === 10);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const PAGE_SIZE = 10;
 
     const { profile } = useAuth();
     const router = useRouter();
@@ -69,10 +83,14 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const fetchLobbies = async () => {
+    const fetchLobbies = async (loadMore = false) => {
         // If we don't have a user ID (even from props), we might not be able to check participation correctly
         // but we can still fetch the public list.
         const effectiveUserId = currentUserId || profile?.id;
+        const from = loadMore ? lobbies.length : 0;
+        const to = from + PAGE_SIZE - 1;
+
+        if (loadMore) setIsLoadingMore(true);
 
         try {
             // Fetch all lobbies with host profiles
@@ -82,6 +100,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
           id,
           host_id,
           name,
+          slug,
           category,
           is_private,
           status,
@@ -90,7 +109,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         `)
                 .order('category', { ascending: true })
                 .order('created_at', { ascending: false })
-                .limit(20);
+                .range(from, to);
 
             if (lobbyError) throw lobbyError;
 
@@ -114,11 +133,16 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             }) || [];
 
             // Cast to any to avoid type mismatch with the complex join/map structure above vs interface
-            setLobbies(lobbiesWithDetails as any);
+            if (loadMore) {
+                setLobbies(prev => [...prev, ...lobbiesWithDetails] as any);
+            } else {
+                setLobbies(lobbiesWithDetails as any);
+            }
+            setHasMoreLobbies(lobbiesWithDetails.length === PAGE_SIZE);
         } catch (error: any) {
             console.error('Error fetching lobbies:', error);
-            // Silent error or small toast?
-            // toast.error('Failed to update lobbies');
+        } finally {
+            if (loadMore) setIsLoadingMore(false);
         }
     };
 
@@ -138,6 +162,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                     host_id: profile.id,
                     status: 'waiting',
                     name: lobbyName.trim(),
+                    slug: `${slugify(lobbyName)}-${Math.random().toString(36).substring(2, 6)}`,
                     category: selectedCategory,
                     is_private: isPrivate
                 })
@@ -159,7 +184,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
             toast.success('Lobby created! 🎉');
             setShowCreateModal(false);
-            router.push(`/tod/${lobby.id}`);
+            router.push(`/tod/${lobby.slug || lobby.id}`);
         } catch (error: any) {
             console.error('Error creating lobby:', error);
             toast.error('Failed to create lobby');
@@ -208,7 +233,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 return;
             }
 
-            router.push(`/tod/${lobby.id}`);
+            router.push(`/tod/${lobby.slug || lobby.id}`);
         } catch (error: any) {
             console.error('Error joining lobby:', error);
             toast.error('Failed to join lobby');
@@ -433,6 +458,23 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                     </div>
                                 ))}
                             </div>
+
+                            {hasMoreLobbies && (
+                                <button
+                                    onClick={() => fetchLobbies(true)}
+                                    disabled={isLoadingMore}
+                                    className="w-full mt-6 py-4 rounded-2xl bg-slate-900/50 border border-slate-800 text-slate-400 font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+                                >
+                                    {isLoadingMore ? (
+                                        <Loader2 className="animate-spin" size={20} />
+                                    ) : (
+                                        <>
+                                            Load More Lobbies
+                                            <Plus size={16} className="group-hover:rotate-90 transition-transform" />
+                                        </>
+                                    )}
+                                </button>
+                            )}
                         </>
                     )}
 

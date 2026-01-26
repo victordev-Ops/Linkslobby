@@ -44,6 +44,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const PAGE_SIZE = 10;
 
   const fetchData = useCallback(async () => {
     if (!lobbyId || lobbyId === 'undefined') {
@@ -55,7 +57,11 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     const [lobbyRes, partsRes, msgsRes] = await Promise.all([
       supabase.from('tod_lobbies').select('*').eq('id', lobbyId).single(),
       supabase.from('tod_participants').select('*, profiles(username)').eq('lobby_id', lobbyId),
-      supabase.from('tod_messages').select('*, profiles(username)').eq('lobby_id', lobbyId).order('created_at', { ascending: true })
+      supabase.from('tod_messages')
+        .select('*, profiles(username)')
+        .eq('lobby_id', lobbyId)
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE)
     ]);
 
     if (lobbyRes.error) {
@@ -65,7 +71,12 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
 
     if (partsRes.data) setParticipants(partsRes.data);
-    if (msgsRes.data) setMessages(msgsRes.data.map(m => ({ ...m, status: 'sent' as const })));
+    if (msgsRes.data) {
+      // Reverse to get chronological order (we fetched DESC for limit)
+      const initialMsgs = [...msgsRes.data].reverse().map(m => ({ ...m, status: 'sent' as const }));
+      setMessages(initialMsgs);
+      setHasMoreMessages(msgsRes.data.length === PAGE_SIZE);
+    }
     setIsLoading(false);
   }, [lobbyId, supabase]);
 
@@ -323,6 +334,33 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     fetchData();
   };
 
+  const loadMoreMessages = useCallback(async () => {
+    if (!hasMoreMessages || messages.length === 0) return;
+
+    // Find the current oldest message that isn't optimistic
+    const oldestMessage = messages.find(m => !m.id.startsWith('temp-'));
+    if (!oldestMessage) return;
+
+    const { data, error } = await supabase
+      .from('tod_messages')
+      .select('*, profiles(username)')
+      .eq('lobby_id', lobbyId)
+      .lt('created_at', oldestMessage.created_at)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE);
+
+    if (error) {
+      console.error("Error loading more messages:", error);
+      return;
+    }
+
+    if (data) {
+      const moreMsgs = [...data].reverse().map(m => ({ ...m, status: 'sent' as const }));
+      setMessages(prev => [...moreMsgs, ...prev]);
+      setHasMoreMessages(data.length === PAGE_SIZE);
+    }
+  }, [lobbyId, messages, hasMoreMessages, supabase]);
+
   const cleanup = () => {
     // Cleanup function for component unmount
   };
@@ -342,6 +380,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     uploadImage,
     cleanup,
     approveRequest,
-    declineRequest
+    declineRequest,
+    loadMoreMessages,
+    hasMoreMessages
   };
 };

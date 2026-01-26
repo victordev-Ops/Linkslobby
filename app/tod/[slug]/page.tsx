@@ -7,11 +7,11 @@ import TODGameClient from "@/components/tod/TODGameClient";
 export default async function TODGamePage({
   params,
 }: {
-  params: Promise<{ lobbyId: string }>;
+  params: Promise<{ slug: string }>;
 }) {
   // Await both params and cookies
   const resolvedParams = await params;
-  const lobbyId = resolvedParams.lobbyId;
+  const slug = resolvedParams.slug;
   const cookieStore = await cookies();
 
   // Initialize Supabase Server Client
@@ -42,11 +42,30 @@ export default async function TODGamePage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(`/login?next=/tod/${lobbyId}`);
+    redirect(`/login?next=/tod/${slug}`);
   }
 
-  // Auto-Join Logic (Server-side)
-  if (lobbyId && lobbyId !== "undefined") {
+  // 1. Resolve Slug/ID to Lobby UUID
+  let lobbyId = slug;
+
+  // Check if slug is a valid UUID
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+
+  const { data: lobbyData } = await supabase
+    .from("tod_lobbies")
+    .select("id")
+    .or(`slug.eq."${slug}",id.eq."${isUUID ? slug : '00000000-0000-0000-0000-000000000000'}"`)
+    .maybeSingle();
+
+  if (!lobbyData) {
+    // Fallback if not found
+    redirect('/tod?error=lobby_not_found');
+  }
+
+  lobbyId = lobbyData.id;
+
+  // 2. Auto-Join Logic (Server-side) using resolved lobbyId
+  if (lobbyId) {
     const { error: joinError } = await supabase
       .from("tod_participants")
       .upsert(
@@ -60,5 +79,5 @@ export default async function TODGamePage({
   }
 
   return <TODGameClient lobbyId={lobbyId} />;
-    }
-                              
+}
+

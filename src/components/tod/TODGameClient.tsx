@@ -44,8 +44,12 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     uploadImage,
     cleanup,
     approveRequest,
-    declineRequest
+    declineRequest,
+    loadMoreMessages,
+    hasMoreMessages
   } = useGameLogic(lobbyId, profile?.id);
+
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const currentUserParticipant = participants.find(p => p.user_id === profile?.id);
   const isJoined = currentUserParticipant?.status === 'joined';
@@ -99,6 +103,27 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     toast.success("Link copied! Share with friends 🎉");
   };
 
+  const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    // Check if scrolled to top and there are more messages to load
+    if (container.scrollTop === 0 && hasMoreMessages && !isLoadingMore && !isLoading) {
+      const prevScrollHeight = container.scrollHeight;
+      setIsLoadingMore(true);
+
+      await loadMoreMessages();
+
+      // Wait for DOM to update with new messages then restore scroll position
+      setTimeout(() => {
+        if (container) {
+          const newScrollHeight = container.scrollHeight;
+          // Calculate the difference and maintain position
+          container.scrollTop = newScrollHeight - prevScrollHeight;
+        }
+        setIsLoadingMore(false);
+      }, 50);
+    }
+  };
+
   const handleSelectMode = async (mode: 'truth' | 'dare') => {
     await selectMode(mode);
   };
@@ -130,13 +155,23 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       }
       // If target is answering the question
       else if (isTarget && lobby?.current_question) {
-        messageType = 'answer';
-        // Find the question message ID for the foreign key reference
+        // Find the question message ID
         const questionMsg = messages.find(m =>
           (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
-        questionRef = questionMsg?.id;
+
+        // Check if there's already an answer for this question
+        const hasAnswer = questionMsg && messages.some(m =>
+          m.message_type === 'answer' &&
+          m.question_ref === questionMsg.id
+        );
+
+        // Only mark as answer if not already answered
+        if (!hasAnswer) {
+          messageType = 'answer';
+          questionRef = questionMsg?.id;
+        }
       }
     }
 
@@ -462,8 +497,17 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
           <main className="flex-1 flex flex-col overflow-hidden">
             <div
               ref={messagesContainerRef}
+              onScroll={handleScroll}
               className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
             >
+              {hasMoreMessages && (
+                <div className="flex justify-center py-2">
+                  <div className="bg-slate-800/40 px-3 py-1 rounded-full text-[10px] text-slate-500 font-bold flex items-center gap-2">
+                    {isLoadingMore ? <Loader2 size={10} className="animate-spin" /> : <Clock size={10} />}
+                    {isLoadingMore ? "Loading history..." : "Scroll up for more"}
+                  </div>
+                </div>
+              )}
               {isHost && pendingRequests.length > 0 && (
                 <div className="mb-6 bg-slate-900 shadow-xl rounded-2xl border border-slate-800 overflow-hidden">
                   <div className="px-4 py-3 bg-slate-800/50 border-b border-slate-700 flex items-center justify-between">
