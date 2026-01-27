@@ -219,7 +219,7 @@ export default function NotificationsClient({
                                 >
                                     <button
                                         onClick={(e) => handleHide(e, item)}
-                                        className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                        className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
                                         title="Hide notification"
                                     >
                                         <Trash2 size={16} />

@@ -19,6 +19,7 @@ export default async function NotificationsPage() {
         .from("confessions")
         .select("*")
         .eq("profile_id", user.id)
+        .eq("is_hidden", false)
         .order("created_at", { ascending: false })
 
     // Fetch DYKM scores
@@ -26,6 +27,7 @@ export default async function NotificationsPage() {
         .from("dykm_scores")
         .select("*")
         .eq("quiz_owner_id", user.id)
+        .eq("is_hidden", false)
         .order("created_at", { ascending: false })
 
     // Fetch Lobby Events (for simplicity, we'll fetch messages from lobbies the user is in)
@@ -50,6 +52,7 @@ export default async function NotificationsPage() {
             .select("*, profiles(username), tod_lobbies(status)")
             .in("lobby_id", lobbyIds)
             .eq("message_type", "system")
+            .eq("is_hidden", false)
             .order("created_at", { ascending: false })
             .limit(20)
 
