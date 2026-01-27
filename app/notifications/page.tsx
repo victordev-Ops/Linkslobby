@@ -14,7 +14,17 @@ export default async function NotificationsPage() {
         redirect("/login")
     }
 
+    // Fetch hidden notifications for the user
+    const { data: hiddenData } = await supabase
+        .from("hidden_notifications")
+        .select("notification_id")
+        .eq("user_id", user.id)
+
+    const hiddenIds = new Set((hiddenData || []).map(h => h.notification_id))
+
     // Fetch confessions (confessions, ama, anonymous)
+    // Note: We used to filter by .eq("is_hidden", false) but now we use the separate table
+    // However, we still respect the local is_hidden if it was used for admin/soft-delete purposes
     const confessionsPromise = supabase
         .from("confessions")
         .select("*")
@@ -30,8 +40,7 @@ export default async function NotificationsPage() {
         .eq("is_hidden", false)
         .order("created_at", { ascending: false })
 
-    // Fetch Lobby Events (for simplicity, we'll fetch messages from lobbies the user is in)
-    // This is a bit complex as we need lobbies where user is a participant.
+    // Fetch Lobby Events
     const lobbiesPromise = supabase
         .from("tod_participants")
         .select("lobby_id")
@@ -52,18 +61,23 @@ export default async function NotificationsPage() {
             .select("*, profiles(username), tod_lobbies(status)")
             .in("lobby_id", lobbyIds)
             .eq("message_type", "system")
-            .eq("is_hidden", false)
+            // .eq("is_hidden", false) // tod_messages might not have is_hidden or it might be shared. We rely on hidden_notifications table.
             .order("created_at", { ascending: false })
-            .limit(20)
+            .limit(50) // Increased limit to account for filtered items
 
         lobbyEvents = events || []
     }
 
+    // Filter out hidden notifications
+    const confessions = (confessionsRes.data || []).filter(c => !hiddenIds.has(c.id))
+    const dykmScores = (dykmRes.data || []).filter(s => !hiddenIds.has(s.id))
+    const filteredLobbyEvents = lobbyEvents.filter(e => !hiddenIds.has(e.id))
+
     return (
         <NotificationsClient
-            initialConfessions={confessionsRes.data || []}
-            initialDykmScores={dykmRes.data || []}
-            initialLobbyEvents={lobbyEvents}
+            initialConfessions={confessions}
+            initialDykmScores={dykmScores}
+            initialLobbyEvents={filteredLobbyEvents}
             isPro={profileRes.data?.is_pro || false}
             username={profileRes.data?.username || ""}
             profileId={user.id}
