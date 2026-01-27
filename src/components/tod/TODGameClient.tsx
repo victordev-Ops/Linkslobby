@@ -97,6 +97,27 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     };
   }, [cleanup]);
 
+  // Track status changes for notifications
+  const prevStatusRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const currentStatus = currentUserParticipant?.status;
+    const prevStatus = prevStatusRef.current;
+
+    // Only if we had a previous status (so we don't trigger on initial load if pending)
+    if (prevStatus === 'pending') {
+      if (currentStatus === 'joined') {
+        toast.success("Request Approved! Welcome to the game! 🎉");
+      } else if (currentStatus === undefined && !isLoading && !isHost) {
+        // If we were pending and now we are gone (and not loading, and not host deleting ourselves)
+        toast.error("Your join request was declined by the host.");
+        router.push('/tod');
+      }
+    }
+
+    prevStatusRef.current = currentStatus;
+  }, [currentUserParticipant?.status, isLoading, isHost, router]);
+
   const copyInviteLink = () => {
     const url = window.location.href;
     navigator.clipboard.writeText(url);
@@ -479,6 +500,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   currentTargetId={lobby.current_target_id}
                   hostId={lobby.host_id}
                   onActivityClick={handleActivityClick}
+                  pendingRequests={pendingRequests}
+                  onApproveRequest={approveRequest}
+                  onDeclineRequest={declineRequest}
+                  isHost={isHost}
                 />
               </div>
             </div>
@@ -492,6 +517,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             hostId={lobby.host_id}
             className="hidden lg:flex"
             onActivityClick={handleActivityClick}
+            pendingRequests={pendingRequests}
+            onApproveRequest={approveRequest}
+            onDeclineRequest={declineRequest}
+            isHost={isHost}
           />
 
           {/* Chat Area */}
@@ -509,42 +538,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   </div>
                 </div>
               )}
-              {isHost && pendingRequests.length > 0 && (
-                <div className="mb-6 bg-slate-900 shadow-xl rounded-2xl border border-slate-800 overflow-hidden">
-                  <div className="px-4 py-3 bg-slate-800/50 border-b border-slate-700 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <UserPlus size={16} className="text-red-400" />
-                      <h4 className="text-sm font-bold text-white">Join Requests ({pendingRequests.length})</h4>
-                    </div>
-                  </div>
-                  <div className="divide-y divide-slate-800">
-                    {pendingRequests.map((req) => (
-                      <div key={req.user_id} className="p-4 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-white text-sm">
-                            {(req.profiles?.username || 'U')[0].toUpperCase()}
-                          </div>
-                          <span className="text-white font-bold">{req.profiles?.username || 'Anonymous'}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => declineRequest(req.user_id)}
-                            className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:bg-slate-700 transition"
-                          >
-                            <X size={18} />
-                          </button>
-                          <button
-                            onClick={() => approveRequest(req.user_id)}
-                            className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition active:scale-95"
-                          >
-                            Approve
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+
 
               {lobby.status === 'waiting' && (
                 <WaitingRoom

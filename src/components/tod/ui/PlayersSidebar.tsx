@@ -1,9 +1,10 @@
 // src/components/tod/ui/PlayersSidebar.tsx
-import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, StopCircle } from 'lucide-react';
+import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, StopCircle, UserPlus, Check, X } from 'lucide-react';
 
 interface Participant {
   user_id: string;
   has_gone_this_round: boolean;
+  status: 'pending' | 'joined';
   profiles?: { username: string };
 }
 
@@ -22,6 +23,10 @@ interface PlayersSidebarProps {
   hostId: string;
   className?: string;
   onActivityClick?: (messageId: string) => void;
+  pendingRequests?: Participant[];
+  onApproveRequest?: (userId: string) => void;
+  onDeclineRequest?: (userId: string) => void;
+  isHost?: boolean;
 }
 
 export const PlayersSidebar = ({
@@ -30,13 +35,17 @@ export const PlayersSidebar = ({
   currentTargetId,
   hostId,
   className = '',
-  onActivityClick
+  onActivityClick,
+  pendingRequests = [],
+  onApproveRequest,
+  onDeclineRequest,
+  isHost = false
 }: PlayersSidebarProps) => {
-  
+
   // Filter for game events: truth/dare questions, system messages (start/end)
-  const gameEvents = messages.filter(m => 
-    m.message_type === 'system' || 
-    m.message_type === 'truth' || 
+  const gameEvents = messages.filter(m =>
+    m.message_type === 'system' ||
+    m.message_type === 'truth' ||
     m.message_type === 'dare'
   );
 
@@ -75,6 +84,50 @@ export const PlayersSidebar = ({
 
   return (
     <aside className={`w-64 flex-shrink-0 border-r border-slate-800/50 bg-slate-900/30 backdrop-blur-sm flex flex-col ${className}`}>
+      {/* Join Requests Section */}
+      {isHost && pendingRequests.length > 0 && (
+        <div className="p-4 border-b border-slate-800/50 bg-red-500/5">
+          <div className="flex items-center gap-2 mb-3">
+            <UserPlus size={18} className="text-orange-400" />
+            <h3 className="text-white font-bold text-sm uppercase tracking-wide">
+              Requests ({pendingRequests.length})
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {pendingRequests.map((req) => (
+              <div key={req.user_id} className="bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-white">
+                        {(req.profiles?.username || 'U')[0].toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-slate-200 truncate max-w-[80px]">
+                      {req.profiles?.username}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onApproveRequest?.(req.user_id)}
+                    className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition"
+                  >
+                    <Check size={12} /> Accept
+                  </button>
+                  <button
+                    onClick={() => onDeclineRequest?.(req.user_id)}
+                    className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition"
+                  >
+                    <X size={12} /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Players Section */}
       <div className="p-4 border-b border-slate-800/50">
         <div className="flex items-center gap-2 mb-4">
@@ -83,37 +136,34 @@ export const PlayersSidebar = ({
             Players ({participants.length})
           </h3>
         </div>
-        
+
         <div className="space-y-2">
           {participants.map((participant) => {
             const isHost = participant.user_id === hostId;
             const isTarget = participant.user_id === currentTargetId;
             const hasTurn = participant.has_gone_this_round;
-            
+
             return (
               <div
                 key={participant.user_id}
-                className={`flex items-center justify-between p-2 rounded-lg transition-all ${
-                  isTarget
-                    ? 'bg-red-500/20 border border-red-500/50'
-                    : 'bg-slate-800/30 border border-slate-700/30'
-                }`}
+                className={`flex items-center justify-between p-2 rounded-lg transition-all ${isTarget
+                  ? 'bg-red-500/20 border border-red-500/50'
+                  : 'bg-slate-800/30 border border-slate-700/30'
+                  }`}
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    isTarget
-                      ? 'bg-gradient-to-br from-red-500 to-orange-500'
-                      : 'bg-slate-700'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isTarget
+                    ? 'bg-gradient-to-br from-red-500 to-orange-500'
+                    : 'bg-slate-700'
+                    }`}>
                     <span className="text-white font-bold text-xs uppercase">
                       {participant.profiles?.username?.slice(0, 2) || '??'}
                     </span>
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-semibold truncate ${
-                      isTarget ? 'text-white' : 'text-slate-300'
-                    }`}>
+                    <p className={`text-sm font-semibold truncate ${isTarget ? 'text-white' : 'text-slate-300'
+                      }`}>
                       {participant.profiles?.username || 'Unknown'}
                     </p>
                     {hasTurn && !isTarget && (
@@ -121,7 +171,7 @@ export const PlayersSidebar = ({
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-1">
                   {isHost && (
                     <Crown size={14} className="text-amber-400" />
@@ -144,13 +194,13 @@ export const PlayersSidebar = ({
             Game Activity
           </h3>
         </div>
-        
+
         {gameEvents.length > 0 ? (
           <div className="space-y-2">
             {gameEvents.map((event) => {
               const EventIcon = getEventIcon(event.message_type, event.content);
               const iconColor = getEventColor(event.message_type, event.content);
-              
+
               return (
                 <button
                   key={event.id}
@@ -163,9 +213,8 @@ export const PlayersSidebar = ({
                       {event.message_type === 'truth' || event.message_type === 'dare' ? (
                         <>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[10px] font-bold uppercase ${
-                              event.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
-                            }`}>
+                            <span className={`text-[10px] font-bold uppercase ${event.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
+                              }`}>
                               {event.message_type}
                             </span>
                             <span className="text-[10px] text-slate-500">
