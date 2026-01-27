@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import {
     Bell, MessageSquare, Brain, Users, Lock,
     ArrowLeft, ChevronRight, Trophy, Sparkles,
-    Eye, EyeOff, Loader2, X
+    Eye, EyeOff, Loader2, X, Trash2
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
@@ -12,6 +12,7 @@ import { formatDistanceToNow } from "@/lib/utils"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { markConfessionAsRead } from "app/actions/confessions"
+import { hideNotification } from "app/actions/notifications"
 import { useRouter } from "next/navigation"
 
 interface NotificationsClientProps {
@@ -88,6 +89,35 @@ export default function NotificationsClient({
             await markConfessionAsRead(item.id)
         }
         router.push(item.type === 'message' ? `/inbox/${item.id}` : '#')
+    }
+
+    const handleHide = async (e: React.MouseEvent, item: any) => {
+        e.stopPropagation() // Prevent triggering card click if we add one later
+
+        // Optimistic update
+        const originalConfessions = [...confessions]
+        const originalDykmScores = [...dykmScores]
+        const originalLobbyEvents = [...lobbyEvents]
+
+        if (item.type === 'message') {
+            setConfessions(prev => prev.filter(c => c.id !== item.id))
+        } else if (item.type === 'dykm') {
+            setDykmScores(prev => prev.filter(s => s.id !== item.id))
+        } else if (item.type === 'lobby') {
+            setLobbyEvents(prev => prev.filter(l => l.id !== item.id))
+        }
+
+        toast.success("Notification hidden")
+
+        const result = await hideNotification(item.id, item.type)
+
+        if (!result.success) {
+            // Revert on failure
+            setConfessions(originalConfessions)
+            setDykmScores(originalDykmScores)
+            setLobbyEvents(originalLobbyEvents)
+            toast.error("Failed to hide notification")
+        }
     }
 
     // Combine and sort notifications
@@ -185,9 +215,17 @@ export default function NotificationsClient({
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.95 }}
-                                    className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border border-slate-200 dark:border-white/10 p-4 rounded-2xl shadow-sm group hover:border-purple-300 dark:hover:border-purple-500/30 transition-all"
+                                    className="relative bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border border-slate-200 dark:border-white/10 p-4 rounded-2xl shadow-sm group hover:border-purple-300 dark:hover:border-purple-500/30 transition-all"
                                 >
-                                    <div className="flex gap-4">
+                                    <button
+                                        onClick={(e) => handleHide(e, item)}
+                                        className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                        title="Hide notification"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+
+                                    <div className="flex gap-4 pr-6">
                                         <div className="w-12 h-12 shrink-0 rounded-xl bg-slate-50 dark:bg-white/5 flex items-center justify-center border border-slate-100 dark:border-white/5">
                                             {getIcon(item)}
                                         </div>
