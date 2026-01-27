@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowLeft, Save, Copy, Check, Loader2, User as UserIcon } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ArrowLeft, Save, Copy, Check, Loader2, User as UserIcon, XCircle, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { updateProfile } from '../actions/profile'
+import { updateProfile, checkSlugAvailability } from '../actions/profile'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { useDebounce } from '@/hooks/use-debounce'
 
 interface ProfileClientProps {
     user: any
@@ -23,6 +24,38 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
     const [isLoading, setIsLoading] = useState(false)
     const router = useRouter()
 
+    // Slug check states
+    const [slug, setSlug] = useState(profile.slug)
+    const debouncedSlug = useDebounce(slug, 500)
+    const [isSlugChecking, setIsSlugChecking] = useState(false)
+    const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
+    const [slugMessage, setSlugMessage] = useState('')
+
+    useEffect(() => {
+        // Don't check if it matches initial profile slug (unless they change back and forth, but checking against DB handles 'taken by others')
+        const checkSlug = async () => {
+            if (debouncedSlug === profile.slug) {
+                setSlugAvailable(null)
+                setSlugMessage('')
+                return
+            }
+
+            setIsSlugChecking(true)
+            const result = await checkSlugAvailability(debouncedSlug)
+            setIsSlugChecking(false)
+
+            setSlugAvailable(result.available)
+            setSlugMessage(result.message || (result.available ? 'Available' : 'Unavailable'))
+        }
+
+        if (debouncedSlug && debouncedSlug.length >= 2) {
+            checkSlug()
+        } else {
+            setSlugAvailable(null)
+            setSlugMessage('')
+        }
+    }, [debouncedSlug, profile.slug])
+
     const copyLink = () => {
         const link = `${window.location.origin}/u/${profile.slug}`
         navigator.clipboard.writeText(link)
@@ -37,6 +70,11 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
     }
 
     async function clientAction(formData: FormData) {
+        if (slugAvailable === false) {
+            toast.error("Please choose a valid and available handle.")
+            return
+        }
+
         setIsLoading(true)
         const result = await updateProfile(null, formData)
         setIsLoading(false)
@@ -120,16 +158,38 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
                                         type="text"
                                         name="slug"
                                         id="slug"
-                                        defaultValue={profile.slug}
-                                        className="w-full pl-10 pr-4 py-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:text-white font-bold transition-all"
+                                        value={slug}
+                                        onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                                        className={`w-full pl-10 pr-10 py-3 rounded-2xl bg-slate-50 dark:bg-black/20 border focus:outline-none focus:ring-2 font-bold transition-all ${slugAvailable === false
+                                            ? 'border-red-300 dark:border-red-500/50 focus:ring-red-500'
+                                            : slugAvailable === true
+                                                ? 'border-green-300 dark:border-green-500/50 focus:ring-green-500'
+                                                : 'border-slate-200 dark:border-white/10 focus:ring-purple-500'
+                                            }`}
                                         placeholder="unique-handle"
                                         minLength={2}
                                         required
                                     />
+                                    <div className="absolute right-4 top-3.5 pointer-events-none">
+                                        {isSlugChecking ? (
+                                            <Loader2 size={16} className="animate-spin text-slate-400" />
+                                        ) : slugAvailable === true ? (
+                                            <CheckCircle size={16} className="text-green-500" />
+                                        ) : slugAvailable === false ? (
+                                            <XCircle size={16} className="text-red-500" />
+                                        ) : null}
+                                    </div>
                                 </div>
-                                <p className="text-[10px] text-slate-400 mt-1.5 ml-1">
-                                    This is your public URL. Changing this will break existing links.
-                                </p>
+                                <div className="flex justify-between items-start mt-1.5 ml-1">
+                                    <p className="text-[10px] text-slate-400">
+                                        This is your public URL. Changing this will break existing links.
+                                    </p>
+                                    {slugMessage && (
+                                        <p className={`text-[10px] font-bold ${slugAvailable === true ? 'text-green-500' : slugAvailable === false ? 'text-red-500' : 'text-slate-400'}`}>
+                                            {slugMessage}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="flex gap-3 pt-2">

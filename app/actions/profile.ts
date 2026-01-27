@@ -50,3 +50,28 @@ export async function updateProfile(state: any, formData: FormData) {
         return { error: 'An unexpected error occurred. Please try again.' }
     }
 }
+
+export async function checkSlugAvailability(slug: string) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { available: false, error: 'Unauthorized' }
+
+    // Basic validation
+    if (!slug || slug.length < 2) return { available: false, message: 'Too short' }
+    if (!/^[a-z0-9-]+$/.test(slug)) return { available: false, message: 'Invalid characters' }
+
+    // Check if taken by anyone ELSE
+    const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('slug', slug)
+        .neq('id', user.id) // It's available if it's the user's current slug
+        .single()
+
+    if (data) {
+        return { available: false, message: 'Taken' }
+    }
+
+    return { available: true }
+}
