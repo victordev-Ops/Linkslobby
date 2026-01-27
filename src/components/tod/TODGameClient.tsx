@@ -97,6 +97,12 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     };
   }, [cleanup]);
 
+  const targetUser = participants.find(p => p.user_id === lobby?.current_target_id);
+  const askerUser = participants.find(p => p.user_id === lobby?.current_asker_id);
+  const isTarget = profile?.id === lobby?.current_target_id;
+  const isAsker = profile?.id === lobby?.current_asker_id;
+  const isHost = profile?.id === lobby?.host_id;
+
   // Track status changes for notifications
   const prevStatusRef = useRef<string | undefined>(undefined);
 
@@ -255,9 +261,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     setReplyingTo(null);
   };
 
-  const isTarget = profile?.id === lobby?.current_target_id;
-  const isAsker = profile?.id === lobby?.current_asker_id;
-  const isHost = profile?.id === lobby?.host_id;
+
 
   const canSendMessage = () => {
     if (!isJoined) return false;
@@ -363,8 +367,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     );
   }
 
-  const targetUser = participants.find(p => p.user_id === lobby.current_target_id);
-  const askerUser = participants.find(p => p.user_id === lobby.current_asker_id);
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-red-950 to-slate-950 relative overflow-hidden">
