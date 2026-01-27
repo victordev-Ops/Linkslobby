@@ -73,6 +73,16 @@ export default async function NotificationsPage() {
     const dykmScores = (dykmRes.data || []).filter(s => !hiddenIds.has(s.id))
     const filteredLobbyEvents = lobbyEvents.filter(e => !hiddenIds.has(e.id))
 
+    console.log('--- Debug Notifications ---')
+    console.log('User ID:', user.id)
+    console.log('Hidden IDs found:', hiddenIds.size, Array.from(hiddenIds))
+    console.log('Lobby Events Total:', lobbyEvents.length)
+    if (lobbyEvents.length > 0) {
+        console.log('Sample Lobby Event ID:', lobbyEvents[0].id)
+    }
+    console.log('Filtered Lobby Events:', filteredLobbyEvents.length)
+    console.log('---------------------------')
+
     return (
         <NotificationsClient
             initialConfessions={confessions}
