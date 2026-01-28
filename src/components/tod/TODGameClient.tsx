@@ -460,7 +460,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleLeaveLobby}
-                className={`hidden lg:flex w-9 h-9 rounded-full border items-center justify-center transition ${isHost
+                className={`flex w-9 h-9 rounded-full border items-center justify-center transition ${isHost
                   ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20 text-red-400'
                   : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-white'}`}
                 title={isHost ? "Delete Lobby" : "Leave Lobby"}

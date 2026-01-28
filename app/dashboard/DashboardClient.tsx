@@ -39,6 +39,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const [isDykmOpen, setIsDykmOpen] = useState(false)
   const [isTodOpen, setIsTodOpen] = useState(false)
   const [isHotSeatOpen, setIsHotSeatOpen] = useState(false)
+  const [isNavigatingToTod, setIsNavigatingToTod] = useState(false)
 
   // DYKM Logic
   const [hasDykm, setHasDykm] = useState(!!initialDykmQuestions)
@@ -92,6 +93,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
   // Truth or Dare Logic - Navigate to TOD dashboard
   const handleNavigateToTod = () => {
+    setIsNavigatingToTod(true)
     router.push('/tod')
   }
 
@@ -233,10 +235,11 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
                   <button
                     onClick={handleNavigateToTod}
-                    className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-rose-200 dark:shadow-rose-900/20"
+                    disabled={isNavigatingToTod}
+                    className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-rose-200 dark:shadow-rose-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    <Sparkles size={16} />
-                    View Game Lobbies
+                    {isNavigatingToTod ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isNavigatingToTod ? 'Loading...' : 'View Game Lobbies'}
                   </button>
                 </div>
               )}

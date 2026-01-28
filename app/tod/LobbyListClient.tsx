@@ -197,8 +197,10 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     };
 
     const joinLobby = async (lobby: Lobby) => {
-        if (!profile?.id) {
-            toast.error("Please log in to join");
+        const effectiveUserId = currentUserId || profile?.id;
+        if (!effectiveUserId) {
+            toast.error("Please log in to join a lobby");
+            router.push('/login');
             return;
         }
 
@@ -208,7 +210,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 .from('tod_participants')
                 .select('id, status')
                 .eq('lobby_id', lobby.id)
-                .eq('user_id', profile.id)
+                .eq('user_id', effectiveUserId)
                 .maybeSingle();
 
             if (!existing) {
@@ -220,7 +222,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                     .from('tod_participants')
                     .insert({
                         lobby_id: lobby.id,
-                        user_id: profile.id,
+                        user_id: effectiveUserId,
                         status: initialStatus
                     });
 

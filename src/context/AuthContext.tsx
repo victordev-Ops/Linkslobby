@@ -99,16 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       setUser(null);
 
-      // 3. Force a hard redirect or router replace to the login page
-      // We use replace to avoid the user going 'back' into a logged-out state
-      router.replace('/login');
+      // 3. Force a hard redirect to ensure complete logout
+      // Using window.location.href ensures middleware catches the logout state
+      window.location.href = '/login';
 
     } catch (error) {
       console.error("Error signing out:", error);
       // Fallback: Clear state and redirect even if Supabase call fails
       setProfile(null);
       setUser(null);
-      router.replace('/login');
+      window.location.href = '/login';
     }
   };
 
