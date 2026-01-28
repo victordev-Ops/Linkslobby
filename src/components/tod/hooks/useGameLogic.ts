@@ -19,7 +19,7 @@ interface Participant {
   user_id: string;
   lobby_id: string;
   has_gone_this_round: boolean;
-  status: 'pending' | 'joined';
+  status: 'pending' | 'joined' | 'rejected';
   profiles?: { username: string };
 }
 
@@ -321,7 +321,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
     const { error } = await supabase
       .from('tod_participants')
-      .delete()
+      .update({ status: 'rejected' })
       .eq('lobby_id', lobbyId)
       .eq('user_id', targetUserId);
 

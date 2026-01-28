@@ -21,7 +21,7 @@ export interface Lobby {
     };
     participant_count?: number;
     is_participant?: boolean;
-    user_status?: 'pending' | 'joined';
+    user_status?: 'pending' | 'joined' | 'rejected';
 }
 
 const slugify = (text: string) => {
@@ -123,10 +123,13 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             const lobbiesWithDetails = lobbyData?.map(lobby => {
                 const participants = participantData?.filter(p => p.lobby_id === lobby.id) || [];
                 const userPart = effectiveUserId ? participants.find(p => p.user_id === effectiveUserId) : null;
+                // Count only joined participants (exclude pending and rejected)
+                const joinedCount = participants.filter(p => p.status === 'joined').length;
+
                 return {
                     ...lobby,
                     host_profile: lobby.profiles,
-                    participant_count: participants.length,
+                    participant_count: joinedCount, // Use filtered count
                     is_participant: !!userPart,
                     user_status: userPart?.status
                 };
@@ -230,6 +233,9 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 }
             } else if (existing.status === 'pending') {
                 toast.info('Your request is still pending approval ⏳');
+                return;
+            } else if (existing.status === 'rejected') {
+                toast.error('Your request to join this lobby was rejected 😔');
                 return;
             }
 
@@ -422,6 +428,10 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                                         <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[10px] font-black uppercase text-slate-500 tracking-wider">
                                                             {lobby.category || 'Casual'}
                                                         </span>
+                                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 text-[10px] font-bold text-slate-400">
+                                                            <Users size={10} />
+                                                            {lobby.participant_count || 0}
+                                                        </div>
                                                     </div>
                                                     <p className="text-xs text-slate-400">
                                                         Hosted by{' '}
@@ -450,9 +460,12 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                                 <span className="text-sm font-bold">
                                                     {lobby.user_status === 'joined' ? 'Rejoin' :
                                                         lobby.user_status === 'pending' ? 'Pending Approval' :
-                                                            lobby.is_private ? 'Request to Join' : 'Join'}
+                                                            lobby.user_status === 'rejected' ? 'Rejected' :
+                                                                lobby.is_private ? 'Request to Join' : 'Join'}
                                                 </span>
-                                                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                                {lobby.user_status !== 'rejected' && (
+                                                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                                )}
                                             </div>
                                         </div>
                                     </div>

@@ -53,6 +53,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
   const currentUserParticipant = participants.find(p => p.user_id === profile?.id);
   const isJoined = currentUserParticipant?.status === 'joined';
+  const isRejected = currentUserParticipant?.status === 'rejected';
+
+  // Filter participants for UI - only show joined users in the list/counts
+  const joinedParticipants = participants.filter(p => p.status === 'joined');
   const pendingRequests = participants.filter(p => p.status === 'pending');
 
   // Group messages with their answers - efficient O(n) with question_ref
@@ -114,9 +118,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     if (prevStatus === 'pending') {
       if (currentStatus === 'joined') {
         toast.success("Request Approved! Welcome to the game! 🎉");
+      } else if (currentStatus === 'rejected') {
+        toast.error("Your join request was declined by the host.");
+        router.push('/tod');
       } else if (currentStatus === undefined && !isLoading && !isHost) {
         // If we were pending and now we are gone (and not loading, and not host deleting ourselves)
-        toast.error("Your join request was declined by the host.");
+        // This case might still happen if record is deleted, but now we use rejected status
+        toast.error("You have been removed from the lobby.");
         router.push('/tod');
       }
     }
@@ -377,24 +385,46 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500 rounded-full blur-[120px]" />
       </div>
 
-      {!isJoined && !isLoading && (
-        <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
-          <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 animate-pulse border border-amber-500/50">
-            <Clock size={32} className="text-amber-400" />
+      {
+        isRejected && !isLoading && (
+          <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
+            <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500/50">
+              <X size={32} className="text-red-400" />
+            </div>
+            <h2 className="text-3xl font-black text-white mb-4 italic">Request Rejected</h2>
+            <p className="text-slate-400 max-w-md leading-relaxed mb-8">
+              Your request to join this lobby was declined by the host.
+            </p>
+            <button
+              onClick={handleLeaveLobby}
+              className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
+            >
+              Go Back
+            </button>
           </div>
-          <h2 className="text-3xl font-black text-white mb-4 italic">Waiting for Approval</h2>
-          <p className="text-slate-400 max-w-md leading-relaxed mb-8">
-            This is a private lobby. Your request to join has been sent to the host.
-            Please wait while they review your request.
-          </p>
-          <button
-            onClick={handleLeaveLobby}
-            className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
-          >
-            Go Back
-          </button>
-        </div>
-      )}
+        )
+      }
+
+      {
+        !isJoined && !isRejected && !isLoading && (
+          <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
+            <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 animate-pulse border border-amber-500/50">
+              <Clock size={32} className="text-amber-400" />
+            </div>
+            <h2 className="text-3xl font-black text-white mb-4 italic">Waiting for Approval</h2>
+            <p className="text-slate-400 max-w-md leading-relaxed mb-8">
+              This is a private lobby. Your request to join has been sent to the host.
+              Please wait while they review your request.
+            </p>
+            <button
+              onClick={handleLeaveLobby}
+              className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
+            >
+              Go Back
+            </button>
+          </div>
+        )
+      }
 
       <div className="relative z-10 h-screen flex flex-col">
         {/* Top Header - STICKY */}
@@ -414,7 +444,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               >
                 <Users size={16} className="text-white" />
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white border-2 border-slate-900">
-                  {participants.length}
+                  {joinedParticipants.length}
                 </span>
               </button>
 
@@ -422,7 +452,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg">
                   <Users size={16} className="text-white" />
                 </div>
-                <span className="text-white font-bold">{participants.length} Players</span>
+                <span className="text-white font-bold">{joinedParticipants.length} Players</span>
               </div>
             </div>
 
@@ -498,7 +528,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   </button>
                 </div>
                 <PlayersSidebar
-                  participants={participants}
+                  participants={joinedParticipants}
                   messages={messages}
                   currentTargetId={lobby.current_target_id}
                   hostId={lobby.host_id}
@@ -514,7 +544,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
           {/* Desktop Sidebar */}
           <PlayersSidebar
-            participants={participants}
+            participants={joinedParticipants}
             messages={messages}
             currentTargetId={lobby.current_target_id}
             hostId={lobby.host_id}
@@ -546,7 +576,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               {lobby.status === 'waiting' && (
                 <WaitingRoom
                   isHost={isHost}
-                  playersCount={participants.length}
+                  playersCount={joinedParticipants.length}
                   onStartGame={handleStartGame}
                 />
               )}
@@ -642,6 +672,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
           </main>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
