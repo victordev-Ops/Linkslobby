@@ -361,6 +361,41 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   }, [lobbyId, messages, hasMoreMessages, supabase]);
 
+  const leaveLobby = async () => {
+    if (!lobby || !userId) return;
+
+    try {
+      const { error } = await supabase
+        .from('tod_participants')
+        .delete()
+        .eq('lobby_id', lobbyId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      toast.success('You left the lobby');
+    } catch (err) {
+      console.error('Error leaving lobby:', err);
+      toast.error('Failed to leave lobby');
+    }
+  };
+
+  const deleteLobby = async () => {
+    if (!lobby || !userId || lobby.host_id !== userId) return;
+
+    try {
+      const { error } = await supabase
+        .from('tod_lobbies')
+        .delete()
+        .eq('id', lobbyId);
+
+      if (error) throw error;
+      toast.success('Lobby deleted');
+    } catch (err) {
+      console.error('Error deleting lobby:', err);
+      toast.error('Failed to delete lobby');
+    }
+  };
+
   const cleanup = () => {
     // Cleanup function for component unmount
   };
@@ -381,6 +416,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     cleanup,
     approveRequest,
     declineRequest,
+    leaveLobby,
+    deleteLobby,
     loadMoreMessages,
     hasMoreMessages
   };

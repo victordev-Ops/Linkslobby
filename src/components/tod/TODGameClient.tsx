@@ -4,7 +4,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock } from "lucide-react";
+import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
@@ -46,7 +46,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     approveRequest,
     declineRequest,
     loadMoreMessages,
-    hasMoreMessages
+    hasMoreMessages,
+    leaveLobby,
+    deleteLobby
   } = useGameLogic(lobbyId, profile?.id);
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -240,9 +242,34 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     return url;
   };
 
-  const handleLeaveLobby = () => {
-    cleanup();
-    router.push('/tod');
+  const handleLeaveLobby = async () => {
+    if (!lobby) {
+      // Error state or not loaded
+      router.push('/tod');
+      return;
+    }
+
+    if (isHost) {
+      if (confirm("Are you sure you want to DELETE this lobby? This will kick all players.")) {
+        await deleteLobby();
+        cleanup();
+        router.push('/tod');
+      }
+    } else {
+      // For participants: if pending, just cancel. If joined, confirm leave.
+      if (isJoined) {
+        if (confirm("Are you sure you want to leave the game?")) {
+          await leaveLobby();
+          cleanup();
+          router.push('/tod');
+        }
+      } else {
+        // Pending or Rejected - just leave/cancel request
+        await leaveLobby();
+        cleanup();
+        router.push('/tod');
+      }
+    }
   };
 
   const handleActivityClick = (messageId: string) => {
@@ -433,9 +460,12 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleLeaveLobby}
-                className="hidden lg:flex w-9 h-9 rounded-full bg-slate-800 border border-slate-700 items-center justify-center hover:bg-slate-700 transition"
+                className={`hidden lg:flex w-9 h-9 rounded-full border items-center justify-center transition ${isHost
+                  ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20 text-red-400'
+                  : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-white'}`}
+                title={isHost ? "Delete Lobby" : "Leave Lobby"}
               >
-                <ArrowLeft size={16} className="text-white" />
+                {isHost ? <Trash2 size={16} /> : <ArrowLeft size={16} />}
               </button>
 
               <button
