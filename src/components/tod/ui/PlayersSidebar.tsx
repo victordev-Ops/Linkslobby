@@ -4,7 +4,7 @@ import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, S
 interface Participant {
   user_id: string;
   has_gone_this_round: boolean;
-  status: 'pending' | 'joined';
+  status: 'pending' | 'joined' | 'rejected';
   profiles?: { username: string };
 }
 
