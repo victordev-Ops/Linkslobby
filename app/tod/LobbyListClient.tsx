@@ -64,21 +64,35 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     const supabase = createClient();
 
     // Realtime subscription setup
+    // IMPORTANT: Delay subscription to avoid conflicts during page load
     useEffect(() => {
-        const channel = supabase
-            .channel('lobbies_list')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'tod_lobbies'
-            }, () => {
-                // Refresh lobbies on change
-                fetchLobbies();
-            })
-            .subscribe();
+        // Wait for page to fully load before establishing WebSocket connection
+        const subscriptionTimer = setTimeout(() => {
+            const channel = supabase
+                .channel('lobbies_list')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'tod_lobbies'
+                }, () => {
+                    // Refresh lobbies on change
+                    fetchLobbies();
+                })
+                .subscribe((status) => {
+                    // Handle subscription errors gracefully
+                    if (status === 'CHANNEL_ERROR') {
+                        console.error('Realtime subscription error - will retry');
+                        // The channel will automatically retry
+                    }
+                });
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        }, 1500); // 1.5 second delay to ensure page is loaded
 
         return () => {
-            supabase.removeChannel(channel);
+            clearTimeout(subscriptionTimer);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

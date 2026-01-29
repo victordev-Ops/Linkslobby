@@ -11,25 +11,59 @@ const serwist = new Serwist({
   navigationPreload: true,
   runtimeCaching: [
     {
-      // Exclude Supabase/API calls from caching to ensure fresh data
+      // CRITICAL: Exclude WebSocket upgrade requests (Supabase Realtime)
+      // WebSocket connections must NEVER be intercepted by the service worker
+      matcher: ({ request }) => {
+        const upgradeHeader = request.headers.get('upgrade');
+        return upgradeHeader === 'websocket';
+      },
+      handler: new NetworkOnly(),
+    },
+    {
+      // CRITICAL: Exclude RSC (React Server Components) requests
+      // RSC uses streaming responses that break when cached
+      // Identified by: _rsc query parameter OR RSC header
+      matcher: ({ url, request }) => {
+        const hasRscParam = url.searchParams.has('_rsc');
+        const hasRscHeader = request.headers.get('RSC') === '1';
+        return hasRscParam || hasRscHeader;
+      },
+      handler: new NetworkOnly(),
+    },
+    {
+      // Exclude Supabase API calls from caching to ensure fresh data
+      // This includes both REST API and Realtime connections
       matcher: /^https:\/\/.*\.supabase\.co\/.*$/,
       handler: new NetworkOnly(),
     },
     {
-      // AGGRESSIVE CACHING: Navigation (Pages)
-      // Serve from cache immediately (0ms), then update in background.
-      // This gives the "Native App" feel of zero lag.
-      matcher: ({ request }) => request.mode === "navigate",
+      // SAFE CACHING: Navigation (Pages)
+      // Only cache fully rendered HTML pages, NOT streaming/partial responses
+      // Serve from cache immediately, then update in background
+      matcher: ({ request, url }) => {
+        // Only cache navigation requests
+        if (request.mode !== "navigate") return false;
+
+        // Exclude RSC requests (double-check)
+        if (url.searchParams.has('_rsc')) return false;
+        if (request.headers.get('RSC') === '1') return false;
+
+        return true;
+      },
       handler: new StaleWhileRevalidate({
         cacheName: "pages-cache-v1",
         plugins: [
-          // Ensure we don't cache 404s or error pages forever
           {
             cacheWillUpdate: async ({ response }) => {
-              if (response && response.status === 200) {
-                return response;
-              }
-              return null;
+              // Only cache successful, complete responses
+              if (!response) return null;
+              if (response.status !== 200) return null;
+
+              // Don't cache streaming responses
+              const contentType = response.headers.get('content-type');
+              if (contentType?.includes('text/x-component')) return null;
+
+              return response;
             },
           },
         ],
