@@ -47,6 +47,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     const [lobbies, setLobbies] = useState<Lobby[]>(initialLobbies);
     const [isCreating, setIsCreating] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [joiningLobbyId, setJoiningLobbyId] = useState<string | null>(null);
 
     // Creation Form State
     const [lobbyName, setLobbyName] = useState("");
@@ -131,7 +132,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             const lobbyIds = lobbyData?.map(l => l.id) || [];
             const { data: participantData } = await supabase
                 .from('tod_participants')
-                .select('lobby_id, user_id')
+                .select('lobby_id, user_id, status')
                 .in('lobby_id', lobbyIds);
 
             const lobbiesWithDetails = lobbyData?.map(lobby => {
@@ -142,7 +143,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
                 return {
                     ...lobby,
-                    host_profile: lobby.profiles,
+                    host_profile: (lobby as any).profiles,
                     participant_count: joinedCount, // Use filtered count
                     is_participant: !!userPart,
                     user_status: userPart?.status
@@ -245,6 +246,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             return;
         }
 
+        setJoiningLobbyId(lobby.id);
         try {
             // Check if already a participant
             const { data: existing } = await supabase
@@ -272,16 +274,20 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 if (lobby.is_private) {
                     toast.success('Request sent! Waiting for host approval ⏳');
                     fetchLobbies();
+                    setJoiningLobbyId(null);
                     return;
                 }
             } else if (existing.status === 'pending') {
                 toast.info('Your request is still pending approval ⏳');
+                setJoiningLobbyId(null);
                 return;
             } else if (existing.status === 'rejected') {
                 toast.error('Your request to join this lobby was rejected 😔');
+                setJoiningLobbyId(null);
                 return;
             } else if (existing.status === 'banned') {
                 toast.error('You have been banned from this lobby 🚫');
+                setJoiningLobbyId(null);
                 return;
             }
 
@@ -289,6 +295,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         } catch (error: any) {
             console.error('Error joining lobby:', error);
             toast.error('Failed to join lobby');
+            setJoiningLobbyId(null);
         }
     };
 
@@ -313,6 +320,8 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                         Ended
                     </div>
                 );
+            default:
+                return null;
         }
     };
 
@@ -456,87 +465,95 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                 {sortedLobbies.map((lobby) => (
                                     <div
                                         key={lobby.id}
-                                        onClick={() => joinLobby(lobby)}
-                                        className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 hover:border-red-500/50 transition-all cursor-pointer group"
+                                        onClick={() => !joiningLobbyId && joinLobby(lobby)}
+                                        className={`bg-slate-900/80 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all cursor-pointer group hover:bg-slate-800/80 ${joiningLobbyId === lobby.id ? 'border-red-500 ring-1 ring-red-500/20' : 'border-slate-800 hover:border-red-500/30'}`}
                                     >
-                                        <div className="flex items-start justify-between mb-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg">
-                                                    <Users size={20} className="text-white" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <p className="text-white font-bold">
-                                                            {lobby.name || (lobby.participant_count ? `${lobby.participant_count} Player${lobby.participant_count !== 1 ? 's' : ''}` : 'New Lobby')}
-                                                        </p>
-                                                        {getStatusBadge(lobby.status)}
-                                                        {lobby.is_private && <Lock size={12} className="text-amber-500" />}
-                                                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                                                            {lobby.category || 'Casual'}
-                                                        </span>
-                                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 text-[10px] font-bold text-slate-400">
-                                                            <Users size={10} />
-                                                            {lobby.participant_count || 0}
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-xs text-slate-400">
-                                                        Hosted by{' '}
-                                                        <span className="text-slate-300 font-semibold">
-                                                            {lobby.host_profile?.username || 'Unknown'}
-                                                        </span>
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            {lobby.host_id === (currentUserId || profile?.id) && (
-                                                <div className="px-2 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center gap-1">
-                                                    <Crown size={12} className="text-amber-400" />
-                                                    <span className="text-xs font-bold text-amber-300">You</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                                                <Clock size={12} />
-                                                {new Date(lobby.created_at).toLocaleString()}
-                                            </div>
-
-                                            <div className="flex items-center gap-2">
-                                                {/* User Status Badge */}
-                                                {lobby.user_status === 'banned' && (
-                                                    <div className="px-2 py-1 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold flex items-center gap-1">
-                                                        <Ban size={12} />
-                                                        Banned
-                                                    </div>
-                                                )}
-                                                {lobby.user_status === 'pending' && (
-                                                    <div className="px-2 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 text-xs font-bold flex items-center gap-1">
-                                                        <Clock size={12} />
-                                                        Pending
-                                                    </div>
-                                                )}
-                                                {lobby.user_status === 'joined' && (
-                                                    <div className="px-2 py-1 rounded-full bg-green-500/20 border border-green-500/30 text-green-300 text-xs font-bold flex items-center gap-1">
-                                                        <Check size={12} />
-                                                        Joined
-                                                    </div>
-                                                )}
-
-                                                {/* Action Text */}
-                                                {lobby.user_status !== 'banned' && (
-                                                    <div className="flex items-center gap-2 text-red-400 group-hover:text-red-300 transition-colors">
-                                                        <span className="text-sm font-bold">
-                                                            {lobby.user_status === 'joined' ? 'Rejoin' :
-                                                                lobby.user_status === 'pending' ? 'View' :
-                                                                    lobby.user_status === 'rejected' ? 'Rejected' :
-                                                                        lobby.is_private ? 'Request' : 'Join'}
-                                                        </span>
-                                                        {lobby.user_status !== 'rejected' && (
-                                                            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                        <div className="flex flex-col gap-4">
+                                            {/* Top Row: Meta & Host */}
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg flex-shrink-0">
+                                                        {joiningLobbyId === lobby.id ? (
+                                                            <Loader2 size={18} className="text-white animate-spin" />
+                                                        ) : (
+                                                            <Users size={18} className="text-white md:scale-110" />
                                                         )}
                                                     </div>
-                                                )}
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                                            <h3 className="text-white font-bold text-sm md:text-base truncate">
+                                                                {lobby.name || (lobby.participant_count ? `${lobby.participant_count} Players` : 'Game Lobby')}
+                                                            </h3>
+                                                            {lobby.is_private && <Lock size={12} className="text-amber-500 shrink-0" />}
+                                                            {lobby.host_id === (currentUserId || profile?.id) && (
+                                                                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30">
+                                                                    <Crown size={10} className="text-amber-400" />
+                                                                    <span className="text-[10px] font-bold text-amber-300">Host</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] md:text-xs text-slate-400 truncate">
+                                                            by <span className="text-slate-300 font-semibold">{lobby.host_profile?.username || 'Host'}</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[9px] md:text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                                                        {lobby.category || 'Casual'}
+                                                    </span>
+                                                    {getStatusBadge(lobby.status)}
+                                                </div>
+                                            </div>
+
+                                            {/* Sub Info Row */}
+                                            <div className="flex items-center justify-between border-t border-slate-800/50 pt-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-1 text-[10px] md:text-xs text-slate-400">
+                                                        <Clock size={12} />
+                                                        {new Date(lobby.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-[10px] md:text-xs text-slate-400">
+                                                        <Users size={12} />
+                                                        {lobby.participant_count || 0}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    {/* User Status Badge */}
+                                                    {lobby.user_status === 'banned' && (
+                                                        <div className="px-2 py-1 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 text-[10px] font-bold flex items-center gap-1">
+                                                            <Ban size={10} />
+                                                            Banned
+                                                        </div>
+                                                    )}
+                                                    {lobby.user_status === 'pending' && (
+                                                        <div className="px-2 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 text-[10px] font-bold flex items-center gap-1">
+                                                            <Clock size={10} />
+                                                            Pending
+                                                        </div>
+                                                    )}
+                                                    {lobby.user_status === 'joined' && (
+                                                        <div className="px-2 py-1 rounded-full bg-green-500/20 border border-green-500/30 text-green-300 text-[10px] font-bold flex items-center gap-1">
+                                                            <Check size={10} />
+                                                            Joined
+                                                        </div>
+                                                    )}
+
+                                                    {/* Action Arrow */}
+                                                    {lobby.user_status !== 'banned' && (
+                                                        <div className="flex items-center gap-1.5 text-red-400 group-hover:text-red-300 transition-colors">
+                                                            <span className="text-xs md:text-sm font-bold">
+                                                                {lobby.user_status === 'joined' ? 'Rejoin' :
+                                                                    lobby.user_status === 'pending' ? 'View' :
+                                                                        lobby.user_status === 'rejected' ? 'Rejected' :
+                                                                            lobby.is_private ? 'Request' : 'Join'}
+                                                            </span>
+                                                            {lobby.user_status !== 'rejected' && (
+                                                                <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

@@ -4,7 +4,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2, LayoutGrid } from "lucide-react";
+import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2, LayoutGrid, ChevronLeft, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
@@ -493,20 +493,20 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => router.push('/tod')}
-                  className="flex w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white items-center justify-center transition"
+                  className="flex w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white items-center justify-center transition active:scale-95"
                   title="Back to Lobbies"
                 >
-                  <LayoutGrid size={16} />
+                  <ChevronLeft size={18} />
                 </button>
 
                 <button
                   onClick={handleLeaveLobby}
-                  className={`flex w-9 h-9 rounded-full border items-center justify-center transition ${isHost
+                  className={`flex w-9 h-9 rounded-full border items-center justify-center transition active:scale-95 ${isHost
                     ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20 text-red-400'
                     : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-white'}`}
                   title={isHost ? "Delete Lobby" : "Leave Lobby"}
                 >
-                  {isHost ? <Trash2 size={16} /> : <ArrowLeft size={16} />}
+                  {isHost ? <Trash2 size={16} /> : <LogOut size={16} />}
                 </button>
               </div>
 
