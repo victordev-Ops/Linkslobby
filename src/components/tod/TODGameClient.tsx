@@ -45,6 +45,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     cleanup,
     approveRequest,
     declineRequest,
+    banParticipant,
+    unbanParticipant,
     loadMoreMessages,
     hasMoreMessages,
     leaveLobby,
@@ -56,10 +58,12 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const currentUserParticipant = participants.find(p => p.user_id === profile?.id);
   const isJoined = currentUserParticipant?.status === 'joined';
   const isRejected = currentUserParticipant?.status === 'rejected';
+  const isBanned = currentUserParticipant?.status === 'banned';
 
   // Filter participants for UI - only show joined users in the list/counts
   const joinedParticipants = participants.filter(p => p.status === 'joined');
   const pendingRequests = participants.filter(p => p.status === 'pending');
+  const bannedParticipants = participants.filter(p => p.status === 'banned');
 
   // Group messages with their answers - efficient O(n) with question_ref
   const messagesWithAnswers = useMemo(() => {
@@ -133,6 +137,14 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
     prevStatusRef.current = currentStatus;
   }, [currentUserParticipant?.status, isLoading, isHost, router]);
+
+  // Handle banned status - redirect immediately
+  useEffect(() => {
+    if (isBanned && !isLoading) {
+      toast.error('You have been banned from this lobby.');
+      router.push('/tod');
+    }
+  }, [isBanned, isLoading, router]);
 
   const copyInviteLink = () => {
     const url = window.location.href;
@@ -433,7 +445,27 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       }
 
       {
-        !isJoined && !isRejected && !isLoading && (
+        isBanned && !isLoading && (
+          <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
+            <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500/50">
+              <X size={32} className="text-red-400" />
+            </div>
+            <h2 className="text-3xl font-black text-white mb-4 italic">Banned from Lobby</h2>
+            <p className="text-slate-400 max-w-md leading-relaxed mb-8">
+              You have been permanently banned from this lobby by the host.
+            </p>
+            <button
+              onClick={handleLeaveLobby}
+              className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
+            >
+              Go Back
+            </button>
+          </div>
+        )
+      }
+
+      {
+        !isJoined && !isRejected && !isBanned && !isLoading && (
           <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
             <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 animate-pulse border border-amber-500/50">
               <Clock size={32} className="text-amber-400" />
@@ -564,8 +596,11 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   hostId={lobby.host_id}
                   onActivityClick={handleActivityClick}
                   pendingRequests={pendingRequests}
+                  bannedParticipants={bannedParticipants}
                   onApproveRequest={approveRequest}
                   onDeclineRequest={declineRequest}
+                  onBanParticipant={banParticipant}
+                  onUnbanParticipant={unbanParticipant}
                   isHost={isHost}
                 />
               </div>
@@ -581,8 +616,11 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             className="hidden lg:flex"
             onActivityClick={handleActivityClick}
             pendingRequests={pendingRequests}
+            bannedParticipants={bannedParticipants}
             onApproveRequest={approveRequest}
             onDeclineRequest={declineRequest}
+            onBanParticipant={banParticipant}
+            onUnbanParticipant={unbanParticipant}
             isHost={isHost}
           />
 

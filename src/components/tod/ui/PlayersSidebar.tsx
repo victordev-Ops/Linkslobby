@@ -1,12 +1,7 @@
 // src/components/tod/ui/PlayersSidebar.tsx
-import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, StopCircle, UserPlus, Check, X } from 'lucide-react';
+import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, StopCircle, UserPlus, Check, X, Ban, ShieldOff } from 'lucide-react';
 
-interface Participant {
-  user_id: string;
-  has_gone_this_round: boolean;
-  status: 'pending' | 'joined' | 'rejected';
-  profiles?: { username: string };
-}
+import { Participant } from '../hooks/useGameLogic';
 
 interface Message {
   id: string;
@@ -24,8 +19,11 @@ interface PlayersSidebarProps {
   className?: string;
   onActivityClick?: (messageId: string) => void;
   pendingRequests?: Participant[];
+  bannedParticipants?: Participant[];
   onApproveRequest?: (userId: string) => void;
   onDeclineRequest?: (userId: string) => void;
+  onBanParticipant?: (participantId: string) => void;
+  onUnbanParticipant?: (participantId: string) => void;
   isHost?: boolean;
 }
 
@@ -37,8 +35,11 @@ export const PlayersSidebar = ({
   className = '',
   onActivityClick,
   pendingRequests = [],
+  bannedParticipants = [],
   onApproveRequest,
   onDeclineRequest,
+  onBanParticipant,
+  onUnbanParticipant,
   isHost = false
 }: PlayersSidebarProps) => {
 
@@ -179,12 +180,59 @@ export const PlayersSidebar = ({
                   {isTarget && (
                     <Target size={14} className="text-red-400 animate-pulse" />
                   )}
+                  {/* Ban button - only show for host and not for themselves */}
+                  {isHost && participant.user_id !== hostId && onBanParticipant && (
+                    <button
+                      onClick={() => onBanParticipant(participant.id)}
+                      className="ml-1 w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition group/ban"
+                      title="Ban player"
+                    >
+                      <Ban size={12} className="text-red-400 group-hover/ban:scale-110 transition-transform" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Banned Participants Section */}
+      {isHost && bannedParticipants.length > 0 && (
+        <div className="p-4 border-b border-slate-800/50 bg-red-500/5">
+          <div className="flex items-center gap-2 mb-3">
+            <Ban size={18} className="text-red-400" />
+            <h3 className="text-white font-bold text-sm uppercase tracking-wide">
+              Banned ({bannedParticipants.length})
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {bannedParticipants.map((banned) => (
+              <div key={banned.user_id} className="bg-slate-800/50 p-2 rounded-lg border border-red-500/30">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-red-400">
+                        {(banned.profiles?.username || 'U')[0].toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-slate-200 truncate max-w-[80px]">
+                      {banned.profiles?.username}
+                    </span>
+                  </div>
+                  <Ban size={12} className="text-red-400" />
+                </div>
+                <button
+                  onClick={() => onUnbanParticipant?.(banned.id)}
+                  className="w-full bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition"
+                >
+                  <ShieldOff size={12} /> Unban
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Game Activity Section */}
       <div className="flex-1 overflow-y-auto p-4">

@@ -15,11 +15,12 @@ interface Lobby {
   created_at: string;
 }
 
-interface Participant {
+export interface Participant {
+  id: string;
   user_id: string;
   lobby_id: string;
   has_gone_this_round: boolean;
-  status: 'pending' | 'joined' | 'rejected';
+  status: 'pending' | 'joined' | 'rejected' | 'banned';
   profiles?: { username: string };
 }
 
@@ -334,6 +335,62 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     fetchData();
   };
 
+  const banParticipant = async (participantId: string) => {
+    if (!lobby || userId !== lobby.host_id) return;
+
+    const targetUser = participants.find(p => p.id === participantId);
+    if (!targetUser) return;
+
+    const { error } = await supabase
+      .from('tod_participants')
+      .update({ status: 'banned' })
+      .eq('id', participantId);
+
+    if (error) {
+      toast.error('Failed to ban participant');
+      return;
+    }
+
+    // Send system message
+    await supabase.from('tod_messages').insert({
+      lobby_id: lobbyId,
+      user_id: userId,
+      content: `${targetUser.profiles?.username || 'A player'} has been banned from the lobby.`,
+      message_type: 'system'
+    });
+
+    toast.success('Participant banned');
+    fetchData();
+  };
+
+  const unbanParticipant = async (participantId: string) => {
+    if (!lobby || userId !== lobby.host_id) return;
+
+    const targetUser = participants.find(p => p.id === participantId);
+    if (!targetUser) return;
+
+    const { error } = await supabase
+      .from('tod_participants')
+      .update({ status: 'joined' })
+      .eq('id', participantId);
+
+    if (error) {
+      toast.error('Failed to unban participant');
+      return;
+    }
+
+    // Send system message
+    await supabase.from('tod_messages').insert({
+      lobby_id: lobbyId,
+      user_id: userId,
+      content: `${targetUser.profiles?.username || 'A player'} has been unbanned.`,
+      message_type: 'system'
+    });
+
+    toast.success('Participant unbanned');
+    fetchData();
+  };
+
   const loadMoreMessages = useCallback(async () => {
     if (!hasMoreMessages || messages.length === 0) return;
 
@@ -416,6 +473,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     cleanup,
     approveRequest,
     declineRequest,
+    banParticipant,
+    unbanParticipant,
     leaveLobby,
     deleteLobby,
     loadMoreMessages,

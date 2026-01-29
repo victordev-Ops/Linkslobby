@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock } from 'lucide-react';
+import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface Lobby {
@@ -21,7 +21,7 @@ export interface Lobby {
     };
     participant_count?: number;
     is_participant?: boolean;
-    user_status?: 'pending' | 'joined' | 'rejected';
+    user_status?: 'pending' | 'joined' | 'rejected' | 'banned';
 }
 
 const slugify = (text: string) => {
@@ -163,6 +163,31 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         }
     };
 
+    // Sort lobbies: user's lobbies first, then by category, status, and date
+    const sortedLobbies = [...lobbies].sort((a, b) => {
+        const effectiveUserId = currentUserId || profile?.id;
+
+        // 1. User's own lobbies first
+        const aIsOwn = a.host_id === effectiveUserId;
+        const bIsOwn = b.host_id === effectiveUserId;
+        if (aIsOwn !== bIsOwn) return aIsOwn ? -1 : 1;
+
+        // 2. Category order (Casual → Deep → Spicy → Extreme)
+        const categoryOrder: Record<string, number> = { 'Casual': 0, 'Deep': 1, 'Spicy': 2, 'Extreme': 3 };
+        const aCat = categoryOrder[a.category || 'Casual'] ?? 999;
+        const bCat = categoryOrder[b.category || 'Casual'] ?? 999;
+        if (aCat !== bCat) return aCat - bCat;
+
+        // 3. Status order (waiting → active → finished)
+        const statusOrder: Record<string, number> = { 'waiting': 0, 'active': 1, 'finished': 2 };
+        const aStatus = statusOrder[a.status] ?? 999;
+        const bStatus = statusOrder[b.status] ?? 999;
+        if (aStatus !== bStatus) return aStatus - bStatus;
+
+        // 4. Newest first
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
     const createNewLobby = async () => {
         if (!profile?.id) return;
         if (!lobbyName.trim()) {
@@ -252,6 +277,9 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 return;
             } else if (existing.status === 'rejected') {
                 toast.error('Your request to join this lobby was rejected 😔');
+                return;
+            } else if (existing.status === 'banned') {
+                toast.error('You have been banned from this lobby 🚫');
                 return;
             }
 
@@ -423,7 +451,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             </div>
 
                             <div className="space-y-3">
-                                {lobbies.map((lobby) => (
+                                {sortedLobbies.map((lobby) => (
                                     <div
                                         key={lobby.id}
                                         onClick={() => joinLobby(lobby)}
@@ -472,15 +500,40 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                                 {new Date(lobby.created_at).toLocaleString()}
                                             </div>
 
-                                            <div className="flex items-center gap-2 text-red-400 group-hover:text-red-300 transition-colors">
-                                                <span className="text-sm font-bold">
-                                                    {lobby.user_status === 'joined' ? 'Rejoin' :
-                                                        lobby.user_status === 'pending' ? 'Pending Approval' :
-                                                            lobby.user_status === 'rejected' ? 'Rejected' :
-                                                                lobby.is_private ? 'Request to Join' : 'Join'}
-                                                </span>
-                                                {lobby.user_status !== 'rejected' && (
-                                                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                            <div className="flex items-center gap-2">
+                                                {/* User Status Badge */}
+                                                {lobby.user_status === 'banned' && (
+                                                    <div className="px-2 py-1 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold flex items-center gap-1">
+                                                        <Ban size={12} />
+                                                        Banned
+                                                    </div>
+                                                )}
+                                                {lobby.user_status === 'pending' && (
+                                                    <div className="px-2 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 text-xs font-bold flex items-center gap-1">
+                                                        <Clock size={12} />
+                                                        Pending
+                                                    </div>
+                                                )}
+                                                {lobby.user_status === 'joined' && (
+                                                    <div className="px-2 py-1 rounded-full bg-green-500/20 border border-green-500/30 text-green-300 text-xs font-bold flex items-center gap-1">
+                                                        <Check size={12} />
+                                                        Joined
+                                                    </div>
+                                                )}
+
+                                                {/* Action Text */}
+                                                {lobby.user_status !== 'banned' && (
+                                                    <div className="flex items-center gap-2 text-red-400 group-hover:text-red-300 transition-colors">
+                                                        <span className="text-sm font-bold">
+                                                            {lobby.user_status === 'joined' ? 'Rejoin' :
+                                                                lobby.user_status === 'pending' ? 'View' :
+                                                                    lobby.user_status === 'rejected' ? 'Rejected' :
+                                                                        lobby.is_private ? 'Request' : 'Join'}
+                                                        </span>
+                                                        {lobby.user_status !== 'rejected' && (
+                                                            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

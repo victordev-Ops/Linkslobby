@@ -66,15 +66,54 @@ export default async function TODGamePage({
 
   // 2. Auto-Join Logic (Server-side) using resolved lobbyId
   if (lobbyId) {
-    const { error: joinError } = await supabase
+    // Check if user already has a participant record
+    const { data: existingParticipant } = await supabase
       .from("tod_participants")
-      .upsert(
-        { lobby_id: lobbyId, user_id: user.id },
-        { onConflict: "lobby_id,user_id" }
-      );
+      .select("id, status")
+      .eq("lobby_id", lobbyId)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    if (joinError) {
-      console.error("Error joining lobby:", joinError.message);
+    // If user is banned, redirect them
+    if (existingParticipant?.status === 'banned') {
+      redirect('/tod?error=banned');
+    }
+
+    // Get lobby privacy setting
+    const { data: lobbyInfo } = await supabase
+      .from("tod_lobbies")
+      .select("is_private")
+      .eq("id", lobbyId)
+      .single();
+
+    if (existingParticipant) {
+      // User has a record - check if they need to rejoin
+      if (existingParticipant.status === 'joined') {
+        // Already joined, do nothing
+      } else if (existingParticipant.status === 'rejected') {
+        // Previously rejected - update to pending if private, joined if public
+        const newStatus = lobbyInfo?.is_private ? 'pending' : 'joined';
+        await supabase
+          .from("tod_participants")
+          .update({ status: newStatus })
+          .eq("id", existingParticipant.id);
+      } else if (existingParticipant.status === 'pending') {
+        // Still pending, do nothing
+      }
+    } else {
+      // New participant - insert with appropriate status
+      const initialStatus = lobbyInfo?.is_private ? 'pending' : 'joined';
+      const { error: joinError } = await supabase
+        .from("tod_participants")
+        .insert({
+          lobby_id: lobbyId,
+          user_id: user.id,
+          status: initialStatus
+        });
+
+      if (joinError) {
+        console.error("Error joining lobby:", joinError.message);
+      }
     }
   }
 
