@@ -140,7 +140,7 @@ export const PlayersSidebar = ({
 
         <div className="space-y-2">
           {participants.map((participant) => {
-            const isHost = participant.user_id === hostId;
+            const isParticipantHost = participant.user_id === hostId;
             const isTarget = participant.user_id === currentTargetId;
             const hasTurn = participant.has_gone_this_round;
 
@@ -174,7 +174,7 @@ export const PlayersSidebar = ({
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {isHost && (
+                  {isParticipantHost && (
                     <Crown size={14} className="text-amber-400" />
                   )}
                   {isTarget && (

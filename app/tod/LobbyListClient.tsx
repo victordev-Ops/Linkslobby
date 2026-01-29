@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -164,29 +164,31 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     };
 
     // Sort lobbies: user's lobbies first, then by category, status, and date
-    const sortedLobbies = [...lobbies].sort((a, b) => {
+    const sortedLobbies = useMemo(() => {
         const effectiveUserId = currentUserId || profile?.id;
 
-        // 1. User's own lobbies first
-        const aIsOwn = a.host_id === effectiveUserId;
-        const bIsOwn = b.host_id === effectiveUserId;
-        if (aIsOwn !== bIsOwn) return aIsOwn ? -1 : 1;
+        return [...lobbies].sort((a, b) => {
+            // 1. User's own lobbies first
+            const aIsOwn = effectiveUserId && a.host_id === effectiveUserId;
+            const bIsOwn = effectiveUserId && b.host_id === effectiveUserId;
+            if (aIsOwn !== bIsOwn) return aIsOwn ? -1 : 1;
 
-        // 2. Category order (Casual → Deep → Spicy → Extreme)
-        const categoryOrder: Record<string, number> = { 'Casual': 0, 'Deep': 1, 'Spicy': 2, 'Extreme': 3 };
-        const aCat = categoryOrder[a.category || 'Casual'] ?? 999;
-        const bCat = categoryOrder[b.category || 'Casual'] ?? 999;
-        if (aCat !== bCat) return aCat - bCat;
+            // 2. Category order (Casual → Deep → Spicy → Extreme)
+            const categoryOrder: Record<string, number> = { 'Casual': 0, 'Deep': 1, 'Spicy': 2, 'Extreme': 3 };
+            const aCat = categoryOrder[a.category || 'Casual'] ?? 999;
+            const bCat = categoryOrder[b.category || 'Casual'] ?? 999;
+            if (aCat !== bCat) return aCat - bCat;
 
-        // 3. Status order (waiting → active → finished)
-        const statusOrder: Record<string, number> = { 'waiting': 0, 'active': 1, 'finished': 2 };
-        const aStatus = statusOrder[a.status] ?? 999;
-        const bStatus = statusOrder[b.status] ?? 999;
-        if (aStatus !== bStatus) return aStatus - bStatus;
+            // 3. Status order (waiting → active → finished)
+            const statusOrder: Record<string, number> = { 'waiting': 0, 'active': 1, 'finished': 2 };
+            const aStatus = statusOrder[a.status] ?? 999;
+            const bStatus = statusOrder[b.status] ?? 999;
+            if (aStatus !== bStatus) return aStatus - bStatus;
 
-        // 4. Newest first
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
+            // 4. Newest first
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+    }, [lobbies, currentUserId, profile?.id]);
 
     const createNewLobby = async () => {
         if (!profile?.id) return;
