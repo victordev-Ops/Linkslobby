@@ -43,14 +43,18 @@ interface LobbyListClientProps {
 const CATEGORIES = ["Casual", "Deep", "Spicy", "Extreme"];
 
 export default function LobbyListClient({ initialLobbies, currentUserId, isPro }: LobbyListClientProps) {
-    // Grouped Lobbies State
-    const [joinedLobbies, setJoinedLobbies] = useState<Lobby[]>([]);
-    const [publicLobbies, setPublicLobbies] = useState<Lobby[]>([]);
-    const [privateLobbies, setPrivateLobbies] = useState<Lobby[]>([]);
+    // Seed state with initialLobbies to avoid flash of empty
+    const initialJoined = initialLobbies.filter(l => l.user_status === 'joined' || l.user_status === 'pending');
+    const initialPublic = initialLobbies.filter(l => !l.is_private && !initialJoined.some(j => j.id === l.id));
+    const initialPrivate = initialLobbies.filter(l => l.is_private && !initialJoined.some(j => j.id === l.id));
 
-    const [isLoading, setIsLoading] = useState(true);
-    const [hasMorePublic, setHasMorePublic] = useState(false);
-    const [hasMorePrivate, setHasMorePrivate] = useState(false);
+    const [joinedLobbies, setJoinedLobbies] = useState<Lobby[]>(initialJoined);
+    const [publicLobbies, setPublicLobbies] = useState<Lobby[]>(initialPublic);
+    const [privateLobbies, setPrivateLobbies] = useState<Lobby[]>(initialPrivate);
+
+    const [isLoading, setIsLoading] = useState(false); // Start false because we have initial data
+    const [hasMorePublic, setHasMorePublic] = useState(initialPublic.length === 10);
+    const [hasMorePrivate, setHasMorePrivate] = useState(initialPrivate.length === 10);
     const [isLoadingMorePublic, setIsLoadingMorePublic] = useState(false);
     const [isLoadingMorePrivate, setIsLoadingMorePrivate] = useState(false);
     const PAGE_SIZE = 10;
@@ -59,10 +63,13 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [joiningLobbyId, setJoiningLobbyId] = useState<string | null>(null);
 
+    // Filter/Search states
+    const [searchQuery, setSearchQuery] = useState("");
+
     // Creation Form State
     const [lobbyName, setLobbyName] = useState("");
     const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
-    const [isPrivate, setIsPrivate] = useState(false);
+    const [isPrivateMode, setIsPrivateMode] = useState(false);
 
     const { profile } = useAuth();
     const router = useRouter();
@@ -70,22 +77,27 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     const effectiveUserId = currentUserId || profile?.id;
 
     const fetchLobbies = useCallback(async (targetGroup?: 'public' | 'private' | 'joined', loadMore = false) => {
-        let currentGroupListSize = 0;
-        if (targetGroup === 'public') currentGroupListSize = publicLobbies.length;
-        else if (targetGroup === 'private') currentGroupListSize = privateLobbies.length;
+        // Decide which range to use
+        let currentSize = 0;
+        if (targetGroup === 'public') currentSize = publicLobbies.length;
+        else if (targetGroup === 'private') currentSize = privateLobbies.length;
 
-        const from = loadMore ? currentGroupListSize : 0;
+        const from = loadMore ? currentSize : 0;
         const to = from + PAGE_SIZE - 1;
 
         if (loadMore) {
             if (targetGroup === 'public') setIsLoadingMorePublic(true);
             else if (targetGroup === 'private') setIsLoadingMorePrivate(true);
         } else if (!targetGroup) {
-            setIsLoading(true);
+            // Only show full loading if we have no data at all
+            if (joinedLobbies.length === 0 && publicLobbies.length === 0 && privateLobbies.length === 0) {
+                setIsLoading(true);
+            }
         }
 
         try {
-            // 1. Fetch Joined Lobbies (if not specifically loading another group)
+            // 1. Fetch Joined Lobbies first to get IDs for exclusion
+            let freshJoinedIds: string[] = [];
             if (!targetGroup || targetGroup === 'joined') {
                 if (effectiveUserId) {
                     const { data: joinedData } = await supabase
@@ -107,6 +119,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
                         const formattedJoined = joinedData.map(d => {
                             const lobby = d.tod_lobbies as any;
+                            if (!lobby) return null;
                             const hostProfile = hostProfiles?.find(p => p.id === lobby.host_id);
                             return {
                                 ...lobby,
@@ -114,33 +127,36 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                 user_status: d.status,
                                 is_participant: true
                             };
-                        });
+                        }).filter(Boolean) as Lobby[];
+
                         setJoinedLobbies(formattedJoined);
+                        freshJoinedIds = formattedJoined.map(l => l.id);
                     }
                 } else {
                     setJoinedLobbies([]);
                 }
+            } else {
+                freshJoinedIds = joinedLobbies.map(l => l.id);
             }
 
             // 2. Fetch Public/Private lobbies
             const fetchPublic = !targetGroup || targetGroup === 'public';
             const fetchPrivate = !targetGroup || targetGroup === 'private';
-            const joinedIds = joinedLobbies.map(l => l.id);
 
-            const fetchShared = async (is_private: boolean) => {
+            const fetchShared = async (is_private_filter: boolean) => {
                 let query = supabase
                     .from('tod_lobbies')
                     .select(`
                         id, host_id, name, slug, category, is_private, status, created_at,
                         profiles:host_id (username)
                     `)
-                    .eq('is_private', is_private)
+                    .eq('is_private', is_private_filter)
                     .neq('status', 'finished')
                     .order('created_at', { ascending: false })
                     .range(from, to);
 
-                if (joinedIds.length > 0) {
-                    query = query.not('id', 'in', `(${joinedIds.join(',')})`);
+                if (freshJoinedIds.length > 0) {
+                    query = query.not('id', 'in', `(${freshJoinedIds.join(',')})`);
                 }
 
                 const { data, error } = await query;
@@ -166,7 +182,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
         } catch (error: any) {
             console.error('Error fetching lobbies:', error);
-            toast.error("Failed to load lobbies");
+            // toast.error("Failed to load lobbies");
         } finally {
             setIsLoading(false);
             setIsLoadingMorePublic(false);
@@ -182,7 +198,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     useEffect(() => {
         const subscriptionTimer = setTimeout(() => {
             const channel = supabase
-                .channel('lobbies_list')
+                .channel('lobbies_list_realtime')
                 .on('postgres_changes', {
                     event: '*',
                     schema: 'public',
@@ -239,7 +255,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                     name: lobbyName.trim(),
                     slug: `${slugify(lobbyName)}-${Math.random().toString(36).substring(2, 6)}`,
                     category: selectedCategory,
-                    is_private: isPrivate
+                    is_private: isPrivateMode
                 })
                 .select()
                 .single();
@@ -329,21 +345,15 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         switch (status) {
             case 'waiting':
                 return (
-                    <div className="px-2 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-bold">
+                    <div className="px-2 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-bold">
                         Waiting
                     </div>
                 );
             case 'active':
                 return (
-                    <div className="px-2 py-1 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold flex items-center gap-1">
-                        <Play size={12} />
+                    <div className="px-2 py-1 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 text-[10px] font-bold flex items-center gap-1">
+                        <Play size={10} />
                         Live
-                    </div>
-                );
-            case 'finished':
-                return (
-                    <div className="px-2 py-1 rounded-full bg-slate-500/20 border border-slate-500/30 text-slate-400 text-xs font-bold">
-                        Ended
                     </div>
                 );
             default:
@@ -351,96 +361,65 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         }
     };
 
-    const renderLobbyCard = (lobby: Lobby) => (
+    const renderLobbyCard = (lobby: Lobby, isPrivateCard = false) => (
         <div
             key={lobby.id}
             onClick={() => !joiningLobbyId && joinLobby(lobby)}
-            className={`bg-slate-900/60 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all cursor-pointer group hover:bg-slate-800/80 ${joiningLobbyId === lobby.id ? 'border-red-500 ring-1 ring-red-500/20' : 'border-slate-800/80 hover:border-red-500/40 shadow-lg hover:shadow-red-500/5'}`}
+            className={`group relative overflow-hidden flex flex-col justify-between p-4 rounded-3xl transition-all cursor-pointer ${isPrivateCard
+                    ? 'bg-slate-900/40 border border-amber-500/20 hover:border-amber-500/50 min-w-[200px] w-full md:w-auto h-40'
+                    : 'bg-slate-900/60 border border-slate-800/80 hover:border-red-500/40'
+                } ${joiningLobbyId === lobby.id ? 'ring-2 ring-red-500' : ''}`}
         >
-            <div className="flex flex-col gap-4">
-                <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-red-600/20 to-orange-600/20 border border-red-500/20 flex items-center justify-center shadow-lg flex-shrink-0 group-hover:from-red-500 group-hover:to-orange-500 transition-all duration-300">
-                            {joiningLobbyId === lobby.id ? (
-                                <Loader2 size={18} className="text-white animate-spin" />
-                            ) : (
-                                <Users size={18} className="text-red-400 group-hover:text-white transition-colors" />
-                            )}
-                        </div>
-                        <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                                <h3 className="text-white font-bold text-sm md:text-base truncate group-hover:text-red-400 transition-colors">
-                                    {lobby.name || 'Game Lobby'}
-                                </h3>
-                                {lobby.is_private && <Lock size={12} className="text-amber-500 shrink-0" />}
-                                {lobby.host_id === effectiveUserId && (
-                                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
-                                        <Crown size={10} className="text-amber-500" />
-                                        <span className="text-[10px] font-bold text-amber-500">Host</span>
-                                    </span>
-                                )}
-                            </div>
-                            <p className="text-[11px] md:text-xs text-slate-500 truncate">
-                                by <span className="text-slate-400 font-semibold">{lobby.host_profile?.username || 'Host'}</span>
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="px-2 py-0.5 rounded-md bg-slate-800/80 text-[9px] md:text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                            {lobby.category || 'Casual'}
-                        </span>
-                        {getStatusBadge(lobby.status)}
-                    </div>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h3 className="text-white font-bold text-sm truncate group-hover:text-red-400 transition-colors">
+                        {lobby.name || 'Game Lobby'}
+                    </h3>
+                    <p className="text-[10px] text-slate-500 truncate">
+                        by <span className="text-slate-400 font-semibold">{lobby.host_profile?.username || 'Host'}</span>
+                    </p>
                 </div>
+                {getStatusBadge(lobby.status)}
+            </div>
 
-                <div className="flex items-center justify-between border-t border-slate-800/50 pt-3">
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 text-[10px] md:text-xs text-slate-500">
-                            <Clock size={12} />
-                            {new Date(lobby.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </div>
-                        <div className="flex items-center gap-1 text-[10px] md:text-xs text-slate-500 font-medium">
-                            <Users size={12} />
-                            {lobby.participant_count || 0} players
-                        </div>
-                    </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+                <span className="px-2 py-0.5 rounded-lg bg-slate-800/80 text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                    {lobby.category || 'Casual'}
+                </span>
+                {isPrivateCard && <Lock size={12} className="text-amber-500 mt-0.5" />}
+            </div>
 
-                    <div className="flex items-center gap-2">
-                        {lobby.user_status === 'pending' && (
-                            <div className="px-2 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 text-[10px] font-bold flex items-center gap-1">
-                                <Clock size={10} /> Pending
-                            </div>
-                        )}
-                        {lobby.user_status === 'joined' && (
-                            <div className="px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-500 text-[10px] font-bold flex items-center gap-1">
-                                <Check size={10} /> Joined
-                            </div>
-                        )}
-                        <div className="flex items-center gap-1.5 text-red-500 group-hover:text-red-400 transition-colors font-bold">
-                            <span className="text-xs md:text-sm">
-                                {lobby.user_status === 'joined' ? 'Rejoin' :
-                                    lobby.user_status === 'pending' ? 'View' :
-                                        lobby.is_private ? 'Request' : 'Join'}
-                            </span>
-                            <ArrowRight size={14} className="translate-y-[0.5px] group-hover:translate-x-1 transition-transform" />
-                        </div>
-                    </div>
+            <div className="mt-auto pt-3 border-t border-slate-800/50 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                    <Users size={12} />
+                    {lobby.participant_count || 0}
+                </div>
+                <div className="flex items-center gap-1.5 text-red-500 group-hover:text-red-400 transition-colors font-bold text-[11px]">
+                    <span>{lobby.user_status === 'joined' ? 'Rejoin' : lobby.user_status === 'pending' ? 'View' : 'Join'}</span>
+                    <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
                 </div>
             </div>
+
+            {joiningLobbyId === lobby.id && (
+                <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center">
+                    <Loader2 className="animate-spin text-red-500" size={24} />
+                </div>
+            )}
         </div>
     );
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
                 <Loader2 className="w-12 h-12 animate-spin text-red-500" />
+                <p className="text-slate-500 font-bold animate-pulse">Loading Lobbies...</p>
             </div>
         );
     }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden pb-32">
-            <div className="absolute inset-0 opacity-20">
+            <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="absolute top-20 left-10 w-72 h-72 bg-red-500 rounded-full blur-[120px]" />
                 <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500 rounded-full blur-[120px]" />
             </div>
@@ -459,121 +438,138 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                 <span className="text-sm font-bold tracking-tight">Dashboard</span>
                             </div>
                         </button>
+
+                        <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-2.5 px-5 rounded-2xl font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition-all active:scale-95 flex items-center gap-2"
+                        >
+                            <Plus size={20} />
+                            <span className="hidden sm:inline">New Lobby</span>
+                        </button>
                     </div>
 
-                    <div className="text-center mb-8">
-                        <h1 className="text-4xl md:text-5xl font-black text-white mb-3 italic tracking-tight">
-                            Truth or Dare
+                    <div className="mb-10 text-left">
+                        <h1 className="text-4xl md:text-5xl font-black text-white mb-2 italic tracking-tighter">
+                            TRUTH OR DARE
                         </h1>
-                        <p className="text-slate-400 text-sm md:text-base">
-                            Join a lobby or create your own game
+                        <p className="text-slate-500 text-sm font-medium">
+                            Choose a lobby to start playing with friends
                         </p>
                     </div>
-
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white p-6 rounded-2xl font-bold shadow-xl hover:shadow-red-500/50 transition-all active:scale-95 flex items-center justify-center gap-3 mb-12"
-                    >
-                        <Plus size={24} />
-                        Create New Game
-                    </button>
 
                     <div className="space-y-12">
                         {/* 1. Joined Lobbies */}
                         {sortedJoined.length > 0 && (
                             <section>
-                                <div className="flex items-center justify-between mb-4 px-2">
-                                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                <div className="flex items-center justify-between mb-5 px-1">
+                                    <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)] animate-pulse" />
                                         My Games
                                     </h2>
-                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
-                                        {sortedJoined.length} Joined
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700/50">
+                                        Active
                                     </span>
                                 </div>
-                                <div className="space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {sortedJoined.map(lobby => renderLobbyCard(lobby))}
                                 </div>
                             </section>
                         )}
 
-                        {/* 2. Public Lobbies */}
+                        {/* 2. Private Lobbies - Mobile-First Horizontal Scroll */}
                         <section>
-                            <div className="flex items-center justify-between mb-4 px-2">
-                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <Play size={20} className="text-red-400" />
+                            <div className="flex items-center justify-between mb-5 px-1">
+                                <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                                    <Lock size={20} className="text-amber-500" />
+                                    Private Lobbies
+                                </h2>
+                                <button
+                                    onClick={() => fetchLobbies('private')}
+                                    className="text-[10px] font-black text-amber-500 uppercase tracking-widest bg-amber-500/5 px-3 py-1.5 rounded-full border border-amber-500/20 hover:bg-amber-500/10 transition-colors"
+                                >
+                                    Refresh List
+                                </button>
+                            </div>
+
+                            {sortedPrivate.length > 0 ? (
+                                <div className="flex overflow-x-auto pb-4 gap-4 snap-x no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-3 md:snap-none">
+                                    {sortedPrivate.map(lobby => (
+                                        <div key={lobby.id} className="snap-center min-w-[240px] md:min-w-0 w-full">
+                                            {renderLobbyCard(lobby, true)}
+                                        </div>
+                                    ))}
+                                    {hasMorePrivate && (
+                                        <button
+                                            onClick={() => fetchLobbies('private', true)}
+                                            disabled={isLoadingMorePrivate}
+                                            className="snap-center min-w-[120px] h-40 rounded-3xl bg-slate-900/30 border border-dashed border-slate-800 flex flex-col items-center justify-center gap-3 text-slate-500 hover:text-slate-300 transition-all font-bold"
+                                        >
+                                            {isLoadingMorePrivate ? <Loader2 className="animate-spin" /> : <Plus />}
+                                            <span className="text-[10px] uppercase tracking-wider">Load More</span>
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="p-10 text-center bg-slate-900/30 rounded-[2.5rem] border border-dashed border-slate-800/50">
+                                    <p className="text-slate-600 text-sm italic">No private lobbies found</p>
+                                </div>
+                            )}
+                        </section>
+
+                        {/* 3. Public Lobbies */}
+                        <section>
+                            <div className="flex items-center justify-between mb-5 px-1">
+                                <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                                    <Play size={22} className="text-red-500" />
                                     Public Lobbies
                                 </h2>
-                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
-                                    Browse all
-                                </span>
+                                <button
+                                    onClick={() => {
+                                        setSearchQuery("");
+                                        fetchLobbies('public');
+                                    }}
+                                    className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700/50 hover:bg-slate-800 transition-colors"
+                                >
+                                    Browse All
+                                </button>
                             </div>
 
                             {sortedPublic.length > 0 ? (
-                                <div className="space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {sortedPublic.map(lobby => renderLobbyCard(lobby))}
                                     {hasMorePublic && (
                                         <button
                                             onClick={() => fetchLobbies('public', true)}
                                             disabled={isLoadingMorePublic}
-                                            className="w-full py-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 text-slate-400 font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+                                            className="col-span-1 sm:col-span-2 py-5 rounded-3xl bg-slate-900/40 border border-slate-800/50 text-slate-500 font-bold hover:bg-slate-800/80 transition-all flex items-center justify-center gap-3 group disabled:opacity-50"
                                         >
                                             {isLoadingMorePublic ? <Loader2 className="animate-spin" size={20} /> : (
-                                                <>Load More Public <Plus size={16} className="group-hover:rotate-90 transition-transform" /></>
+                                                <>
+                                                    <span className="text-sm">Explore More</span>
+                                                    <Plus size={18} className="group-hover:rotate-90 transition-transform" />
+                                                </>
                                             )}
                                         </button>
                                     )}
                                 </div>
                             ) : (
-                                <div className="p-8 text-center bg-slate-900/30 rounded-3xl border border-dashed border-slate-800">
-                                    <p className="text-slate-500 text-sm italic">No public lobbies available</p>
-                                </div>
-                            )}
-                        </section>
-
-                        {/* 3. Private Lobbies */}
-                        <section>
-                            <div className="flex items-center justify-between mb-4 px-2">
-                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <Lock size={18} className="text-amber-500" />
-                                    Private Lobbies
-                                </h2>
-                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
-                                    Host Approval Required
-                                </span>
-                            </div>
-
-                            {sortedPrivate.length > 0 ? (
-                                <div className="space-y-4">
-                                    {sortedPrivate.map(lobby => renderLobbyCard(lobby))}
-                                    {hasMorePrivate && (
-                                        <button
-                                            onClick={() => fetchLobbies('private', true)}
-                                            disabled={isLoadingMorePrivate}
-                                            className="w-full py-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 text-slate-400 font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
-                                        >
-                                            {isLoadingMorePrivate ? <Loader2 className="animate-spin" size={20} /> : (
-                                                <>Load More Private <Plus size={16} className="group-hover:rotate-90 transition-transform" /></>
-                                            )}
-                                        </button>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="p-8 text-center bg-slate-900/30 rounded-3xl border border-dashed border-slate-800">
-                                    <p className="text-slate-500 text-sm italic">No private lobbies available</p>
+                                <div className="p-16 text-center bg-slate-900/30 rounded-[2.5rem] border border-dashed border-slate-800/50">
+                                    <p className="text-slate-600 text-sm italic">Looking for games...</p>
                                 </div>
                             )}
                         </section>
                     </div>
 
-                    {/* Empty State (Overall) */}
-                    {joinedLobbies.length === 0 && publicLobbies.length === 0 && privateLobbies.length === 0 && (
-                        <div className="text-center py-12 bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-slate-800 mt-8">
-                            <div className="w-20 h-20 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
-                                <Users size={32} className="text-red-400" />
+                    {/* Overall Empty State */}
+                    {sortedJoined.length === 0 && sortedPublic.length === 0 && sortedPrivate.length === 0 && !isLoading && (
+                        <div className="text-center py-20 bg-slate-900/40 backdrop-blur-xl rounded-[3rem] border border-slate-800/50 mt-10">
+                            <div className="w-24 h-24 bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                                <Sparkles size={40} className="text-red-500/40" />
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-2">No Active Lobbies</h3>
-                            <p className="text-slate-400 text-sm">Be the first to create a game and invite your friends!</p>
+                            <h3 className="text-2xl font-black text-white mb-2">Ghost Town...</h3>
+                            <p className="text-slate-500 text-sm max-w-xs mx-auto">
+                                No active games right now. Start a new one to get the party started!
+                            </p>
                         </div>
                     )}
                 </div>
@@ -581,40 +577,43 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
             {/* Create Lobby Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-                            <h3 className="text-xl font-bold text-white">New Game</h3>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+                    <div className="bg-slate-950 border border-slate-800 w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="p-8 border-b border-slate-900 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-2xl font-black text-white italic tracking-tight">NEW PARTY</h3>
+                                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Configure your game</p>
+                            </div>
                             <button
                                 onClick={() => setShowCreateModal(false)}
-                                className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition"
+                                className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-slate-500 hover:text-white transition active:scale-95"
                             >
-                                <X size={20} />
+                                <X size={24} />
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-5">
+                        <div className="p-8 space-y-8">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Lobby Name</label>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Party Name</label>
                                 <input
                                     type="text"
                                     value={lobbyName}
                                     onChange={(e) => setLobbyName(e.target.value)}
-                                    placeholder="Friday Night Fun..."
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition"
+                                    placeholder="FRIDAY NIGHT CHAOS..."
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-white font-bold placeholder:text-slate-700 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Category</label>
-                                <div className="grid grid-cols-2 gap-2">
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Vibe</label>
+                                <div className="grid grid-cols-2 gap-3">
                                     {CATEGORIES.map(cat => (
                                         <button
                                             key={cat}
                                             onClick={() => setSelectedCategory(cat)}
-                                            className={`py-3 rounded-xl text-sm font-bold border transition ${selectedCategory === cat
-                                                ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30'
-                                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
+                                            className={`py-4 rounded-2xl text-[11px] font-black uppercase tracking-wider border-2 transition-all active:scale-95 ${selectedCategory === cat
+                                                ? 'bg-red-500 border-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)]'
+                                                : 'bg-slate-900 border-slate-800 text-slate-600 hover:border-slate-700'
                                                 }`}
                                         >
                                             {cat}
@@ -624,46 +623,56 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Privacy</label>
-                                <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Game Access</label>
+                                <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800">
                                     <button
-                                        onClick={() => setIsPrivate(false)}
-                                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${!isPrivate ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400'}`}
+                                        onClick={() => setIsPrivateMode(false)}
+                                        className={`flex-1 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${!isPrivateMode ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
                                     >
                                         Public
                                     </button>
                                     <button
                                         onClick={() => {
-                                            if (isPro) setIsPrivate(true);
+                                            if (isPro) setIsPrivateMode(true);
                                             else toast.error("Private lobbies are a Pro feature! 💎");
                                         }}
-                                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${isPrivate ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400'}`}
+                                        className={`flex-1 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${isPrivateMode ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
                                     >
                                         {!isPro && <Lock size={12} className="text-amber-500" />}
                                         Private
                                     </button>
                                 </div>
                                 {!isPro && (
-                                    <p className="text-[10px] text-slate-500 mt-2 italic ml-1">
-                                        Only host-approved players can join private lobbies.
+                                    <p className="text-[10px] text-slate-600 mt-3 font-medium italic ml-1">
+                                        Private games require host approval for players to join.
                                     </p>
                                 )}
                             </div>
                         </div>
 
-                        <div className="p-6 bg-slate-900/50 border-t border-slate-800">
+                        <div className="p-8 bg-slate-900/30 border-t border-slate-900">
                             <button
                                 onClick={createNewLobby}
                                 disabled={isCreating}
-                                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 rounded-xl font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-5 rounded-[1.5rem] font-black uppercase tracking-widest shadow-xl shadow-red-500/20 hover:shadow-red-500/40 hover:scale-[1.02] transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
                             >
                                 {isCreating ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                                {isCreating ? 'Creating...' : 'Start Game'}
+                                {isCreating ? 'Finalizing...' : 'Launch Lobby'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
+
+            <style jsx global>{`
+                .no-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .no-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+            `}</style>
         </div>
     );
 }
