@@ -11,10 +11,16 @@ export default function BottomNavbar() {
   const pathname = usePathname()
   const { unreadCount, unreadMessagesCount } = useNotifications()
   const [mounted, setMounted] = useState(false)
+  const [pendingPathname, setPendingPathname] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Sync pendingPathname with actual pathname
+  useEffect(() => {
+    setPendingPathname(null)
+  }, [pathname])
 
   const navItems = [
     { name: 'Home', href: '/dashboard', icon: Home },
@@ -29,12 +35,19 @@ export default function BottomNavbar() {
       <div className="max-w-md mx-auto px-4 h-16 flex justify-around items-center">
         {navItems.map((item) => {
           // Logic: Active if strictly matched or if it's the inbox subpath
-          const isActive = pathname === item.href || (item.href === '/inbox' && pathname.startsWith('/inbox'))
+          // Optimistically use pendingPathname if it exists
+          const currentPath = pendingPathname || pathname
+          const isActive = currentPath === item.href || (item.href === '/inbox' && currentPath.startsWith('/inbox'))
 
           return (
             <Link
               key={item.name}
               href={item.href}
+              onClick={() => {
+                if (pathname !== item.href) {
+                  setPendingPathname(item.href)
+                }
+              }}
               className={`relative flex flex-col items-center justify-center flex-1 h-full transition-colors active:scale-95 ${isActive ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-white/30 hover:text-purple-400'
                 }`}
             >
