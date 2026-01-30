@@ -10,6 +10,7 @@ import { Toaster } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { setXPNotificationHandler } from "@/hooks/xp";
 import { showXPNotification } from "@/components/XPNotification";
+import PWAInstallPrompt from "./PWAInstallPrompt";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -78,6 +79,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <NavbarWrapper />
             </Suspense>
             <Toaster position="top-center" richColors />
+            <PWAInstallPrompt />
           </div>
         </XPNotificationProvider>
       </NotificationProvider>

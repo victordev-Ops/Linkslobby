@@ -7,10 +7,18 @@ export default function PWAInstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
     // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches || 
-        window.navigator.standalone === true) {
+    if (window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true) {
       setIsInstalled(true);
       return;
     }
@@ -55,19 +63,19 @@ export default function PWAInstallPrompt() {
     try {
       // Show the install prompt
       deferredPrompt.prompt();
-      
+
       // Wait for the user's response
       const { outcome } = await deferredPrompt.userChoice;
-      
+
       console.log(`User response: ${outcome}`);
-      
+
       if (outcome === "accepted") {
         console.log("✅ User accepted the install prompt");
         setIsInstalled(true);
       } else {
         console.log("❌ User dismissed the install prompt");
       }
-      
+
       // Clear the deferredPrompt
       setDeferredPrompt(null);
       setShowPrompt(false);
@@ -81,7 +89,7 @@ export default function PWAInstallPrompt() {
     console.log("🚫 User dismissed prompt (will show again in 1 minute)");
   };
 
-  if (isInstalled || !showPrompt || !deferredPrompt) {
+  if (!mounted || isInstalled || !showPrompt || !deferredPrompt) {
     return null;
   }
 

@@ -70,4 +70,4 @@ export default function manifest(): MetadataRoute.Manifest {
     related_applications: [],
     prefer_related_applications: false,
   };
-            }
+}
