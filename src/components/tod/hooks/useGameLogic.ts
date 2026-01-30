@@ -1,7 +1,7 @@
-// src/components/tod/hooks/useGameLogic.ts
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 interface Lobby {
   id: string;
@@ -46,6 +46,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [typingUsers, setTypingUsers] = useState<Record<string, { username: string, lastTyped: number }>>({});
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null);
   const PAGE_SIZE = 10;
 
   const fetchData = useCallback(async () => {
@@ -87,7 +89,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   useEffect(() => {
     if (!lobbyId || lobbyId === 'undefined') return;
 
-    const channel = supabase.channel(`game:${lobbyId}`, {
+    const gameChannel = supabase.channel(`game:${lobbyId}`, {
       config: {
         presence: {
           key: userId,
@@ -101,6 +103,20 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         filter: `id=eq.${lobbyId}`
       }, (payload) => {
         setLobby(prev => ({ ...prev, ...payload.new } as Lobby));
+      })
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        const { userId: typingUserId, username, isTyping } = payload;
+        if (typingUserId === userId) return;
+
+        setTypingUsers(prev => {
+          const next = { ...prev };
+          if (isTyping) {
+            next[typingUserId] = { username, lastTyped: Date.now() };
+          } else {
+            delete next[typingUserId];
+          }
+          return next;
+        });
       })
       .on('postgres_changes', {
         event: 'INSERT',
@@ -131,25 +147,25 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         fetchData();
       })
       .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
+        const state = gameChannel.presenceState();
         const onlineIds = new Set<string>();
-        Object.values(state).forEach((presences: any) => {
-          presences.forEach((p: any) => {
+        Object.values(state).forEach((presences) => {
+          (presences as any[]).forEach((p) => {
             if (p.key) onlineIds.add(p.key);
           });
         });
         setOnlineUsers(onlineIds);
       })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+      .on('presence', { event: 'join' }, ({ key }) => {
         setOnlineUsers(prev => {
           const next = new Set(prev);
           next.add(key);
           return next;
         });
       })
-      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+      .on('presence', { event: 'leave' }, ({ key }) => {
         // Only remove if no more presences for this key
-        const state = channel.presenceState();
+        const state = gameChannel.presenceState();
         if (!state[key] || state[key].length === 0) {
           setOnlineUsers(prev => {
             const next = new Set(prev);
@@ -160,38 +176,41 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED' && userId) {
-          await channel.track({ key: userId, online_at: new Date().toISOString() });
+          await gameChannel.track({ key: userId, online_at: new Date().toISOString() });
+          setChannel(gameChannel);
         }
       });
 
     fetchData();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(gameChannel);
+      setChannel(null);
     };
   }, [lobbyId, supabase, fetchData, userId]);
 
-  // Timer for mode selection (target user has 60s to select truth or dare)
+  // Typing indicator cleanup - remove users who haven't sent a typing update in 5s
   useEffect(() => {
-    if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at || lobby.selected_mode) return;
-
     const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - new Date(lobby.turn_started_at!).getTime()) / 1000);
-      const remaining = Math.max(0, 60 - elapsed);
-      setTimeRemaining(remaining);
-
-      // Auto-select random mode if time runs out
-      if (remaining === 0 && userId === lobby.host_id) {
-        const randomMode = Math.random() > 0.5 ? 'truth' : 'dare';
-        selectMode(randomMode);
-        toast.info(`Time's up! Randomly selected: ${randomMode}`);
-      }
-    }, 1000);
+      const now = Date.now();
+      setTypingUsers(prev => {
+        let changed = false;
+        const next = { ...prev };
+        Object.entries(next).forEach(([id, data]) => {
+          if (now - data.lastTyped > 5000) {
+            delete next[id];
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, 2000);
 
     return () => clearInterval(interval);
-  }, [lobby?.turn_started_at, lobby?.status, lobby?.selected_mode, userId, lobby?.host_id]);
+  }, []);
 
-  const selectMode = async (mode: 'truth' | 'dare') => {
+
+  const selectMode = useCallback(async (mode: 'truth' | 'dare') => {
     if (!lobby || !userId) return;
 
     // Update lobby with selected mode
@@ -218,7 +237,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     });
 
     toast.success(`${mode.toUpperCase()} selected!`);
-  };
+  }, [lobby, userId, lobbyId, supabase, participants]);
 
   const sendMessage = useCallback(async (
     content: string,
@@ -269,7 +288,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
           .eq('id', lobbyId);
       }
 
-    } catch (err) {
+    } catch {
       toast.error("Message failed to send");
       // Remove optimistic message on error
       setMessages(prev => prev.filter(m => m.id !== tempId));
@@ -340,7 +359,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
         .getPublicUrl(path);
 
       return data.publicUrl;
-    } catch (err) {
+    } catch {
       toast.error('Failed to upload image');
       return null;
     }
@@ -486,8 +505,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
       if (error) throw error;
       toast.success('You left the lobby');
-    } catch (err) {
-      console.error('Error leaving lobby:', err);
+    } catch (_err) {
+      console.error('Error leaving lobby:', _err);
       toast.error('Failed to leave lobby');
     }
   };
@@ -503,8 +522,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
       if (error) throw error;
       toast.success('Lobby deleted');
-    } catch (err) {
-      console.error('Error deleting lobby:', err);
+    } catch (_err) {
+      console.error('Error deleting lobby:', _err);
       toast.error('Failed to delete lobby');
     }
   };
@@ -512,6 +531,35 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const cleanup = () => {
     // Cleanup function for component unmount
   };
+
+  const setTypingIndicator = useCallback((isTyping: boolean) => {
+    if (!channel || !userId) return;
+
+    channel.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { userId, username: participants.find(p => p.user_id === userId)?.profiles?.username || 'Someone', isTyping }
+    });
+  }, [channel, userId, participants]);
+
+  // Timer for mode selection (target user has 60s to select truth or dare)
+  useEffect(() => {
+    if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at || lobby.selected_mode) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - new Date(lobby.turn_started_at!).getTime()) / 1000);
+      const remaining = Math.max(0, 60 - elapsed);
+      setTimeRemaining(remaining);
+
+      if (remaining === 0 && userId === lobby.host_id) {
+        const randomMode = Math.random() > 0.5 ? 'truth' : 'dare';
+        selectMode(randomMode);
+        toast.info(`Time's up! Randomly selected: ${randomMode}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lobby, userId, selectMode]);
 
   return {
     lobby,
@@ -535,6 +583,8 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     deleteLobby,
     loadMoreMessages,
     hasMoreMessages,
-    onlineUsers
+    onlineUsers,
+    typingUsers,
+    setTypingIndicator
   };
 };

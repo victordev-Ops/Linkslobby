@@ -14,6 +14,7 @@ import { ChatInput } from "./ui/ChatInput";
 import { WaitingRoom } from "./ui/WaitingRoom";
 import { NextRoundButton } from "./ui/NextRoundButton";
 import { GameStatus } from "./ui/GameStatus";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface TODGameClientProps {
   lobbyId: string;
@@ -25,6 +26,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [replyingTo, setReplyingTo] = useState<typeof messages[0] | null>(null);
+  const [hideFinishSummary, setHideFinishSummary] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const previousMessageCount = useRef(0);
@@ -51,7 +53,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     hasMoreMessages,
     leaveLobby,
     deleteLobby,
-    onlineUsers
+    onlineUsers,
+    typingUsers,
+    setTypingIndicator
   } = useGameLogic(lobbyId, profile?.id);
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -138,6 +142,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
     prevStatusRef.current = currentStatus;
   }, [currentUserParticipant?.status, isLoading, isHost, router]);
+
+  // Reset finish summary hidden state when game ends
+  useEffect(() => {
+    if (lobby?.status === 'finished') {
+      setHideFinishSummary(false);
+    }
+  }, [lobby?.status]);
 
   // Handle banned status - redirect immediately
   useEffect(() => {
@@ -697,7 +708,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 })()
               )}
 
-              {lobby.status === 'finished' && (
+              {lobby.status === 'finished' && !hideFinishSummary && (
                 <div className="text-center py-12">
                   <div className="w-20 h-20 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
                     <Sparkles size={32} className="text-red-400" />
@@ -742,6 +753,45 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
             {/* Chat Input - STICKY AT BOTTOM */}
             <div className="sticky bottom-0 z-10 flex-shrink-0">
+              {/* Typing Indicator */}
+              <AnimatePresence>
+                {Object.keys(typingUsers).length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute bottom-full left-4 mb-2 flex items-center gap-2"
+                  >
+                    <div className="flex gap-1 px-3 py-2 bg-slate-800/80 backdrop-blur-md rounded-2xl rounded-bl-none border border-slate-700/50 shadow-lg">
+                      <div className="flex gap-1 items-center h-4">
+                        {[0, 1, 2].map((i) => (
+                          <motion.div
+                            key={i}
+                            animate={{
+                              y: [0, -4, 0],
+                            }}
+                            transition={{
+                              duration: 0.6,
+                              repeat: Infinity,
+                              delay: i * 0.15,
+                              ease: "easeInOut",
+                            }}
+                            className="w-1.5 h-1.5 bg-red-400 rounded-full"
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-300 ml-1">
+                        {Object.values(typingUsers).length === 1
+                          ? `${Object.values(typingUsers)[0].username} is typing...`
+                          : Object.values(typingUsers).length === 2
+                            ? `${Object.values(typingUsers)[0].username} and ${Object.values(typingUsers)[1].username} are typing...`
+                            : "Several people are typing..."}
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <ChatInput
                 canSend={canSendMessage()}
                 placeholder={getInputPlaceholder()}
@@ -750,6 +800,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 onUploadImage={handleUploadImage}
                 replyingTo={replyingTo}
                 onCancelReply={handleCancelReply}
+                onInteraction={() => setHideFinishSummary(true)}
+                onTyping={setTypingIndicator}
               />
             </div>
           </main>

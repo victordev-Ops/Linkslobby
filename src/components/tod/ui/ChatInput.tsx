@@ -18,6 +18,8 @@ interface ChatInputProps {
   onUploadImage: (file: File) => Promise<string | null>;
   replyingTo?: Message | null;
   onCancelReply?: () => void;
+  onInteraction?: () => void;
+  onTyping?: (isTyping: boolean) => void;
 }
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -30,13 +32,17 @@ export const ChatInput = ({
   onSend,
   onUploadImage,
   replyingTo,
-  onCancelReply
+  onCancelReply,
+  onInteraction,
+  onTyping
 }: ChatInputProps) => {
   const [messageInput, setMessageInput] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
-  
+  const isTypingRef = useRef(false);
+  const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,6 +62,34 @@ export const ChatInput = ({
     }
   }, [replyingTo]);
 
+  // Handle typing indicator
+  useEffect(() => {
+    if (messageInput.length > 0) {
+      if (!isTypingRef.current) {
+        isTypingRef.current = true;
+        onTyping?.(true);
+      }
+
+      // Reset timer
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => {
+        isTypingRef.current = false;
+        onTyping?.(false);
+      }, 3000);
+    } else if (isTypingRef.current) {
+      isTypingRef.current = false;
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      onTyping?.(false);
+    }
+  }, [messageInput, onTyping]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+  }, []);
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -74,6 +108,7 @@ export const ChatInput = ({
 
     setSelectedImage(file);
     setImagePreview(URL.createObjectURL(file));
+    onInteraction?.();
   };
 
   const removeImage = () => {
@@ -81,10 +116,10 @@ export const ChatInput = ({
     if (imagePreview) {
       URL.revokeObjectURL(imagePreview);
     }
-    
+
     setSelectedImage(null);
     setImagePreview(null);
-    
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -121,6 +156,13 @@ export const ChatInput = ({
 
       // Reset input after successful send
       resetInput();
+
+      // Immediately stop typing indicator
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        onTyping?.(false);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
@@ -141,8 +183,8 @@ export const ChatInput = ({
 
   const getReplyPreview = () => {
     if (!replyingTo) return '';
-    const preview = replyingTo.content.length > 50 
-      ? replyingTo.content.substring(0, 50) + '...' 
+    const preview = replyingTo.content.length > 50
+      ? replyingTo.content.substring(0, 50) + '...'
       : replyingTo.content;
     return preview;
   };
@@ -232,7 +274,10 @@ export const ChatInput = ({
           <textarea
             ref={textareaRef}
             value={messageInput}
-            onChange={(e) => setMessageInput(e.target.value)}
+            onChange={(e) => {
+              setMessageInput(e.target.value);
+              onInteraction?.();
+            }}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={isDisabled}
@@ -261,4 +306,4 @@ export const ChatInput = ({
     </div>
   );
 };
-  
+
