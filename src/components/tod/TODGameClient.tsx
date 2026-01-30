@@ -205,8 +205,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       }
       // If target is answering the question
       else if (isTarget && lobby?.current_question) {
-        // Find the question message ID
-        const questionMsg = messages.find(m =>
+        // Find the LATEST question message by content
+        const questionMsg = [...messages].reverse().find(m =>
           (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
@@ -358,8 +358,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         return "Waiting for question...";
       }
       if (lobby?.current_question && isTarget) {
-        // Check if target already answered
-        const currentQuestionMsg = messages.find(m =>
+        // Check if target already answered the LATEST question
+        const currentQuestionMsg = [...messages].reverse().find(m =>
           (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
@@ -371,8 +371,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         return "Type your answer...";
       }
       if (lobby?.current_question && !isTarget) {
-        // Check if answer has been given
-        const currentQuestionMsg = messages.find(m =>
+        // Check if answer has been given for the LATEST question
+        const currentQuestionMsg = [...messages].reverse().find(m =>
           (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
@@ -679,8 +679,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               {/* Next Round Button - efficiently checks for answer via question_ref */}
               {lobby.status === 'active' && lobby.current_question && isHost && (
                 (() => {
-                  // Find the current question message
-                  const currentQuestionMsg = messages.find(m =>
+                  // Find the LATEST question message by content
+                  const currentQuestionMsg = [...messages].reverse().find(m =>
                     (m.message_type === 'truth' || m.message_type === 'dare') &&
                     m.content === lobby.current_question
                   );

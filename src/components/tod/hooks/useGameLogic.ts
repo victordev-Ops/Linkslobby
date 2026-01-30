@@ -277,10 +277,26 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   }, [lobbyId, userId, lobby, supabase]);
 
   const startNextRound = async () => {
-    const { error } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
-    if (error) {
+    // 1. First trigger the turn logic RPC
+    const { error: rpcError } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
+    if (rpcError) {
       toast.error("Failed to start next round");
-      console.error(error);
+      console.error(rpcError);
+      return;
+    }
+
+    // 2. Explicitly clear question and mode to ensure fresh state for the new round
+    // This fixes the bug where subsequent rounds might stay in "chat mode" or match old questions
+    const { error: updateError } = await supabase
+      .from('tod_lobbies')
+      .update({
+        current_question: null,
+        selected_mode: null
+      })
+      .eq('id', lobbyId);
+
+    if (updateError) {
+      console.error("Error clearing round state:", updateError);
     }
   };
 
