@@ -27,6 +27,7 @@ interface PlayersSidebarProps {
   isHost?: boolean;
   onlineUsers?: Set<string>;
   currentAskerId?: string;
+  lobbyName?: string;
 }
 
 export const PlayersSidebar = ({
@@ -44,7 +45,8 @@ export const PlayersSidebar = ({
   onUnbanParticipant,
   isHost = false,
   onlineUsers = new Set(),
-  currentAskerId
+  currentAskerId,
+  lobbyName
 }: PlayersSidebarProps) => {
 
   // Filter for game events: truth/dare questions, system messages (start/end)
@@ -89,6 +91,18 @@ export const PlayersSidebar = ({
 
   return (
     <aside className={`w-64 flex-shrink-0 border-r border-slate-800/50 bg-slate-900/30 backdrop-blur-sm flex flex-col ${className}`}>
+      {/* Lobby Name Header - Added for mobile first / sidebar context */}
+      <div className="p-4 border-b border-slate-800/50 bg-slate-900/40">
+        <div className="flex items-center gap-2 mb-1">
+          <Sparkles size={16} className="text-red-400" />
+          <h2 className="text-white font-black text-base italic tracking-tight truncate">
+            {lobbyName || 'Game Lobby'}
+          </h2>
+        </div>
+        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+          Truth or Dare
+        </p>
+      </div>
       {/* Join Requests Section */}
       {isHost && pendingRequests.length > 0 && (
         <div className="p-4 border-b border-slate-800/50 bg-red-500/5">

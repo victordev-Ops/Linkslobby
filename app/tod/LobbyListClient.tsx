@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check } from 'lucide-react';
+import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check, ChevronLeft, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface Lobby {
@@ -447,6 +447,20 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
             <div className="relative z-10 py-6 px-4">
                 <div className="max-w-4xl mx-auto">
+                    {/* Top Navigation */}
+                    <div className="flex items-center justify-between mb-8">
+                        <button
+                            onClick={() => router.push('/dashboard')}
+                            className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/60 border border-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all active:scale-95 group"
+                        >
+                            <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                            <div className="flex items-center gap-2">
+                                <LayoutGrid size={16} />
+                                <span className="text-sm font-bold tracking-tight">Dashboard</span>
+                            </div>
+                        </button>
+                    </div>
+
                     <div className="text-center mb-8">
                         <h1 className="text-4xl md:text-5xl font-black text-white mb-3 italic tracking-tight">
                             Truth or Dare
