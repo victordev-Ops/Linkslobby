@@ -115,7 +115,7 @@ function Footer() {
         </div>
 
         <div className="text-[10px] font-medium text-white/20">
-          © {new Date().getFullYear()} Say App. All rights reserved.
+          © 2026 Say App. All rights reserved.
         </div>
       </div>
     </footer>

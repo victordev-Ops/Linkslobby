@@ -26,19 +26,19 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // 1. Static Asset Pass-through
-  if (pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js)$/) || pathname.startsWith('/_next')) {
+  if (pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|webmanifest)$/) || pathname.startsWith('/_next')) {
     return response
   }
 
   // 2. Define Public Routes
-  const publicPaths = ['/login', '/signup']
+  const publicPaths = ['/login', '/signup', '/manifest.webmanifest', '/sw.js']
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
-  
+
   // Routes that start with a specific prefix
-  const isPublicPrefix = 
-    pathname.startsWith('/auth/') || 
-    pathname.startsWith('/confess/') || 
-    pathname.startsWith('/ama/') || 
+  const isPublicPrefix =
+    pathname.startsWith('/auth/') ||
+    pathname.startsWith('/confess/') ||
+    pathname.startsWith('/ama/') ||
     pathname.startsWith('/anonymous/') ||
     pathname.startsWith('/dykm/')// <--- Added this
 
