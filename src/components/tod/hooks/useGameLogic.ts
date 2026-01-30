@@ -6,6 +6,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 interface Lobby {
   id: string;
   host_id: string;
+  name?: string;
   status: 'waiting' | 'active' | 'finished';
   current_asker_id?: string;
   current_target_id?: string;

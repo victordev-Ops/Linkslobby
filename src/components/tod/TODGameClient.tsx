@@ -536,7 +536,20 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg">
                   <Users size={16} className="text-white" />
                 </div>
-                <span className="text-white font-bold">{joinedParticipants.length} Players</span>
+                <div className="flex flex-col">
+                  <span className="text-white font-bold leading-none">{lobby.name || 'Game Lobby'}</span>
+                  <span className="text-slate-400 text-[10px] font-medium">{joinedParticipants.length} Players</span>
+                </div>
+              </div>
+
+              {/* Mobile Lobby Name - simplified */}
+              <div className="lg:hidden flex flex-col min-w-0">
+                <span className="text-white font-bold text-xs truncate max-w-[120px] leading-tight">
+                  {lobby.name || 'Game'}
+                </span>
+                <span className="text-slate-400 text-[10px] leading-tight">
+                  {joinedParticipants.length} players
+                </span>
               </div>
             </div>
 
