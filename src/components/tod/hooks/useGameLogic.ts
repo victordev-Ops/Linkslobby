@@ -82,10 +82,18 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   }, [lobbyId, supabase]);
 
   // Realtime subscriptions
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (!lobbyId || lobbyId === 'undefined') return;
 
-    const channel = supabase.channel(`game:${lobbyId}`)
+    const channel = supabase.channel(`game:${lobbyId}`, {
+      config: {
+        presence: {
+          key: userId,
+        },
+      },
+    })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -122,14 +130,46 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       }, () => {
         fetchData();
       })
-      .subscribe();
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const onlineIds = new Set<string>();
+        Object.values(state).forEach((presences: any) => {
+          presences.forEach((p: any) => {
+            if (p.key) onlineIds.add(p.key);
+          });
+        });
+        setOnlineUsers(onlineIds);
+      })
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        setOnlineUsers(prev => {
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        // Only remove if no more presences for this key
+        const state = channel.presenceState();
+        if (!state[key] || state[key].length === 0) {
+          setOnlineUsers(prev => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED' && userId) {
+          await channel.track({ key: userId, online_at: new Date().toISOString() });
+        }
+      });
 
     fetchData();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [lobbyId, supabase, fetchData]);
+  }, [lobbyId, supabase, fetchData, userId]);
 
   // Timer for mode selection (target user has 60s to select truth or dare)
   useEffect(() => {
@@ -478,6 +518,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     leaveLobby,
     deleteLobby,
     loadMoreMessages,
-    hasMoreMessages
+    hasMoreMessages,
+    onlineUsers
   };
 };

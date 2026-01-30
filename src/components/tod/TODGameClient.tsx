@@ -50,7 +50,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     loadMoreMessages,
     hasMoreMessages,
     leaveLobby,
-    deleteLobby
+    deleteLobby,
+    onlineUsers
   } = useGameLogic(lobbyId, profile?.id);
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -612,6 +613,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   onBanParticipant={banParticipant}
                   onUnbanParticipant={unbanParticipant}
                   isHost={isHost}
+                  onlineUsers={onlineUsers}
+                  currentAskerId={lobby.current_asker_id}
                 />
               </div>
             </div>
@@ -632,6 +635,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             onBanParticipant={banParticipant}
             onUnbanParticipant={unbanParticipant}
             isHost={isHost}
+            onlineUsers={onlineUsers}
+            currentAskerId={lobby.current_asker_id}
           />
 
           {/* Chat Area */}

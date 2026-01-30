@@ -25,6 +25,8 @@ interface PlayersSidebarProps {
   onBanParticipant?: (participantId: string) => void;
   onUnbanParticipant?: (participantId: string) => void;
   isHost?: boolean;
+  onlineUsers?: Set<string>;
+  currentAskerId?: string;
 }
 
 export const PlayersSidebar = ({
@@ -40,7 +42,9 @@ export const PlayersSidebar = ({
   onDeclineRequest,
   onBanParticipant,
   onUnbanParticipant,
-  isHost = false
+  isHost = false,
+  onlineUsers = new Set(),
+  currentAskerId
 }: PlayersSidebarProps) => {
 
   // Filter for game events: truth/dare questions, system messages (start/end)
@@ -142,34 +146,51 @@ export const PlayersSidebar = ({
           {participants.map((participant) => {
             const isParticipantHost = participant.user_id === hostId;
             const isTarget = participant.user_id === currentTargetId;
+            const isAsker = participant.user_id === currentAskerId;
+            const isOnline = onlineUsers.has(participant.user_id);
             const hasTurn = participant.has_gone_this_round;
 
             return (
               <div
                 key={participant.user_id}
-                className={`flex items-center justify-between p-2 rounded-lg transition-all ${isTarget
-                  ? 'bg-red-500/20 border border-red-500/50'
-                  : 'bg-slate-800/30 border border-slate-700/30'
+                className={`flex items-center justify-between p-2 rounded-lg transition-all border ${isTarget
+                  ? 'bg-red-500/20 border-red-500/50'
+                  : isAsker
+                    ? 'bg-blue-500/20 border-blue-500/50'
+                    : 'bg-slate-800/30 border-slate-700/30'
                   }`}
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isTarget
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 relative ${isTarget
                     ? 'bg-gradient-to-br from-red-500 to-orange-500'
-                    : 'bg-slate-700'
+                    : isAsker
+                      ? 'bg-gradient-to-br from-blue-500 to-cyan-500'
+                      : 'bg-slate-700'
                     }`}>
                     <span className="text-white font-bold text-xs uppercase">
                       {participant.profiles?.username?.slice(0, 2) || '??'}
                     </span>
+                    {isOnline && (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900 shadow-sm" />
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-semibold truncate ${isTarget ? 'text-white' : 'text-slate-300'
+                    <p className={`text-sm font-semibold truncate ${isTarget ? 'text-white' : isAsker ? 'text-blue-100' : 'text-slate-300'
                       }`}>
                       {participant.profiles?.username || 'Unknown'}
                     </p>
-                    {hasTurn && !isTarget && (
-                      <p className="text-xs text-slate-500">Played</p>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {isTarget && (
+                        <span className="text-[10px] font-black uppercase text-red-400/80 tracking-tighter">Target</span>
+                      )}
+                      {isAsker && (
+                        <span className="text-[10px] font-black uppercase text-blue-400/80 tracking-tighter">Asker</span>
+                      )}
+                      {!isTarget && !isAsker && hasTurn && (
+                        <p className="text-[10px] text-slate-500 font-medium">Played</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -179,6 +200,9 @@ export const PlayersSidebar = ({
                   )}
                   {isTarget && (
                     <Target size={14} className="text-red-400 animate-pulse" />
+                  )}
+                  {isAsker && (
+                    <MessageCircle size={14} className="text-blue-400 animate-bounce [animation-duration:2s]" />
                   )}
                   {/* Ban button - only show for host and not for themselves */}
                   {isHost && participant.user_id !== hostId && onBanParticipant && (
