@@ -501,7 +501,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       <div className="relative z-10 h-full flex flex-col overflow-hidden">
         {/* Top Header - STICKY */}
         <header className="sticky top-0 z-[100] flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/80 border-b border-white/5 shadow-lg">
-          <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
                 <button
@@ -592,7 +592,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         </header>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-hidden flex max-w-6xl mx-auto w-full">
+        <div className="flex-1 overflow-hidden flex max-w-7xl mx-auto w-full">
           {/* Mobile Sidebar Overlay */}
           {showSidebar && (
             <div

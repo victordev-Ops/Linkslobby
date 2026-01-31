@@ -424,32 +424,32 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500 rounded-full blur-[120px]" />
             </div>
 
+            {/* Sticky Top Navigation */}
+            <div className="sticky top-0 z-[60] bg-slate-950/90 backdrop-blur-xl border-b border-white/5 shadow-xl transition-all duration-300">
+                <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+                    <button
+                        onClick={() => router.push('/dashboard')}
+                        className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/60 border border-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all active:scale-95 group"
+                    >
+                        <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                        <div className="flex items-center gap-2">
+                            <LayoutGrid size={16} />
+                            <span className="text-sm font-bold tracking-tight">Dashboard</span>
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-2.5 px-5 rounded-2xl font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition-all active:scale-95 flex items-center gap-2"
+                    >
+                        <Plus size={20} />
+                        <span className="hidden sm:inline">New Lobby</span>
+                    </button>
+                </div>
+            </div>
+
             <div className="relative z-10 px-4">
                 <div className="max-w-4xl mx-auto">
-                    {/* Sticky Top Navigation */}
-                    <div className="sticky top-0 z-[60] -mx-4 px-4 py-4 bg-slate-950/90 backdrop-blur-xl border-b border-white/5 shadow-xl transition-all duration-300">
-                        <div className="flex items-center justify-between">
-                            <button
-                                onClick={() => router.push('/dashboard')}
-                                className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/60 border border-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all active:scale-95 group"
-                            >
-                                <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-                                <div className="flex items-center gap-2">
-                                    <LayoutGrid size={16} />
-                                    <span className="text-sm font-bold tracking-tight">Dashboard</span>
-                                </div>
-                            </button>
-
-                            <button
-                                onClick={() => setShowCreateModal(true)}
-                                className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-2.5 px-5 rounded-2xl font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition-all active:scale-95 flex items-center gap-2"
-                            >
-                                <Plus size={20} />
-                                <span className="hidden sm:inline">New Lobby</span>
-                            </button>
-                        </div>
-                    </div>
-
                     <div className="mt-8 text-left">
                         <h1 className="text-4xl md:text-5xl font-black text-white mb-2 italic tracking-tighter">
                             TRUTH OR DARE
