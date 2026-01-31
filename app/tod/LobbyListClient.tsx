@@ -418,7 +418,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden pb-32">
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative pb-32">
             <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="absolute top-20 left-10 w-72 h-72 bg-red-500 rounded-full blur-[120px]" />
                 <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500 rounded-full blur-[120px]" />
@@ -427,7 +427,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             <div className="relative z-10 px-4">
                 <div className="max-w-4xl mx-auto">
                     {/* Sticky Top Navigation */}
-                    <div className="sticky top-0 z-50 -mx-4 px-4 py-4 bg-slate-950/80 backdrop-blur-md border-b border-transparent transition-all duration-300">
+                    <div className="sticky top-0 z-[60] -mx-4 px-4 py-4 bg-slate-950/90 backdrop-blur-xl border-b border-white/5 shadow-xl transition-all duration-300">
                         <div className="flex items-center justify-between">
                             <button
                                 onClick={() => router.push('/dashboard')}

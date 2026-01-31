@@ -429,7 +429,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-red-950 to-slate-950 relative overflow-hidden">
+    <div className="flex h-[100dvh] bg-slate-950 overflow-hidden relative font-sans selection:bg-red-500/30 overscroll-behavior-none">
       {/* Decorative Background */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-20 left-10 w-72 h-72 bg-red-500 rounded-full blur-[120px]" />
@@ -497,9 +497,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         )
       }
 
-      <div className="relative z-10 h-screen flex flex-col">
+      {/* Main Container */}
+      <div className="relative z-10 h-full flex flex-col overflow-hidden">
         {/* Top Header - STICKY */}
-        <header className="sticky top-0 z-20 flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/50 border-b border-slate-800/50">
+        <header className="sticky top-0 z-[100] flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/80 border-b border-white/5 shadow-lg">
           <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
@@ -602,7 +603,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 className="absolute left-0 top-0 bottom-0 w-80 bg-slate-900 shadow-2xl overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between p-4 border-b border-slate-800">
+                <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
                   <h2 className="text-lg font-bold text-white">Game Info</h2>
                   <button
                     onClick={() => setShowSidebar(false)}
