@@ -53,11 +53,11 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     const [privateLobbies, setPrivateLobbies] = useState<Lobby[]>(initialPrivate);
 
     const [isLoading, setIsLoading] = useState(false); // Start false because we have initial data
-    const [hasMorePublic, setHasMorePublic] = useState(initialPublic.length === 10);
-    const [hasMorePrivate, setHasMorePrivate] = useState(initialPrivate.length === 10);
+    const [hasMorePublic, setHasMorePublic] = useState(initialPublic.length === 4);
+    const [hasMorePrivate, setHasMorePrivate] = useState(initialPrivate.length === 4);
     const [isLoadingMorePublic, setIsLoadingMorePublic] = useState(false);
     const [isLoadingMorePrivate, setIsLoadingMorePrivate] = useState(false);
-    const PAGE_SIZE = 10;
+    const PAGE_SIZE = 4;
 
     const [isCreating, setIsCreating] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -88,11 +88,11 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         if (loadMore) {
             if (targetGroup === 'public') setIsLoadingMorePublic(true);
             else if (targetGroup === 'private') setIsLoadingMorePrivate(true);
-        } else if (!targetGroup) {
-            // Only show full loading if we have no data at all
-            if (joinedLobbies.length === 0 && publicLobbies.length === 0 && privateLobbies.length === 0) {
-                setIsLoading(true);
-            }
+        } else {
+            // If not loading more, we are refreshing a specific group or everything
+            if (targetGroup === 'public') setPublicLobbies([]);
+            if (targetGroup === 'private') setPrivateLobbies([]);
+            if (!targetGroup) setIsLoading(true);
         }
 
         try {
@@ -366,8 +366,8 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             key={lobby.id}
             onClick={() => !joiningLobbyId && joinLobby(lobby)}
             className={`group relative overflow-hidden flex flex-col justify-between p-4 rounded-3xl transition-all cursor-pointer ${isPrivateCard
-                    ? 'bg-slate-900/40 border border-amber-500/20 hover:border-amber-500/50 min-w-[200px] w-full md:w-auto h-40'
-                    : 'bg-slate-900/60 border border-slate-800/80 hover:border-red-500/40'
+                ? 'bg-slate-900/40 border border-amber-500/20 hover:border-amber-500/50 min-w-[200px] w-full md:w-auto h-40'
+                : 'bg-slate-900/60 border border-slate-800/80 hover:border-red-500/40'
                 } ${joiningLobbyId === lobby.id ? 'ring-2 ring-red-500' : ''}`}
         >
             <div className="flex items-start justify-between gap-3">
@@ -386,7 +386,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 <span className="px-2 py-0.5 rounded-lg bg-slate-800/80 text-[9px] font-black uppercase text-slate-500 tracking-wider">
                     {lobby.category || 'Casual'}
                 </span>
-                {isPrivateCard && <Lock size={12} className="text-amber-500 mt-0.5" />}
+                {lobby.is_private && <Lock size={12} className="text-amber-500 mt-0.5" />}
             </div>
 
             <div className="mt-auto pt-3 border-t border-slate-800/50 flex items-center justify-between">
