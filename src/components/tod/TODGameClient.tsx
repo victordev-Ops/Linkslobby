@@ -429,79 +429,79 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
 
   return (
-    <div className="flex h-[100dvh] bg-slate-950 overflow-hidden relative font-sans selection:bg-red-500/30 overscroll-behavior-none">
+    <div className="flex h-[100dvh] items-center justify-center bg-slate-950 overflow-hidden relative font-sans selection:bg-red-500/30 overscroll-behavior-none">
       {/* Decorative Background */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-20 left-10 w-72 h-72 bg-red-500 rounded-full blur-[120px]" />
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500 rounded-full blur-[120px]" />
       </div>
 
-      {
-        isRejected && !isLoading && (
-          <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
-            <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500/50">
-              <X size={32} className="text-red-400" />
+      {/* Main App Column */}
+      <div className="relative z-10 w-full max-w-lg h-full flex flex-col bg-slate-950 border-x border-white/5 shadow-2xl overflow-hidden">
+        {
+          isRejected && !isLoading && (
+            <div className="absolute inset-0 z-[110] flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
+              <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500/50">
+                <X size={32} className="text-red-400" />
+              </div>
+              <h2 className="text-3xl font-black text-white mb-4 italic">Request Rejected</h2>
+              <p className="text-slate-400 max-w-md leading-relaxed mb-8">
+                Your request to join this lobby was declined by the host.
+              </p>
+              <button
+                onClick={handleLeaveLobby}
+                className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
+              >
+                Go Back
+              </button>
             </div>
-            <h2 className="text-3xl font-black text-white mb-4 italic">Request Rejected</h2>
-            <p className="text-slate-400 max-w-md leading-relaxed mb-8">
-              Your request to join this lobby was declined by the host.
-            </p>
-            <button
-              onClick={handleLeaveLobby}
-              className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
-            >
-              Go Back
-            </button>
-          </div>
-        )
-      }
+          )
+        }
 
-      {
-        isBanned && !isLoading && (
-          <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
-            <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500/50">
-              <X size={32} className="text-red-400" />
+        {
+          isBanned && !isLoading && (
+            <div className="absolute inset-0 z-[110] flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
+              <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500/50">
+                <X size={32} className="text-red-400" />
+              </div>
+              <h2 className="text-3xl font-black text-white mb-4 italic">Banned from Lobby</h2>
+              <p className="text-slate-400 max-w-md leading-relaxed mb-8">
+                You have been permanently banned from this lobby by the host.
+              </p>
+              <button
+                onClick={handleLeaveLobby}
+                className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
+              >
+                Go Back
+              </button>
             </div>
-            <h2 className="text-3xl font-black text-white mb-4 italic">Banned from Lobby</h2>
-            <p className="text-slate-400 max-w-md leading-relaxed mb-8">
-              You have been permanently banned from this lobby by the host.
-            </p>
-            <button
-              onClick={handleLeaveLobby}
-              className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
-            >
-              Go Back
-            </button>
-          </div>
-        )
-      }
+          )
+        }
 
-      {
-        !isJoined && !isRejected && !isBanned && !isLoading && (
-          <div className="relative z-50 min-h-screen flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
-            <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 animate-pulse border border-amber-500/50">
-              <Clock size={32} className="text-amber-400" />
+        {
+          !isJoined && !isRejected && !isBanned && !isLoading && (
+            <div className="absolute inset-0 z-[110] flex flex-col items-center justify-center p-6 text-center backdrop-blur-md bg-slate-950/40">
+              <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 animate-pulse border border-amber-500/50">
+                <Clock size={32} className="text-amber-400" />
+              </div>
+              <h2 className="text-3xl font-black text-white mb-4 italic">Waiting for Approval</h2>
+              <p className="text-slate-400 max-w-md leading-relaxed mb-8">
+                This is a private lobby. Your request to join has been sent to the host.
+                Please wait while they review your request.
+              </p>
+              <button
+                onClick={handleLeaveLobby}
+                className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
+              >
+                Go Back
+              </button>
             </div>
-            <h2 className="text-3xl font-black text-white mb-4 italic">Waiting for Approval</h2>
-            <p className="text-slate-400 max-w-md leading-relaxed mb-8">
-              This is a private lobby. Your request to join has been sent to the host.
-              Please wait while they review your request.
-            </p>
-            <button
-              onClick={handleLeaveLobby}
-              className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-bold hover:bg-slate-700 transition active:scale-95"
-            >
-              Go Back
-            </button>
-          </div>
-        )
-      }
+          )
+        }
 
-      {/* Main Container */}
-      <div className="relative z-10 h-full flex flex-col overflow-hidden">
         {/* Top Header - STICKY */}
         <header className="sticky top-0 z-[100] flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/80 border-b border-white/5 shadow-lg">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
                 <button
@@ -525,20 +525,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
               <button
                 onClick={() => setShowSidebar(!showSidebar)}
-                className="lg:hidden w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg relative"
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg relative"
               >
                 <Users size={16} className="text-white" />
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white border-2 border-slate-900">
                   {joinedParticipants.length}
                 </span>
               </button>
-
-              <div className="hidden lg:flex items-center gap-2 text-sm">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg">
-                  <Users size={16} className="text-white" />
-                </div>
-                <span className="text-white font-bold">{joinedParticipants.length} Players</span>
-              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -591,67 +584,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
           </div>
         </header>
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-hidden flex max-w-7xl mx-auto w-full">
-          {/* Mobile Sidebar Overlay */}
-          {showSidebar && (
-            <div
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-              onClick={() => setShowSidebar(false)}
-            >
-              <div
-                className="absolute left-0 top-0 bottom-0 w-80 bg-slate-900 shadow-2xl overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
-                  <h2 className="text-lg font-bold text-white">Game Info</h2>
-                  <button
-                    onClick={() => setShowSidebar(false)}
-                    className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition"
-                  >
-                    <X size={16} className="text-white" />
-                  </button>
-                </div>
-                <PlayersSidebar
-                  participants={joinedParticipants}
-                  messages={messages}
-                  currentTargetId={lobby.current_target_id}
-                  hostId={lobby.host_id}
-                  onActivityClick={handleActivityClick}
-                  pendingRequests={pendingRequests}
-                  bannedParticipants={bannedParticipants}
-                  onApproveRequest={approveRequest}
-                  onDeclineRequest={declineRequest}
-                  onBanParticipant={banParticipant}
-                  onUnbanParticipant={unbanParticipant}
-                  isHost={isHost}
-                  onlineUsers={onlineUsers}
-                  currentAskerId={lobby.current_asker_id}
-                  lobbyName={lobby.name}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Desktop Sidebar */}
-          <PlayersSidebar
-            participants={joinedParticipants}
-            messages={messages}
-            currentTargetId={lobby.current_target_id}
-            hostId={lobby.host_id}
-            className="hidden lg:flex"
-            onActivityClick={handleActivityClick}
-            pendingRequests={pendingRequests}
-            bannedParticipants={bannedParticipants}
-            onApproveRequest={approveRequest}
-            onDeclineRequest={declineRequest}
-            onBanParticipant={banParticipant}
-            onUnbanParticipant={unbanParticipant}
-            isHost={isHost}
-            onlineUsers={onlineUsers}
-            currentAskerId={lobby.current_asker_id}
-            lobbyName={lobby.name}
-          />
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-hidden flex w-full">
 
           {/* Chat Area */}
           <main className="flex-1 flex flex-col overflow-hidden">
@@ -809,6 +743,58 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             </div>
           </main>
         </div>
+
+        {/* Unified Sidebar Overlay */}
+        <AnimatePresence>
+          {showSidebar && (
+            <div className="absolute inset-0 z-[200]">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={() => setShowSidebar(false)}
+              />
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="absolute left-0 top-0 bottom-0 w-80 bg-slate-900 shadow-2xl overflow-hidden flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm flex-shrink-0">
+                  <h2 className="text-lg font-bold text-white">Game Info</h2>
+                  <button
+                    onClick={() => setShowSidebar(false)}
+                    className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition"
+                  >
+                    <X size={16} className="text-white" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  <PlayersSidebar
+                    participants={joinedParticipants}
+                    messages={messages}
+                    currentTargetId={lobby.current_target_id}
+                    hostId={lobby.host_id}
+                    onActivityClick={handleActivityClick}
+                    pendingRequests={pendingRequests}
+                    bannedParticipants={bannedParticipants}
+                    onApproveRequest={approveRequest}
+                    onDeclineRequest={declineRequest}
+                    onBanParticipant={banParticipant}
+                    onUnbanParticipant={unbanParticipant}
+                    isHost={isHost}
+                    onlineUsers={onlineUsers}
+                    currentAskerId={lobby.current_asker_id}
+                    lobbyName={lobby.name}
+                  />
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </div >
   );
