@@ -26,6 +26,8 @@ export async function hideNotification(id: string, type: 'message' | 'dykm' | 'l
 
         if (!notificationType) throw new Error('Invalid notification type')
 
+        // Verify the notification belongs to the user (if applicable) or just hide it for them
+        // Hidden notifications are stored per user, so this is generally safe.
         const { error } = await supabase
             .from('hidden_notifications')
             .insert({
@@ -41,6 +43,6 @@ export async function hideNotification(id: string, type: 'message' | 'dykm' | 'l
         return { success: true }
     } catch (error) {
         console.error('Server Action Error:', error)
-        return { success: false, error }
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
 }

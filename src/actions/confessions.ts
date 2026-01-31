@@ -8,6 +8,20 @@ export async function markConfessionAsRead(id: string) {
   const supabase = await createSupabaseServerClient()
 
   try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
+
+    // Verify ownership before updating
+    const { data: confession } = await supabase
+      .from('confessions')
+      .select('profile_id')
+      .eq('id', id)
+      .single()
+
+    if (!confession || confession.profile_id !== user.id) {
+      throw new Error('Unauthorized or confession not found')
+    }
+
     const { error } = await supabase
       .from('confessions')
       .update({ is_read: true })
@@ -15,15 +29,11 @@ export async function markConfessionAsRead(id: string) {
 
     if (error) throw error
 
-    // THE MAGIC FIX:
-    // This tells Next.js "Purge the cache for /inbox immediately"
-    // When the user goes back, the server will fetch fresh data.
     revalidatePath('/inbox')
-    
+
     return { success: true }
   } catch (error) {
     console.error('Server Action Error:', error)
-    return { success: false, error }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
-               }
-      
+}

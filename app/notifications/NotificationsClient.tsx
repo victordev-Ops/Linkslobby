@@ -11,8 +11,8 @@ import Link from "next/link"
 import { formatDistanceToNow } from "@/lib/utils"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
-import { markConfessionAsRead } from "app/actions/confessions"
-import { hideNotification } from "app/actions/notifications"
+import { markConfessionAsRead } from "@/actions/confessions"
+import { hideNotification } from "@/actions/notifications"
 import { useRouter } from "next/navigation"
 
 interface NotificationsClientProps {

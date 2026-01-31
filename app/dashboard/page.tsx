@@ -25,6 +25,11 @@ export default async function DashboardPage() {
       .maybeSingle()
   ])
 
+  if (profileResponse.error) {
+    console.error('Profile fetch error:', profileResponse.error)
+    throw new Error('Failed to load user profile')
+  }
+
   const profile = profileResponse.data
   const dykmData = dykmResponse.data
 

@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { RefreshCw, MessageSquare, ChevronRight, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { markConfessionAsRead } from 'app/actions/confessions'
+import { markConfessionAsRead } from '@/actions/confessions'
 import { useNotifications } from '@/context/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -248,8 +248,8 @@ export default function InboxClient({
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === tab
-                  ? 'bg-white dark:bg-purple-600 text-purple-600 dark:text-white shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                ? 'bg-white dark:bg-purple-600 text-purple-600 dark:text-white shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
             >
               {tab}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { setupProfile, checkUsernameAvailability } from '@/actions/setup-profile'
+import { setupProfile, checkUsernameAvailability } from '@/actions/profile'
 import { useDebounce } from '@/hooks/use-debounce'
 import { motion, AnimatePresence } from 'framer-motion'
 import AuthForm from '@/components/AuthForm'
