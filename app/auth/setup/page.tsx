@@ -8,6 +8,7 @@ import AuthForm from '@/components/AuthForm'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { showXPNotification } from '@/components/XPNotification'
+import { createClient } from '@/lib/supabase/client'
 import { User, Loader2, Check, X, ArrowRight } from 'lucide-react'
 
 export default function SetupUsername() {
@@ -18,16 +19,25 @@ export default function SetupUsername() {
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
 
+  // Fast session check - doesn't wait for profile
+  const [sessionChecked, setSessionChecked] = useState(false)
+  const [hasSession, setHasSession] = useState(false)
+
   const debouncedUsername = useDebounce(username, 500)
   const router = useRouter()
-  const { refreshProfile, user, loading: authLoading } = useAuth()
+  const { refreshProfile } = useAuth()
 
-  // Redirect if not authenticated
+  // Quick session check on mount - much faster than waiting for full AuthContext
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/login')
-    }
-  }, [user, authLoading, router])
+    const supabase = createClient()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setHasSession(!!session)
+      setSessionChecked(true)
+      if (!session) {
+        router.replace('/login')
+      }
+    })
+  }, [router])
 
   // Validate username availability
   useEffect(() => {
@@ -84,8 +94,8 @@ export default function SetupUsername() {
     }
   }
 
-  // Loading state
-  if (authLoading) {
+  // Show loading only until session is checked (fast)
+  if (!sessionChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0f0a1e] text-white">
         <div className="text-center">
@@ -96,8 +106,8 @@ export default function SetupUsername() {
     )
   }
 
-  // No user guard
-  if (!user) return null
+  // No session guard
+  if (!hasSession) return null
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0f0a1e] text-white selection:bg-purple-500/30">
