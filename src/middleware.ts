@@ -56,8 +56,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // 5. Profile Completion Check
-  if (user && pathname === '/dashboard') {
+  // 5. Profile Completion Check - Apply to all protected routes
+  const protectedRoutesRequiringProfile = ['/dashboard', '/inbox', '/settings', '/notifications', '/profile', '/tod']
+  const needsProfileCheck = user && protectedRoutesRequiringProfile.some(route =>
+    pathname === route || pathname.startsWith(route + '/')
+  )
+
+  if (needsProfileCheck) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('username, slug')

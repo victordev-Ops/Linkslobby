@@ -8,6 +8,26 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
     console.log("🔔 Webhook received");
 
+    // 1. Verify webhook secret for security
+    const webhookSecret = process.env.WEBHOOK_SECRET;
+    const providedSecret = req.headers.get('x-webhook-secret');
+
+    if (webhookSecret && providedSecret !== webhookSecret) {
+        console.error("❌ Unauthorized webhook request");
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 2. Parse body once and store for reuse
+    let body: { record?: { profile_id?: string; id?: string; message_type?: string } };
+    try {
+        body = await req.json();
+    } catch {
+        console.error("❌ Invalid JSON payload");
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const { record } = body;
+
     try {
         const vapidSubject = process.env.VAPID_SUBJECT;
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -25,16 +45,13 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
         }
 
-        webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-        const body = await req.json();
-        const { record } = body;
-
         if (!record?.profile_id) {
             console.error("❌ Invalid payload");
             return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
         }
+
+        webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
         console.log("👤 Processing for user:", record.profile_id);
 
@@ -60,19 +77,14 @@ export async function POST(req: NextRequest) {
 
         console.log("📱 Sending push to:", profile.username);
 
-        // Get confession count for personalization
-        const { count } = await supabaseAdmin
-            .from("confessions")
-            .select("*", { count: 'exact', head: true })
-            .eq("profile_id", record.profile_id);
+        // Get message type for notification customization
+        const messageType = record.message_type || 'message';
 
-        // Create personalized notification
-        const messagePreview = record.message?.substring(0, 100) || "Someone sent you a confession";
-        const confessionCount = count || 0;
-
+        // SECURITY: Don't include actual message content in push notifications
+        // This prevents sensitive confession content from appearing in notification centers
         const payload = {
-            title: "🎭 New Secret Confession!",
-            body: messagePreview + (messagePreview.length >= 100 ? "..." : ""),
+            title: getNotificationTitle(messageType),
+            body: getNotificationBody(messageType),
             icon: "/favicon.ico",
             badge: "/logo.png",
             image: "/logo.png",
@@ -86,17 +98,11 @@ export async function POST(req: NextRequest) {
                 confessionId: record.id,
                 timestamp: new Date().toISOString(),
                 username: profile.username,
-                messagePreview: messagePreview
             },
             actions: [
                 {
                     action: "view",
                     title: "👀 Read Now",
-                    icon: "/logo.png"
-                },
-                {
-                    action: "reply",
-                    title: "💬 Quick Reply",
                     icon: "/logo.png"
                 },
                 {
@@ -107,35 +113,25 @@ export async function POST(req: NextRequest) {
             ]
         };
 
-        // Add personalized message based on confession count
-        if (confessionCount === 1) {
-            payload.title = "🎉 Your First Confession!";
-            payload.body = "Someone just shared their secret with you! " + messagePreview;
-        } else if (confessionCount > 10) {
-            payload.title = `🔥 Confession #${confessionCount}!`;
-            payload.body = `You're popular! New confession: ${messagePreview}`;
-        } else if (confessionCount > 5) {
-            payload.title = "✨ Another Confession!";
-        }
-
         await webPush.sendNotification(subscription, JSON.stringify(payload));
 
         console.log("✅ Push notification sent successfully");
         return NextResponse.json({ ok: true, message: "Notification sent" });
 
-    } catch (error: any) {
-        console.error("❌ Webhook error:", error);
+    } catch (error: unknown) {
+        const err = error as { statusCode?: number; message?: string };
+        console.error("❌ Webhook error:", err);
 
-        if (error.statusCode === 410 || error.statusCode === 404) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
             console.log("🧹 Removing expired subscription");
 
             try {
-                const body = await req.json().catch(() => ({}));
                 const supabaseAdmin = createClient(
                     process.env.NEXT_PUBLIC_SUPABASE_URL!,
                     process.env.SUPABASE_SERVICE_ROLE_KEY!
                 );
 
+                // Use the already-parsed body variable instead of re-parsing
                 await supabaseAdmin
                     .from("profiles")
                     .update({ push_subscription: null })
@@ -149,8 +145,39 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             error: "Internal error",
-            details: error.message
+            details: err.message
         }, { status: 500 });
+    }
+}
+
+// Helper functions for notification content
+function getNotificationTitle(messageType: string): string {
+    switch (messageType) {
+        case 'confession':
+            return '🎭 New Secret Confession!';
+        case 'ama':
+            return '❓ New Question!';
+        case 'anonymous':
+            return '💌 Anonymous Message!';
+        case 'direct_message':
+            return '💬 New Message!';
+        default:
+            return '📩 New Message!';
+    }
+}
+
+function getNotificationBody(messageType: string): string {
+    switch (messageType) {
+        case 'confession':
+            return 'Someone shared a secret with you';
+        case 'ama':
+            return 'Someone asked you a question';
+        case 'anonymous':
+            return 'You received an anonymous message';
+        case 'direct_message':
+            return 'You received a direct message';
+        default:
+            return 'You have a new message waiting';
     }
 }
 

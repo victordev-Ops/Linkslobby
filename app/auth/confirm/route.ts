@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (!error && data.user) {
-      // 2. Check if profile exists
+      // 2. Check if profile exists and is complete
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id, username, slug')
@@ -29,23 +29,8 @@ export async function GET(request: NextRequest) {
         console.error('Profile check error:', profileError)
       }
 
-      // 3. Create minimal profile if it doesn't exist
-      if (!profile) {
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            email: data.user.email,
-            username: null, // Will be set in setup
-            slug: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-
-        if (insertError) {
-          console.error('Profile creation error:', insertError)
-        }
-      }
+      // Note: Profile creation happens in setupProfile action via upsert
+      // Just redirect based on current state
 
       // 4. Redirect based on profile completion
       if (profile?.username && profile?.slug) {
@@ -60,4 +45,4 @@ export async function GET(request: NextRequest) {
 
   // Fallback for expired or invalid tokens
   return NextResponse.redirect(new URL('/login?error=link-expired', request.url))
-  }
+}

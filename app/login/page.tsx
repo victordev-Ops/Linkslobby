@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { signIn } from '@/actions/login'
 import AuthForm from '@/components/AuthForm'
 import { Mail, ArrowRight, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -13,22 +13,15 @@ export default function Login() {
   const [message, setMessage] = useState({ type: '', text: '' })
   const [emailSent, setEmailSent] = useState(false)
 
-  const supabase = createClient()
-
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setMessage({ type: '', text: '' })
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/confirm`,
-      },
-    })
+    const result = await signIn(email)
 
-    if (error) {
-      setMessage({ type: 'error', text: error.message })
+    if (!result.success) {
+      setMessage({ type: 'error', text: result.message })
       setLoading(false)
     } else {
       setEmailSent(true)
@@ -36,6 +29,7 @@ export default function Login() {
       setLoading(false)
     }
   }
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0f0a1e] text-white selection:bg-purple-500/30">

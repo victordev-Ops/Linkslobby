@@ -20,10 +20,12 @@ export async function createSupabaseServerClient() {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options)
             })
-          } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
+          } catch (error) {
+            // Expected in Server Components where cookies are read-only
+            // Only log in development for debugging session issues
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('[Supabase] Cookie setAll called from read-only context')
+            }
           }
         },
       },

@@ -1,27 +1,32 @@
 import DashboardClient from './DashboardClient'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient()
 
-  // 1. Get User
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
-    redirect('/login')
+  // User and profile completeness are guaranteed by middleware
+  // Just get the session for the user ID
+  const { data: { session } } = await supabase.auth.getSession()
+
+  // This shouldn't happen since middleware protects this route,
+  // but TypeScript needs the check
+  if (!session) {
+    throw new Error('Session not found')
   }
 
-  // 2. Get Profile & Dykm Data in parallel for speed
+  const userId = session.user.id
+
+  // Get Profile & Dykm Data in parallel for speed
   const [profileResponse, dykmResponse] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, username, slug')
-      .eq('id', user.id)
-      .maybeSingle(),
+      .eq('id', userId)
+      .single(), // Use single() since middleware guarantees profile exists
     supabase
       .from('dykm_quizzes')
       .select('questions')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle()
   ])
 
@@ -33,12 +38,6 @@ export default async function DashboardPage() {
   const profile = profileResponse.data
   const dykmData = dykmResponse.data
 
-  // 3. Handle redirects if profile missing
-  if (!profile || !profile.username || !profile.slug) {
-    redirect('/auth/setup')
-  }
-
-  // 4. Render Client with Data
   return (
     <DashboardClient
       serverProfile={profile}

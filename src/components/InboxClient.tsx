@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { RefreshCw, MessageSquare, ChevronRight, AlertCircle } from 'lucide-react'
+import { RefreshCw, MessageSquare, ChevronRight, AlertCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { markConfessionAsRead } from '@/actions/confessions'
@@ -20,6 +20,8 @@ type Confession = {
   profile_id: string
   message_type: 'confession' | 'ama' | 'anonymous' | 'direct_message'
 }
+
+const PAGE_SIZE = 20
 
 // --- HELPERS ---
 function debounce<T extends (...args: any[]) => any>(
@@ -74,6 +76,10 @@ export default function InboxClient({
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'All' | 'Confessions' | 'AMA' | 'Anonymous' | 'DMs'>('All')
 
+  // Pagination state
+  const [hasMore, setHasMore] = useState(initialConfessions.length >= PAGE_SIZE)
+  const [loadingMore, setLoadingMore] = useState(false)
+
   // NEW: State for the instant preview overlay
   const [selectedConfession, setSelectedConfession] = useState<Confession | null>(null)
 
@@ -104,7 +110,7 @@ export default function InboxClient({
         .select('id, message, created_at, is_read, profile_id, message_type')
         .eq('profile_id', userId)
         .order('created_at', { ascending: false })
-        .limit(100)
+        .limit(PAGE_SIZE)
 
       if (supabaseError) throw supabaseError
 
@@ -125,6 +131,35 @@ export default function InboxClient({
       if (isManual) setTimeout(() => setRefreshing(false), 600)
     }
   }, [userId, supabase, refreshUnreadCount])
+
+  // --- LOAD MORE (Pagination) ---
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || confessions.length === 0) return
+    setLoadingMore(true)
+
+    const lastItem = confessions[confessions.length - 1]
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('confessions')
+        .select('id, message, created_at, is_read, profile_id, message_type')
+        .eq('profile_id', userId)
+        .lt('created_at', lastItem.created_at)
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE)
+
+      if (supabaseError) throw supabaseError
+
+      if (data) {
+        setConfessions(prev => mergeConfessions(prev, data))
+        setHasMore(data.length >= PAGE_SIZE)
+      }
+    } catch (err) {
+      console.error('Load more error:', err)
+      toast.error('Failed to load more messages')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [confessions, userId, supabase, hasMore, loadingMore])
 
   // --- 2. SYNC SERVER PROPS ---
   useEffect(() => {
@@ -327,6 +362,26 @@ export default function InboxClient({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Load More Button */}
+      {hasMore && filteredConfessions.length > 0 && (
+        <div className="px-6 py-4">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="w-full py-3 px-4 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 font-medium text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loadingMore ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Loading...
+              </>
+            ) : (
+              'Load More Messages'
+            )}
+          </button>
+        </div>
+      )}
 
       {/* --- INSTANT PREVIEW OVERLAY --- */}
       <AnimatePresence>
