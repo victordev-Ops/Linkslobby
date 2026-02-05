@@ -59,10 +59,11 @@ export async function earnXP(
 
     const result = data as XPResult
 
-    // Show notification if enabled and we have the handler
-    if (result.success && showNotification && showXPNotification) {
-      showXPNotification(finalAmount, finalReason)
-    }
+    // Notification is now handled globally via Realtime subscription in XPNotificationProvider
+    // to support server-side events (webhooks, penalties) consistently.
+    // if (result.success && showNotification && showXPNotification) {
+    //   showXPNotification(finalAmount, finalReason)
+    // }
 
     return result
   } catch (error) {
