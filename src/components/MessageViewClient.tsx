@@ -6,6 +6,7 @@ import { X, Share2, Lock, Camera, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toPng } from 'html-to-image'
 import { toast } from 'sonner'
+import { revealSenderHint } from '@/actions/reveal'
 
 type Confession = {
   id: string
@@ -38,6 +39,7 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
   const [colorIndex, setColorIndex] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
 
   const handleNextColor = () => setColorIndex((prev) => (prev + 1) % GRADIENTS.length)
 
@@ -120,8 +122,22 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
     }
   }
 
-  const handleReveal = () => {
-    toast.info("Reveal Sender feature coming soon!")
+  const handleReveal = async () => {
+    if (hint) return
+
+    const toastId = toast.loading("Unlocking hint...")
+    try {
+      const result = await revealSenderHint(confession.id)
+
+      if (result.success && result.data?.hint) {
+        setHint(result.data.hint)
+        toast.success("Hint unlocked!", { id: toastId })
+      } else {
+        toast.error(result.message || "Failed to reveal hint", { id: toastId })
+      }
+    } catch (error) {
+      toast.error("Something went wrong", { id: toastId })
+    }
   }
 
   const getDisplayName = (type: Confession['message_type']) => {
@@ -176,6 +192,18 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
                     say-app.com/confess/{username}
                   </span>
                 </div>
+
+                {hint && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-500/20"
+                  >
+                    <p className="text-sm font-bold text-purple-700 dark:text-purple-300">
+                      🕵️ Warning: {hint}
+                    </p>
+                  </motion.div>
+                )}
               </div>
             </div>
           </div>

@@ -30,35 +30,40 @@ export function setXPNotificationHandler(handler: (amount: number, reason: strin
  * Award XP to the current user
  */
 export async function earnXP(
-  amount: number, 
-  reason: string, 
+  amount: number,
+  reason: string,
   metadata?: any,
-  showNotification: boolean = true
+  showNotification: boolean = true,
+  isPro: boolean = false
 ): Promise<XPResult> {
   const supabase = createClient()
-  
+
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return { success: false, error: 'User not authenticated' }
     }
 
+    // Apply Pro multiplier (2x)
+    const finalAmount = isPro ? amount * 2 : amount
+    const finalReason = isPro ? `${reason} (2x Pro Bonus)` : reason
+
     const { data, error } = await supabase.rpc('add_xp', {
       p_user_id: user.id,
-      p_amount: amount,
-      p_reason: reason,
+      p_amount: finalAmount,
+      p_reason: finalReason,
       p_metadata: metadata || null
     })
 
     if (error) throw error
-    
+
     const result = data as XPResult
-    
+
     // Show notification if enabled and we have the handler
     if (result.success && showNotification && showXPNotification) {
-      showXPNotification(amount, reason)
+      showXPNotification(finalAmount, finalReason)
     }
-    
+
     return result
   } catch (error) {
     console.error('Error earning XP:', error)
@@ -66,16 +71,49 @@ export async function earnXP(
   }
 }
 
+// ... existing spendXP ...
+
+/**
+ * XP reward constants
+ */
+export const XP_REWARDS = {
+  PROFILE_CREATED: 100,
+  DAILY_LOGIN: 10,
+  TOD_PARTICIPANT_JOINED: 5,
+  MESSAGE_RECEIVED: 2,           // Confession, AMA, DYKM, Anonymous
+  HOT_QUESTION_RECEIVED: 5,
+  SHARE_LINK: 15,
+} as const
+
+/**
+ * XP costs
+ */
+export const XP_COSTS = {
+  REVEAL_SENDER_HINT: 500,
+  REVEAL_SENDER_HINT_PRO: 50,
+  REVEAL_DYKM_ANSWERER: 5,
+  CUSTOM_THEME: 500,
+  PREMIUM_STICKER: 200,
+  UNLOCK_FEATURE: 300,
+} as const
+
+/**
+ * XP penalties (make sure to use spendXP for these, or create a deductXP helper if needed)
+ */
+export const XP_PENALTIES = {
+  SKIP_ROUND_NO_ANSWER: 10,
+  SYSTEM_CHOSE_MODE: 2,
+} as const
 /**
  * Spend XP for the current user (with balance validation)
  */
 export async function spendXP(
-  amount: number, 
-  reason: string, 
+  amount: number,
+  reason: string,
   metadata?: any
 ): Promise<XPResult> {
   const supabase = createClient()
-  
+
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -102,7 +140,7 @@ export async function spendXP(
  */
 export async function getXPBalance(): Promise<number> {
   const supabase = createClient()
-  
+
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return 0
@@ -126,7 +164,7 @@ export async function getXPBalance(): Promise<number> {
  */
 export async function getXPTransactions(limit: number = 20): Promise<XPTransaction[]> {
   const supabase = createClient()
-  
+
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return []
@@ -146,25 +184,4 @@ export async function getXPTransactions(limit: number = 20): Promise<XPTransacti
   }
 }
 
-/**
- * XP reward constants - customize these based on your app's economy
- */
-export const XP_REWARDS = {
-  PROFILE_CREATED: 100,
-  FIRST_CONFESSION_SENT: 50,
-  FIRST_CONFESSION_RECEIVED: 50,
-  CONFESSION_SENT: 10,
-  CONFESSION_RECEIVED: 5,
-  AMA_STICKER_CREATED: 25,
-  DAILY_LOGIN: 10,
-  SHARE_LINK: 15,
-} as const
 
-/**
- * XP costs - customize these based on your app's features
- */
-export const XP_COSTS = {
-  CUSTOM_THEME: 500,
-  PREMIUM_STICKER: 200,
-  UNLOCK_FEATURE: 300,
-} as const

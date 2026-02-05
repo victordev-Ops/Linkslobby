@@ -4,11 +4,14 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { User, Session } from "@supabase/supabase-js";
+import { checkDailyLogin } from '@/actions/daily-login';
+import { toast } from "sonner";
 
 type Profile = {
   id: string;
   username: string | null;
   slug: string | null;
+  is_pro?: boolean;
 };
 
 type AuthContextType = {
@@ -33,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, slug")
+        .select("id, username, slug, is_pro")
         .eq("id", userId)
         .maybeSingle();
 
@@ -59,6 +62,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (currentUser) {
           const profileData = await fetchProfile(currentUser.id);
           if (mounted) setProfile(profileData);
+
+          // Trigger Daily Login Check
+          checkDailyLogin(profileData?.is_pro || false).then(result => {
+            if (result.success && result.awarded) {
+              toast.success(result.message || "Daily Login Bonus!", {
+                description: `+${result.xp} XP`,
+                duration: 5000
+              });
+            }
+          });
 
           // REMOVED: The automatic redirect logic here caused the loop.
           // We now rely on Middleware and Layouts to protect routes.

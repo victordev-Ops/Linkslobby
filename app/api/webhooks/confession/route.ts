@@ -57,13 +57,29 @@ export async function POST(req: NextRequest) {
 
         const { data: profile, error: profileError } = await supabaseAdmin
             .from("profiles")
-            .select("push_subscription, username")
+            .select("push_subscription, username, is_pro")
             .eq("id", record.profile_id)
             .single();
 
         if (profileError || !profile) {
             console.error("❌ Profile error:", profileError);
             return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+        }
+
+        // Award XP for receiving a message
+        try {
+            const isPro = profile.is_pro || false;
+            const xpAmount = isPro ? 4 : 2; // 2 XP normally, 4 for pro
+            const xpReason = isPro ? 'Message Received (2x Pro Bonus)' : 'Message Received';
+
+            await supabaseAdmin.rpc('add_xp', {
+                p_user_id: record.profile_id,
+                p_amount: xpAmount,
+                p_reason: xpReason,
+                p_metadata: { type: 'message_received', message_type: record.message_type }
+            });
+        } catch (xpError) {
+            console.error("Failed to award XP:", xpError);
         }
 
         if (!profile.push_subscription) {

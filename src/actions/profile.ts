@@ -57,7 +57,7 @@ export async function setupProfile(username: string) {
     // Check if this is a new profile (first time setup)
     const { data: existingProfile } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, is_pro')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -84,10 +84,14 @@ export async function setupProfile(username: string) {
 
     if (isNewProfile) {
         try {
+            // Check if user is somehow pro on signup (e.g. invited via pro link? unlikely but good to support)
+            const isPro = existingProfile?.is_pro || false
+            const amount = isPro ? 200 : 100 // Hardcoded or import from XP_REWARDS if accessible
+
             await supabase.rpc('add_xp', {
                 p_user_id: user.id,
-                p_amount: 100,
-                p_reason: 'Welcome to Say! 🎉',
+                p_amount: amount,
+                p_reason: isPro ? 'Welcome to Say! 🎉 (Pro Bonus)' : 'Welcome to Say! 🎉',
                 p_metadata: { action: 'profile_created', username }
             })
         } catch (xpError) {

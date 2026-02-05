@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { earnXP, XP_REWARDS } from '@/hooks/xp';
+import { penalizeSkippedRound, penalizeSystemModeSelection } from '@/actions/tod-xp';
 
 interface Lobby {
   id: string;
@@ -297,6 +299,10 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   }, [lobbyId, userId, lobby, supabase]);
 
   const startNextRound = async () => {
+    // Check for XP penalty (skipped round without answer)
+    // Fire and forget - doesn't block game flow
+    penalizeSkippedRound(lobbyId).catch(console.error);
+
     // 1. First trigger the turn logic RPC
     const { error: rpcError } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
     if (rpcError) {
@@ -388,6 +394,9 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       content: `${targetUser?.profiles?.username || 'Someone'} has joined the game! 🎉`,
       message_type: 'system'
     });
+
+    // Award Host XP for approving a participant
+    await earnXP(XP_REWARDS.TOD_PARTICIPANT_JOINED, 'Player joined lobby', { lobby_id: lobbyId });
 
     toast.success('Player approved!');
     fetchData();
@@ -555,6 +564,10 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       if (remaining === 0 && userId === lobby.host_id) {
         const randomMode = Math.random() > 0.5 ? 'truth' : 'dare';
         selectMode(randomMode);
+
+        // XP Penalty for system selection
+        penalizeSystemModeSelection(lobbyId).catch(console.error);
+
         toast.info(`Time's up! Randomly selected: ${randomMode}`);
       }
     }, 1000);
