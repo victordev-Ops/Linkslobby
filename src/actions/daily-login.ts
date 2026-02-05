@@ -1,7 +1,7 @@
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { XP_REWARDS } from '@/hooks/xp'
+import { XP_REWARDS, applyProRewardMultiplier, formatRewardReason } from '@/hooks/xp'
 
 export type DailyLoginResult = {
     success: boolean
@@ -33,9 +33,8 @@ export async function checkDailyLogin(isPro: boolean = false): Promise<DailyLogi
             return { success: true, awarded: false, message: 'Already claimed today' }
         }
 
-        // Award XP
-        const amount = isPro ? XP_REWARDS.DAILY_LOGIN * 2 : XP_REWARDS.DAILY_LOGIN
-        const reason = isPro ? 'Daily Login (2x Pro Bonus)' : 'Daily Login'
+        const amount = applyProRewardMultiplier(XP_REWARDS.DAILY_LOGIN, isPro)
+        const reason = formatRewardReason('Daily Login', isPro)
 
         // 1. Update last_login_date
         const { error: updateError } = await supabase

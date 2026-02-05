@@ -8,6 +8,7 @@ import AuthForm from '@/components/AuthForm'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { showXPNotification } from '@/components/XPNotification'
+import { XP_REWARDS } from '@/hooks/xp'
 import { createClient } from '@/lib/supabase/client'
 import { User, Loader2, Check, X, ArrowRight } from 'lucide-react'
 
@@ -75,8 +76,8 @@ export default function SetupUsername() {
       }
 
       if (result?.success) {
-        // Show welcome notification
-        showXPNotification(100, 'Welcome to Say! 🎉')
+        const amount = result.xpAwarded ?? XP_REWARDS.PROFILE_CREATED
+        showXPNotification(amount, 'Welcome to Say! 🎉')
 
         // Refresh profile context
         await refreshProfile()

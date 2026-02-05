@@ -44,9 +44,8 @@ export async function earnXP(
       return { success: false, error: 'User not authenticated' }
     }
 
-    // Apply Pro multiplier (2x)
-    const finalAmount = isPro ? amount * 2 : amount
-    const finalReason = isPro ? `${reason} (2x Pro Bonus)` : reason
+    const finalAmount = applyProRewardMultiplier(amount, isPro)
+    const finalReason = formatRewardReason(reason, isPro)
 
     const { data, error } = await supabase.rpc('add_xp', {
       p_user_id: user.id,
@@ -74,8 +73,28 @@ export async function earnXP(
 
 // ... existing spendXP ...
 
+/** Pro users earn this multiplier on reward XP (applied in one place for consistency) */
+export const PRO_REWARD_MULTIPLIER = 2
+
 /**
- * XP reward constants
+ * Apply Pro multiplier to a base XP amount. Use everywhere rewards are awarded
+ * (client, server actions, webhooks) so changing the multiplier is reliable.
+ */
+export function applyProRewardMultiplier(amount: number, isPro: boolean): number {
+  return isPro ? amount * PRO_REWARD_MULTIPLIER : amount
+}
+
+/**
+ * Format reward reason for transactions (e.g. "(2x Pro Bonus)" suffix).
+ * Keeps reason strings consistent across client, server, and webhooks.
+ */
+export function formatRewardReason(reason: string, isPro: boolean): string {
+  return isPro ? `${reason} (2x Pro Bonus)` : reason
+}
+
+/**
+ * XP reward constants — single source of truth for all reward amounts.
+ * Server actions and API routes should import these instead of hardcoding.
  */
 export const XP_REWARDS = {
   PROFILE_CREATED: 100,

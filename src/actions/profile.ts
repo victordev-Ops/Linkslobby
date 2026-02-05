@@ -2,6 +2,11 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import {
+  XP_REWARDS,
+  applyProRewardMultiplier,
+  formatRewardReason,
+} from '@/hooks/xp'
 
 /**
  * Checks if a username is taken and generates suggestions if it is.
@@ -70,7 +75,7 @@ export async function setupProfile(username: string) {
             email: user.email,
             username: username,
             slug: slug,
-            xp_balance: isNewProfile ? 100 : undefined, // Set initial XP for new profiles
+            ...(isNewProfile && { xp_balance: 0 }),
             updated_at: new Date().toISOString(),
         }, {
             onConflict: 'id'
@@ -82,18 +87,20 @@ export async function setupProfile(username: string) {
         return { error: 'Could not save profile. Please try again.' }
     }
 
+    let xpAwarded: number | undefined
     if (isNewProfile) {
         try {
-            // Check if user is somehow pro on signup (e.g. invited via pro link? unlikely but good to support)
-            const isPro = existingProfile?.is_pro || false
-            const amount = isPro ? 200 : 100 // Hardcoded or import from XP_REWARDS if accessible
+            const isPro = existingProfile?.is_pro ?? false
+            const amount = applyProRewardMultiplier(XP_REWARDS.PROFILE_CREATED, isPro)
+            const reason = formatRewardReason('Welcome to Say! 🎉', isPro)
 
             await supabase.rpc('add_xp', {
                 p_user_id: user.id,
                 p_amount: amount,
-                p_reason: isPro ? 'Welcome to Say! 🎉 (Pro Bonus)' : 'Welcome to Say! 🎉',
+                p_reason: reason,
                 p_metadata: { action: 'profile_created', username }
             })
+            xpAwarded = amount
         } catch (xpError) {
             console.error("XP Award Error:", xpError)
         }
@@ -102,7 +109,7 @@ export async function setupProfile(username: string) {
     revalidatePath('/', 'layout')
     revalidatePath('/dashboard')
 
-    return { success: true }
+    return { success: true, xpAwarded }
 }
 
 export async function updateProfile(state: any, formData: FormData) {

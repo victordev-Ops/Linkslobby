@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import webPush from "web-push";
 import { createClient } from "@supabase/supabase-js";
+import {
+  XP_REWARDS,
+  applyProRewardMultiplier,
+  formatRewardReason,
+} from "@/hooks/xp";
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,11 +71,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Profile not found" }, { status: 404 });
         }
 
-        // Award XP for receiving a message
+        // Award XP for receiving a message (single source: XP_REWARDS.MESSAGE_RECEIVED)
         try {
-            const isPro = profile.is_pro || false;
-            const xpAmount = isPro ? 4 : 2; // 2 XP normally, 4 for pro
-            const xpReason = isPro ? 'Message Received (2x Pro Bonus)' : 'Message Received';
+            const isPro = profile.is_pro ?? false;
+            const xpAmount = applyProRewardMultiplier(XP_REWARDS.MESSAGE_RECEIVED, isPro);
+            const xpReason = formatRewardReason('Message Received', isPro);
 
             await supabaseAdmin.rpc('add_xp', {
                 p_user_id: record.profile_id,
