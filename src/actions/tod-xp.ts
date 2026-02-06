@@ -134,7 +134,20 @@ export async function joinLobbyAction(lobbyId: string, isPrivate: boolean) {
 
             if (lobby && lobby.host_id) {
                 // Check if host is pro (for bonus)
-                const { data: hostProfile } = await supabase
+                // Use admin client to award XP to host
+                const adminClient = require('@supabase/supabase-js').createClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+                    {
+                        auth: {
+                            autoRefreshToken: false,
+                            persistSession: false
+                        }
+                    }
+                )
+
+                // Check if host is pro using admin client (bypasses RLS)
+                const { data: hostProfile } = await adminClient
                     .from('profiles')
                     .select('is_pro')
                     .eq('id', lobby.host_id)
