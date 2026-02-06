@@ -41,8 +41,11 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
           },
           (payload) => {
             const newRecord = payload.new as { amount: number, reason: string, type: 'earn' | 'spend' }
+            console.log('📊 XP Transaction detected:', newRecord)
             // Show notifications for all XP events (both earning and spending)
+            // Amount is always positive in the database, type indicates earn/spend
             if (newRecord.amount > 0) {
+              console.log('🔔 Showing XP notification:', { amount: newRecord.amount, reason: newRecord.reason, type: newRecord.type })
               showXPNotification(newRecord.amount, newRecord.reason, newRecord.type)
             }
           }
@@ -77,10 +80,12 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
                   .single()
                 
                 if (transactions) {
+                  console.log('🔔 Profile update - showing notification from transaction:', transactions)
                   showXPNotification(transactions.amount, transactions.reason, transactions.type)
                 } else {
                   // Fallback if transaction not found - determine type from diff
                   const type = diff > 0 ? 'earn' : 'spend'
+                  console.log('🔔 Profile update - showing fallback notification:', { diff, type })
                   showXPNotification(Math.abs(diff), diff > 0 ? 'Stars Earned' : 'Stars Spent', type)
                 }
               }

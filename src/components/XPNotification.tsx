@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles, Coins } from 'lucide-react'
 
@@ -46,8 +47,14 @@ const Particle = ({ delay, isEarning }: { delay: number; isEarning: boolean }) =
 }
 
 export function XPNotificationToast({ show, amount, reason, type, onComplete }: XPNotificationProps) {
+  const [mounted, setMounted] = useState(false)
   const isEarning = type === 'earn'
   const displayAmount = Math.abs(amount)
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   useEffect(() => {
     if (show && onComplete) {
       const timer = setTimeout(onComplete, 5000)
@@ -55,7 +62,14 @@ export function XPNotificationToast({ show, amount, reason, type, onComplete }: 
     }
   }, [show, onComplete])
 
-  return (
+  // Debug logging
+  useEffect(() => {
+    if (show) {
+      console.log('🎉 XP Notification:', { amount, reason, type, isEarning })
+    }
+  }, [show, amount, reason, type, isEarning])
+
+  const notificationContent = (
     <AnimatePresence>
       {show && (
         <motion.div
@@ -78,7 +92,7 @@ export function XPNotificationToast({ show, amount, reason, type, onComplete }: 
             damping: 20,
             mass: 0.8
           }}
-          className="fixed top-16 right-4 z-[9999] pointer-events-none max-w-sm"
+          className="fixed top-16 right-4 z-[99999] pointer-events-none max-w-sm"
           style={{ fontFamily: 'Roboto, sans-serif', perspective: '1000px' }}
         >
           <div className="relative">
@@ -246,6 +260,11 @@ export function XPNotificationToast({ show, amount, reason, type, onComplete }: 
       )}
     </AnimatePresence>
   )
+
+  // Render in portal to escape any stacking contexts
+  if (!mounted) return null
+  
+  return createPortal(notificationContent, document.body)
 }
 
 // Global XP notification manager
@@ -254,6 +273,7 @@ let currentNotification: XPNotification | null = null
 let listeners: Array<(notification: XPNotification | null) => void> = []
 
 export function showXPNotification(amount: number, reason: string, type: 'earn' | 'spend' = 'earn') {
+  console.log('🎯 showXPNotification called:', { amount, reason, type })
   const notification: XPNotification = {
     id: Math.random().toString(36).substr(2, 9),
     amount: Math.abs(amount),
@@ -262,6 +282,7 @@ export function showXPNotification(amount: number, reason: string, type: 'earn' 
   }
 
   notificationQueue.push(notification)
+  console.log('📋 Notification queue length:', notificationQueue.length)
   processQueue()
 }
 

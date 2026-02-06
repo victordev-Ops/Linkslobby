@@ -27,12 +27,22 @@ export async function revealSenderHint(messageId: string, isPro: boolean = false
         })
 
         if (xpError) {
+            console.error('XP spend error:', xpError)
             // Handle "insufficient funds" or other DB errors
-            if (xpError.message.includes('Insufficient')) {
+            if (xpError.message.includes('Insufficient') || xpError.message.includes('insufficient')) {
                 return { success: false, message: `Need ${cost} XP to reveal hint` }
             }
             throw xpError
         }
+
+        // Verify XP was actually spent
+        if (!xpResult || (xpResult as any).success === false) {
+            const errorMsg = (xpResult as any)?.error || 'Failed to spend XP'
+            console.error('XP spend failed:', errorMsg)
+            return { success: false, message: errorMsg.includes('Insufficient') ? `Need ${cost} XP to reveal hint` : 'Failed to spend XP' }
+        }
+
+        console.log('✅ XP spent successfully:', xpResult)
 
         // 2. Fetch Hint (Logic depends on how hints are stored/generated)
         // For now, we'll return a placeholder or partial data since implementation details of hints weren't provided.
