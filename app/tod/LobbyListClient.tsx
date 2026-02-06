@@ -117,6 +117,21 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             .select('id, username')
                             .in('id', hostIds);
 
+                        const lobbyIds = joinedData.map(d => (d.tod_lobbies as any)?.id).filter(Boolean);
+                        let participantCounts: Record<string, number> = {};
+                        
+                        if (lobbyIds.length > 0) {
+                            const { data: participantData } = await supabase
+                                .from('tod_participants')
+                                .select('lobby_id')
+                                .in('lobby_id', lobbyIds);
+                            
+                            participantCounts = (participantData || []).reduce((acc, p) => {
+                                acc[p.lobby_id] = (acc[p.lobby_id] || 0) + 1;
+                                return acc;
+                            }, {} as Record<string, number>);
+                        }
+
                         const formattedJoined = joinedData.map(d => {
                             const lobby = d.tod_lobbies as any;
                             if (!lobby) return null;
@@ -125,7 +140,8 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                 ...lobby,
                                 host_profile: hostProfile ? { username: hostProfile.username } : undefined,
                                 user_status: d.status,
-                                is_participant: true
+                                is_participant: true,
+                                participant_count: participantCounts[lobby.id] || 0
                             };
                         }).filter(Boolean) as Lobby[];
 
@@ -161,10 +177,29 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
                 const { data, error } = await query;
                 if (error) throw error;
+                
+                // Fetch participant counts for all lobbies
+                const lobbyIds = data?.map(l => l.id) || [];
+                let participantCounts: Record<string, number> = {};
+                
+                if (lobbyIds.length > 0) {
+                    const { data: participantData } = await supabase
+                        .from('tod_participants')
+                        .select('lobby_id')
+                        .in('lobby_id', lobbyIds);
+                    
+                    // Count participants per lobby
+                    participantCounts = (participantData || []).reduce((acc, p) => {
+                        acc[p.lobby_id] = (acc[p.lobby_id] || 0) + 1;
+                        return acc;
+                    }, {} as Record<string, number>);
+                }
+                
                 return data?.map(l => ({
                     ...l,
                     host_profile: (l as any).profiles,
-                    is_participant: false
+                    is_participant: false,
+                    participant_count: participantCounts[l.id] || 0
                 })) || [];
             };
 
@@ -197,7 +232,8 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
     useEffect(() => {
         const subscriptionTimer = setTimeout(() => {
-            const channel = supabase
+            // Subscribe to lobby changes
+            const lobbyChannel = supabase
                 .channel('lobbies_list_realtime')
                 .on('postgres_changes', {
                     event: '*',
@@ -208,8 +244,21 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 })
                 .subscribe();
 
+            // Subscribe to participant changes to update counts in real-time
+            const participantChannel = supabase
+                .channel('participants_list_realtime')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'tod_participants'
+                }, () => {
+                    fetchLobbies();
+                })
+                .subscribe();
+
             return () => {
-                supabase.removeChannel(channel);
+                supabase.removeChannel(lobbyChannel);
+                supabase.removeChannel(participantChannel);
             };
         }, 1500);
 

@@ -78,7 +78,7 @@ export function XPNotificationToast({ show, amount, reason, type, onComplete }: 
             damping: 20,
             mass: 0.8
           }}
-          className="fixed top-16 right-4 z-[100] pointer-events-none max-w-sm"
+          className="fixed top-16 right-4 z-[9999] pointer-events-none max-w-sm"
           style={{ fontFamily: 'Roboto, sans-serif', perspective: '1000px' }}
         >
           <div className="relative">
