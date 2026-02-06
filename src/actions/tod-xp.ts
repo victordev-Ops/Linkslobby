@@ -89,3 +89,103 @@ export async function penalizeSystemModeSelection(lobbyId: string) {
         console.error('Penalize system mode error:', error)
     }
 }
+
+export async function joinLobbyAction(lobbyId: string, isPrivate: boolean) {
+    const supabase = await createSupabaseServerClient()
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error("User not authenticated")
+
+        // 1. Check if already joined
+        const { data: existing } = await supabase
+            .from('tod_participants')
+            .select('status')
+            .eq('lobby_id', lobbyId)
+            .eq('user_id', user.id)
+            .maybeSingle()
+
+        if (existing) {
+            return { success: true, status: existing.status, message: 'Already joined' }
+        }
+
+        // 2. Determine initial status
+        const initialStatus = isPrivate ? 'pending' : 'joined'
+
+        // 3. Insert participant
+        const { error: joinError } = await supabase
+            .from('tod_participants')
+            .insert({
+                lobby_id: lobbyId,
+                user_id: user.id,
+                status: initialStatus
+            })
+
+        if (joinError) throw joinError
+
+        // 4. If public lobby, award XP to HOST
+        if (!isPrivate && initialStatus === 'joined') {
+            // Get lobby host
+            const { data: lobby } = await supabase
+                .from('tod_lobbies')
+                .select('host_id')
+                .eq('id', lobbyId)
+                .single()
+
+            if (lobby && lobby.host_id) {
+                // Check if host is pro (for bonus)
+                const { data: hostProfile } = await supabase
+                    .from('profiles')
+                    .select('is_pro')
+                    .eq('id', lobby.host_id)
+                    .single()
+
+                const isPro = hostProfile?.is_pro ?? false
+
+                // Use admin client to award XP to host
+                const adminClient = require('@supabase/supabase-js').createClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+                    {
+                        auth: {
+                            autoRefreshToken: false,
+                            persistSession: false
+                        }
+                    }
+                )
+
+                // Import XP constants needed (re-defining simply here to avoid importing client-heavy file if needed, 
+                // but better to import if possible. Let's try importing `XP_REWARDS` from hooks/xp first if it works, 
+                // but that file has 'createClient'. Safe to import constants though? 
+                // Actually `hooks/xp.ts` imports `createClient` at top level. That might break server action if it tries to use browser client.
+                // Let's safe-guard by just using the value or importing if safe. 
+                // hooks/xp.ts:1: import { createClient } from '@/lib/supabase/client' -> might be issue.
+                // I will hardcode the reward value here to be safe and avoid "client component" error or similar in server action.
+                // Better yet, I'll assume 5 XP as per previous code.
+                /* 
+                   XP_REWARDS.TOD_PARTICIPANT_JOINED = 5
+                */
+
+                const rewardAmount = 5 // XP_REWARDS.TOD_PARTICIPANT_JOINED
+                const finalAmount = isPro ? rewardAmount * 2 : rewardAmount
+                const reason = isPro ? 'Player joined your lobby (2x Pro Bonus)' : 'Player joined your lobby'
+
+                await adminClient.rpc('add_xp', {
+                    p_user_id: lobby.host_id,
+                    p_amount: finalAmount,
+                    p_reason: reason,
+                    // p_metadata: { lobby_id: lobbyId, joined_user_id: user.id } 
+                    // The signature in previous file used p_metadata. Let's keep it if RPC supports it.
+                    // The original earnXP used p_metadata.
+                    p_metadata: { lobby_id: lobbyId, joined_user_id: user.id }
+                })
+            }
+        }
+
+        return { success: true, status: initialStatus }
+
+    } catch (error: any) {
+        console.error('Join lobby error:', error)
+        return { success: false, error: error.message }
+    }
+}

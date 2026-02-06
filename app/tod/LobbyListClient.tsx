@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check, ChevronLeft, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
-import { earnXP, XP_REWARDS } from '@/hooks/xp';
 
 export interface Lobby {
     id: string;
@@ -120,13 +119,13 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
                         const lobbyIds = joinedData.map(d => (d.tod_lobbies as any)?.id).filter(Boolean);
                         let participantCounts: Record<string, number> = {};
-                        
+
                         if (lobbyIds.length > 0) {
                             const { data: participantData } = await supabase
                                 .from('tod_participants')
                                 .select('lobby_id')
                                 .in('lobby_id', lobbyIds);
-                            
+
                             participantCounts = (participantData || []).reduce((acc, p) => {
                                 acc[p.lobby_id] = (acc[p.lobby_id] || 0) + 1;
                                 return acc;
@@ -178,24 +177,24 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
                 const { data, error } = await query;
                 if (error) throw error;
-                
+
                 // Fetch participant counts for all lobbies
                 const lobbyIds = data?.map(l => l.id) || [];
                 let participantCounts: Record<string, number> = {};
-                
+
                 if (lobbyIds.length > 0) {
                     const { data: participantData } = await supabase
                         .from('tod_participants')
                         .select('lobby_id')
                         .in('lobby_id', lobbyIds);
-                    
+
                     // Count participants per lobby
                     participantCounts = (participantData || []).reduce((acc, p) => {
                         acc[p.lobby_id] = (acc[p.lobby_id] || 0) + 1;
                         return acc;
                     }, {} as Record<string, number>);
                 }
-                
+
                 return data?.map(l => ({
                     ...l,
                     host_profile: (l as any).profiles,
@@ -343,65 +342,40 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
         setJoiningLobbyId(lobby.id);
         try {
-            const { data: existing } = await supabase
-                .from('tod_participants')
-                .select('id, status')
-                .eq('lobby_id', lobby.id)
-                .eq('user_id', effectiveUserId)
-                .maybeSingle();
+            // Use server action for secure joining and host rewards
+            const { joinLobbyAction } = await import('@/actions/tod-xp');
+            const result = await joinLobbyAction(lobby.id, lobby.is_private || false);
 
-            if (!existing) {
-                const initialStatus = lobby.is_private ? 'pending' : 'joined';
-
-                const { error } = await supabase
-                    .from('tod_participants')
-                    .insert({
-                        lobby_id: lobby.id,
-                        user_id: effectiveUserId,
-                        status: initialStatus
-                    });
-
-                if (error) throw error;
-
-                // Award XP when joining a public lobby (client-side join)
-                if (!lobby.is_private && initialStatus === 'joined') {
-                    try {
-                        // Get user's pro status
-                        const { data: profile } = await supabase
-                            .from('profiles')
-                            .select('is_pro')
-                            .eq('id', effectiveUserId)
-                            .single();
-
-                        const isPro = profile?.is_pro ?? false;
-                        await earnXP(XP_REWARDS.TOD_PARTICIPANT_JOINED, 'Joined Public Lobby', { lobby_id: lobby.id, is_public: true }, true, isPro);
-                    } catch (xpErr) {
-                        console.error('Error awarding XP for joining lobby:', xpErr);
-                        // Don't block the join flow if XP fails
-                    }
-                }
-
-                if (lobby.is_private) {
-                    toast.success('Request sent! Waiting for host approval ⏳');
-                    fetchLobbies();
-                    setJoiningLobbyId(null);
-                    return;
-                }
-            } else if (existing.status === 'pending') {
-                toast.info('Your request is still pending approval ⏳');
-                setJoiningLobbyId(null);
-                return;
-            } else if (existing.status === 'rejected') {
-                toast.error('Your request to join this lobby was rejected 😔');
-                setJoiningLobbyId(null);
-                return;
-            } else if (existing.status === 'banned') {
-                toast.error('You have been banned from this lobby 🚫');
+            if (!result.success) {
+                toast.error(result.message || 'Failed to join lobby');
                 setJoiningLobbyId(null);
                 return;
             }
 
-            router.push(`/tod/${lobby.slug || lobby.id}`);
+            const status = result.status;
+
+            if (status === 'joined') {
+                // If it was public, the server action already awarded XP to the host
+                if (lobby.is_private) {
+                    // Should not happen if logic is correct, but just in case
+                }
+                router.push(`/tod/${lobby.slug || lobby.id}`);
+            } else if (status === 'pending') {
+                toast.success('Request sent! Waiting for host approval ⏳');
+                fetchLobbies(); // Refresh to show pending status
+                setJoiningLobbyId(null);
+            } else if (status === 'rejected') {
+                toast.error('Your request to join this lobby was rejected 😔');
+                setJoiningLobbyId(null);
+            } else if (status === 'banned') {
+                toast.error('You have been banned from this lobby 🚫');
+                setJoiningLobbyId(null);
+            } else {
+                // Fallback
+                toast.error('Unknown status');
+                setJoiningLobbyId(null);
+            }
+
         } catch (error: any) {
             console.error('Error joining lobby:', error);
             toast.error('Failed to join lobby');
