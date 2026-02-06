@@ -41,9 +41,9 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
           },
           (payload) => {
             const newRecord = payload.new as { amount: number, reason: string, type: 'earn' | 'spend' }
-            // Only show notifications for earning XP (positive amounts)
-            if (newRecord.type === 'earn' && newRecord.amount > 0) {
-              showXPNotification(newRecord.amount, newRecord.reason)
+            // Show notifications for all XP events (both earning and spending)
+            if (newRecord.amount > 0) {
+              showXPNotification(newRecord.amount, newRecord.reason, newRecord.type)
             }
           }
         )
@@ -65,23 +65,23 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
               const newBalance = payload.new.xp_balance as number
               const diff = newBalance - lastBalance
               
-              // Only show notification if XP increased significantly (to avoid spam)
-              if (diff > 0 && diff >= 2) {
-                // Fetch the most recent transaction to get the reason
+              // Show notification for any significant change (to avoid spam from tiny updates)
+              if (Math.abs(diff) >= 2) {
+                // Fetch the most recent transaction to get the reason and type
                 const { data: transactions } = await supabase
                   .from('xp_transactions')
-                  .select('amount, reason')
+                  .select('amount, reason, type')
                   .eq('user_id', user.id)
-                  .eq('type', 'earn')
                   .order('created_at', { ascending: false })
                   .limit(1)
                   .single()
                 
                 if (transactions) {
-                  showXPNotification(transactions.amount, transactions.reason)
+                  showXPNotification(transactions.amount, transactions.reason, transactions.type)
                 } else {
-                  // Fallback if transaction not found
-                  showXPNotification(diff, 'Stars Earned')
+                  // Fallback if transaction not found - determine type from diff
+                  const type = diff > 0 ? 'earn' : 'spend'
+                  showXPNotification(Math.abs(diff), diff > 0 ? 'Stars Earned' : 'Stars Spent', type)
                 }
               }
               
@@ -107,6 +107,7 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
         show={!!notification}
         amount={notification?.amount || 0}
         reason={notification?.reason || ''}
+        type={notification?.type || 'earn'}
       />
     </>
   )
