@@ -17,32 +17,23 @@ export async function checkDailyLogin(isPro: boolean = false): Promise<DailyLogi
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { success: false, awarded: false, message: 'Not authenticated' }
 
-        // Get profile to check last login date
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('last_login_date')
-            .eq('id', user.id)
-            .single()
-
-        if (profileError) throw profileError
-
         const today = new Date().toISOString().split('T')[0]
 
-        // Check if already logged in today
-        if (profile.last_login_date === today) {
+        // Check if already claimed today by looking at XP transactions
+        const { data: existingClaim } = await supabase
+            .from('xp_transactions')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('metadata->>type', 'daily_login')
+            .eq('metadata->>date', today)
+            .maybeSingle()
+
+        if (existingClaim) {
             return { success: true, awarded: false, message: 'Already claimed today' }
         }
 
         const amount = applyProRewardMultiplier(XP_REWARDS.DAILY_LOGIN, isPro)
         const reason = formatRewardReason('Daily Login', isPro)
-
-        // 1. Update last_login_date
-        const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ last_login_date: today })
-            .eq('id', user.id)
-
-        if (updateError) throw updateError
 
         // 2. Add XP
         // Note: detailed transaction logging happens in the DB trigger/RPC usually, 

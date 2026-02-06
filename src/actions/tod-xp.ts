@@ -156,16 +156,7 @@ export async function joinLobbyAction(lobbyId: string, isPrivate: boolean) {
                 const isPro = hostProfile?.is_pro ?? false
 
                 // Use admin client to award XP to host
-                const adminClient = require('@supabase/supabase-js').createClient(
-                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-                    {
-                        auth: {
-                            autoRefreshToken: false,
-                            persistSession: false
-                        }
-                    }
-                )
+                // (adminClient is already initialized above for the Pro check)
 
                 // Import XP constants needed (re-defining simply here to avoid importing client-heavy file if needed, 
                 // but better to import if possible. Let's try importing `XP_REWARDS` from hooks/xp first if it works, 
