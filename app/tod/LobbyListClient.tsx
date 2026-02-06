@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check, ChevronLeft, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
+import { earnXP, XP_REWARDS } from '@/hooks/xp';
 
 export interface Lobby {
     id: string;
@@ -361,6 +362,24 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                     });
 
                 if (error) throw error;
+
+                // Award XP when joining a public lobby (client-side join)
+                if (!lobby.is_private && initialStatus === 'joined') {
+                    try {
+                        // Get user's pro status
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('is_pro')
+                            .eq('id', effectiveUserId)
+                            .single();
+
+                        const isPro = profile?.is_pro ?? false;
+                        await earnXP(XP_REWARDS.TOD_PARTICIPANT_JOINED, 'Joined Public Lobby', { lobby_id: lobby.id, is_public: true }, true, isPro);
+                    } catch (xpErr) {
+                        console.error('Error awarding XP for joining lobby:', xpErr);
+                        // Don't block the join flow if XP fails
+                    }
+                }
 
                 if (lobby.is_private) {
                     toast.success('Request sent! Waiting for host approval ⏳');

@@ -62,17 +62,20 @@ export function XPNotificationToast({ show, amount, reason, type, onComplete }: 
     }
   }, [show, onComplete])
 
-  // Debug logging
+  // Debug logging (only in development)
   useEffect(() => {
-    if (show) {
+    if (show && process.env.NODE_ENV === 'development') {
       console.log('🎉 XP Notification:', { amount, reason, type, isEarning })
     }
   }, [show, amount, reason, type, isEarning])
 
+  if (!mounted) return null
+
   const notificationContent = (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {show && (
         <motion.div
+          key={`notification-${amount}-${reason}`}
           initial={{ opacity: 0, y: -100, scale: 0.5, rotateX: -90 }}
           animate={{ 
             opacity: 1, 
@@ -262,8 +265,6 @@ export function XPNotificationToast({ show, amount, reason, type, onComplete }: 
   )
 
   // Render in portal to escape any stacking contexts
-  if (!mounted) return null
-  
   return createPortal(notificationContent, document.body)
 }
 
@@ -273,7 +274,9 @@ let currentNotification: XPNotification | null = null
 let listeners: Array<(notification: XPNotification | null) => void> = []
 
 export function showXPNotification(amount: number, reason: string, type: 'earn' | 'spend' = 'earn') {
-  console.log('🎯 showXPNotification called:', { amount, reason, type })
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🎯 showXPNotification called:', { amount, reason, type })
+  }
   const notification: XPNotification = {
     id: Math.random().toString(36).substr(2, 9),
     amount: Math.abs(amount),
@@ -282,7 +285,9 @@ export function showXPNotification(amount: number, reason: string, type: 'earn' 
   }
 
   notificationQueue.push(notification)
-  console.log('📋 Notification queue length:', notificationQueue.length)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📋 Notification queue length:', notificationQueue.length)
+  }
   processQueue()
 }
 
@@ -290,9 +295,15 @@ function processQueue() {
   if (currentNotification || notificationQueue.length === 0) return
   
   currentNotification = notificationQueue.shift() || null
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📬 Processing notification:', currentNotification)
+  }
   notifyListeners()
 
   setTimeout(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('⏰ Notification timeout, clearing:', currentNotification)
+    }
     currentNotification = null
     notifyListeners()
     processQueue()

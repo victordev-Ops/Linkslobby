@@ -40,17 +40,34 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
-            const newRecord = payload.new as { amount: number, reason: string, type: 'earn' | 'spend' }
-            console.log('📊 XP Transaction detected:', newRecord)
-            // Show notifications for all XP events (both earning and spending)
-            // Amount is always positive in the database, type indicates earn/spend
-            if (newRecord.amount > 0) {
-              console.log('🔔 Showing XP notification:', { amount: newRecord.amount, reason: newRecord.reason, type: newRecord.type })
-              showXPNotification(newRecord.amount, newRecord.reason, newRecord.type)
+            try {
+              const newRecord = payload.new as { amount: number, reason: string, type: 'earn' | 'spend' }
+              if (process.env.NODE_ENV === 'development') {
+                console.log('📊 XP Transaction detected:', newRecord)
+              }
+              // Show notifications for all XP events (both earning and spending)
+              // Amount is always positive in the database, type indicates earn/spend
+              if (newRecord && newRecord.amount > 0 && newRecord.reason) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('🔔 Showing XP notification:', { amount: newRecord.amount, reason: newRecord.reason, type: newRecord.type || 'earn' })
+                }
+                showXPNotification(newRecord.amount, newRecord.reason, newRecord.type || 'earn')
+              }
+            } catch (error) {
+              console.error('Error processing XP transaction notification:', error)
             }
           }
         )
-        .subscribe()
+        .subscribe((status) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📡 Transaction subscription status:', status)
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Successfully subscribed to XP transactions')
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('❌ Failed to subscribe to XP transactions')
+            }
+          }
+        })
 
       // Also listen to profile updates as a fallback (for server-side XP changes)
       profileChannel = supabase
@@ -80,12 +97,16 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
                   .single()
                 
                 if (transactions) {
-                  console.log('🔔 Profile update - showing notification from transaction:', transactions)
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('🔔 Profile update - showing notification from transaction:', transactions)
+                  }
                   showXPNotification(transactions.amount, transactions.reason, transactions.type)
                 } else {
                   // Fallback if transaction not found - determine type from diff
                   const type = diff > 0 ? 'earn' : 'spend'
-                  console.log('🔔 Profile update - showing fallback notification:', { diff, type })
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('🔔 Profile update - showing fallback notification:', { diff, type })
+                  }
                   showXPNotification(Math.abs(diff), diff > 0 ? 'Stars Earned' : 'Stars Spent', type)
                 }
               }
@@ -94,7 +115,16 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
             }
           }
         )
-        .subscribe()
+        .subscribe((status) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📡 Profile subscription status:', status)
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Successfully subscribed to profile updates')
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('❌ Failed to subscribe to profile updates')
+            }
+          }
+        })
     }
 
     setupSubscription()

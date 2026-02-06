@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import TODGameClient from "@/components/tod/TODGameClient";
+import { XP_REWARDS, applyProRewardMultiplier, formatRewardReason } from "@/hooks/xp";
 
 // Next.js 15+ - params is a Promise
 export default async function TODGamePage({
@@ -113,6 +114,35 @@ export default async function TODGamePage({
 
       if (joinError) {
         console.error("Error joining lobby:", joinError.message);
+      } else {
+        // Award XP when user successfully joins a public lobby
+        if (initialStatus === 'joined' && !lobbyInfo?.is_private) {
+          try {
+            // Get user's pro status
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('is_pro')
+              .eq('id', user.id)
+              .single();
+
+            const isPro = profile?.is_pro ?? false;
+            const amount = applyProRewardMultiplier(XP_REWARDS.TOD_PARTICIPANT_JOINED, isPro);
+            const reason = formatRewardReason('Joined Public Lobby', isPro);
+
+            const { error: xpError } = await supabase.rpc('add_xp', {
+              p_user_id: user.id,
+              p_amount: amount,
+              p_reason: reason,
+              p_metadata: { type: 'tod_join', lobby_id: lobbyId, is_public: true }
+            });
+
+            if (xpError) {
+              console.error("Failed to award XP for joining lobby:", xpError);
+            }
+          } catch (xpErr) {
+            console.error("Error awarding XP:", xpErr);
+          }
+        }
       }
     }
   }
