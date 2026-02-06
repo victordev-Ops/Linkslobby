@@ -42,39 +42,102 @@ export default function XPBalance() {
   const supabase = createClient()
 
   useEffect(() => {
-    fetchBalance()
+    let mounted = true
+    let profileChannel: ReturnType<typeof supabase.channel> | null = null
+    let transactionChannel: ReturnType<typeof supabase.channel> | null = null
 
-    // Subscribe to XP changes
-    const channel = supabase
-      .channel('xp-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${supabase.auth.getUser().then(u => u.data.user?.id)}`
-        },
-        (payload) => {
-          if (payload.new && 'xp_balance' in payload.new) {
-            const newBalance = payload.new.xp_balance as number
-            setPrevBalance(balance)
-            setBalance(newBalance)
+    const setupSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || !mounted) return
 
-            // Trigger pulse animation
-            if (newBalance > balance) {
-              setShouldPulse(true)
-              setTimeout(() => setShouldPulse(false), 1000)
+      // Subscribe to XP changes on profiles table
+      profileChannel = supabase
+        .channel(`xp-changes-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${user.id}`
+          },
+          (payload) => {
+            if (!mounted) return
+            if (payload.new && 'xp_balance' in payload.new) {
+              const newBalance = payload.new.xp_balance as number
+              const oldBalance = payload.old?.xp_balance as number
+              
+              if (oldBalance !== undefined) {
+                setPrevBalance(oldBalance)
+                setBalance(newBalance)
+
+                // Trigger pulse animation for both increases and decreases
+                if (newBalance !== oldBalance) {
+                  setShouldPulse(true)
+                  setTimeout(() => setShouldPulse(false), 1000)
+                }
+              } else {
+                // Fallback: use functional update if old balance not available
+                setBalance(currentBalance => {
+                  setPrevBalance(currentBalance)
+                  if (newBalance !== currentBalance) {
+                    setShouldPulse(true)
+                    setTimeout(() => setShouldPulse(false), 1000)
+                  }
+                  return newBalance
+                })
+              }
             }
           }
-        }
-      )
-      .subscribe()
+        )
+        .subscribe()
+
+      // Also subscribe to XP transactions for better real-time updates
+      transactionChannel = supabase
+        .channel(`xp-transactions-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'xp_transactions',
+            filter: `user_id=eq.${user.id}`
+          },
+          async () => {
+            if (!mounted) return
+            // Refresh balance when a transaction is created
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('xp_balance')
+              .eq('id', user.id)
+              .single()
+            
+            if (profile) {
+              const newBalance = profile.xp_balance || 0
+              // Use functional update to get current balance
+              setBalance(currentBalance => {
+                setPrevBalance(currentBalance)
+                if (newBalance !== currentBalance) {
+                  setShouldPulse(true)
+                  setTimeout(() => setShouldPulse(false), 1000)
+                }
+                return newBalance
+              })
+            }
+          }
+        )
+        .subscribe()
+    }
+
+    fetchBalance()
+    setupSubscription()
 
     return () => {
-      supabase.removeChannel(channel)
+      mounted = false
+      if (profileChannel) supabase.removeChannel(profileChannel)
+      if (transactionChannel) supabase.removeChannel(transactionChannel)
     }
-  }, [balance])
+  }, []) // Empty dependency array - only run once on mount
 
   const fetchBalance = async () => {
     try {
