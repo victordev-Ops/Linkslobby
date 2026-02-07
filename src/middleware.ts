@@ -46,6 +46,18 @@ export async function middleware(request: NextRequest) {
 
   // 3. Logic: Redirect logged-in users away from Login/Signup to Dashboard
   if (user && (pathname === '/login' || pathname === '/signup')) {
+    // Check if profile is complete before sending to dashboard
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('username, slug')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    // If profile incomplete, redirect to setup
+    if (!profile || !profile.username || !profile.slug) {
+      return NextResponse.redirect(new URL('/auth/setup', request.url))
+    }
+
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

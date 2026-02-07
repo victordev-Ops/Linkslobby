@@ -98,7 +98,7 @@ export function formatRewardReason(reason: string, isPro: boolean): string {
  */
 export const XP_REWARDS = {
   PROFILE_CREATED: 100,
-  DAILY_LOGIN: 10,
+  DAILY_LOGIN: 5,
   TOD_PARTICIPANT_JOINED: 5,
   MESSAGE_RECEIVED: 2,           // Confession, AMA, DYKM, Anonymous
   HOT_QUESTION_RECEIVED: 5,
