@@ -328,29 +328,43 @@ export default function XPBalance() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 100, scale: 0.95 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 sm:bottom-auto sm:top-20 sm:right-4 sm:left-auto sm:w-96 max-h-[85vh] sm:max-h-[600px] bg-white dark:bg-[#1a1429] rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-white/10 z-[70] overflow-hidden flex flex-col"
+              className="fixed bottom-0 left-0 right-0 sm:bottom-auto sm:top-20 sm:right-4 sm:left-auto sm:w-96 max-h-[80vh] sm:max-h-[600px] bg-white dark:bg-[#1a1429] rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-white/10 z-[70] overflow-hidden flex flex-col"
             >
-              {/* Drag Handle (Mobile only) */}
-              <div className="w-full h-1.5 flex justify-center pt-2 pb-6 sm:hidden cursor-grab active:cursor-grabbing" onClick={() => setShowHistory(false)}>
+              {/* Drag Handle (Mobile only) - Click to close */}
+              <div
+                className="w-full flex justify-center pt-3 pb-3 sm:hidden cursor-pointer active:opacity-70"
+                onClick={() => setShowHistory(false)}
+              >
                 <div className="w-12 h-1.5 rounded-full bg-slate-200 dark:bg-white/10" />
               </div>
 
               {/* Header */}
               <div className="relative shrink-0">
                 <div className="absolute inset-0 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 opacity-10 dark:opacity-20" />
-                <div className="relative p-6 border-b border-orange-100 dark:border-white/5">
+                <div className="relative p-6 px-6 pt-2 sm:pt-6 border-b border-orange-100 dark:border-white/5">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <Star className="w-5 h-5 text-orange-500 fill-orange-500" />
                       History
                     </h3>
-                    <div className="px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20">
-                      <span className="text-xs font-bold text-orange-600 dark:text-orange-400">
-                        <AnimatedCounter value={balance} /> Stars
-                      </span>
+
+                    <div className="flex items-center gap-3">
+                      <div className="px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20">
+                        <span className="text-xs font-bold text-orange-600 dark:text-orange-400">
+                          <AnimatedCounter value={balance} /> Stars
+                        </span>
+                      </div>
+
+                      {/* Close Button */}
+                      <button
+                        onClick={() => setShowHistory(false)}
+                        className="p-1.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors sm:hidden"
+                      >
+                        <ChevronDown className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pr-8">
                     Track your earnings and spending. Earn more stars by logging in daily! 🌟
                   </p>
                 </div>
