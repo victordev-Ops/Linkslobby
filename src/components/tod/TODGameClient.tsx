@@ -4,7 +4,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2, LayoutGrid, ChevronLeft, LogOut } from "lucide-react";
+import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2, LayoutGrid, ChevronLeft, LogOut, MoreVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
@@ -25,6 +25,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [replyingTo, setReplyingTo] = useState<typeof messages[0] | null>(null);
   const [hideFinishSummary, setHideFinishSummary] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -501,40 +502,22 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
         {/* Top Header - STICKY */}
         <header className="sticky top-0 z-[100] flex-shrink-0 px-4 py-3 backdrop-blur-xl bg-slate-900/80 border-b border-white/5 shadow-lg">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => router.push('/tod')}
-                  className="flex w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white items-center justify-center transition active:scale-95"
-                  title="Back to Lobbies"
-                >
-                  <ChevronLeft size={18} />
-                </button>
-
-                <button
-                  onClick={handleLeaveLobby}
-                  className={`flex w-9 h-9 rounded-full border items-center justify-center transition active:scale-95 ${isHost
-                    ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20 text-red-400'
-                    : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-white'}`}
-                  title={isHost ? "Delete Lobby" : "Leave Lobby"}
-                >
-                  {isHost ? <Trash2 size={16} /> : <LogOut size={16} />}
-                </button>
-              </div>
-
+          <div className="flex items-center justify-between gap-3 relative">
+            {/* Left: Participants */}
+            <div className="flex items-center justify-start flex-1">
               <button
                 onClick={() => setShowSidebar(!showSidebar)}
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg relative"
+                className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg relative active:scale-95 transition-transform"
               >
-                <Users size={16} className="text-white" />
+                <Users size={18} className="text-white" />
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white border-2 border-slate-900">
                   {joinedParticipants.length}
                 </span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Center: Game Status */}
+            <div className="flex items-center gap-2 justify-center">
               <GameStatus
                 status={lobby.status}
                 selectedMode={lobby.selected_mode}
@@ -554,32 +537,84 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              {isHost && lobby.status === 'active' && (
-                <button
-                  onClick={handleEndGame}
-                  className="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-white text-xs font-bold hover:bg-slate-700 transition-all active:scale-95 flex items-center gap-1.5"
-                >
-                  <StopCircle size={14} />
-                  <span className="hidden sm:inline">End</span>
-                </button>
-              )}
-              {isHost && lobby.status === 'finished' && messages.length > 3 && (
-                <button
-                  onClick={handleStartGame}
-                  className="px-3 py-1.5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs font-bold hover:shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 flex items-center gap-1.5"
-                >
-                  <Play size={14} />
-                  <span className="hidden sm:inline">Play Again</span>
-                </button>
-              )}
+            {/* Right: Menu */}
+            <div className="flex items-center justify-end flex-1">
               <button
-                onClick={copyInviteLink}
-                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs font-bold hover:shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 flex items-center gap-1.5"
+                onClick={() => setShowMenu(!showMenu)}
+                className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white flex items-center justify-center transition active:scale-95"
               >
-                <UserPlus size={14} />
-                <span className="hidden sm:inline">Invite</span>
+                <MoreVertical size={20} />
               </button>
+
+              <AnimatePresence>
+                {showMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-[150] bg-transparent"
+                      onClick={() => setShowMenu(false)}
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                      className="absolute top-full right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden z-[160] flex flex-col p-1.5"
+                    >
+                      {/* Menu Items */}
+                      <button
+                        onClick={copyInviteLink}
+                        className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 rounded-xl transition-colors text-left w-full"
+                      >
+                        <UserPlus size={16} className="text-orange-400" />
+                        Invite Friends
+                      </button>
+
+                      {isHost && lobby.status === 'active' && (
+                        <button
+                          onClick={() => {
+                            handleEndGame();
+                            setShowMenu(false);
+                          }}
+                          className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 rounded-xl transition-colors text-left w-full"
+                        >
+                          <StopCircle size={16} className="text-red-400" />
+                          End Game
+                        </button>
+                      )}
+
+                      {isHost && lobby.status === 'finished' && messages.length > 3 && (
+                        <button
+                          onClick={() => {
+                            handleStartGame();
+                            setShowMenu(false);
+                          }}
+                          className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 rounded-xl transition-colors text-left w-full"
+                        >
+                          <Play size={16} className="text-green-400" />
+                          Play Again
+                        </button>
+                      )}
+
+                      <div className="h-px bg-slate-800 my-1 font-bold" />
+
+                      <button
+                        onClick={() => router.push('/tod')}
+                        className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 rounded-xl transition-colors text-left w-full"
+                      >
+                        <ChevronLeft size={16} />
+                        Back to Lobbies
+                      </button>
+
+                      <button
+                        onClick={handleLeaveLobby}
+                        className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 rounded-xl transition-colors text-left w-full"
+                      >
+                        {isHost ? <Trash2 size={16} /> : <LogOut size={16} />}
+                        {isHost ? "Delete Lobby" : "Leave Lobby"}
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
