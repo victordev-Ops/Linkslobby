@@ -2,7 +2,31 @@
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+
+export async function sendAmaQuestion(profileId: string, message: string) {
+  const supabase = await createSupabaseServerClient()
+
+  const headersList = await headers()
+  const ua = headersList.get('user-agent') || 'unknown'
+  const lang = headersList.get('accept-language') || 'unknown'
+  const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
+
+  const metadata = JSON.stringify({ ua, lang, ip, t: Date.now() })
+  const messageWithMeta = `${message}\n\n[META:${metadata}]`
+
+  const { error } = await supabase
+    .from('confessions')
+    .insert({
+      profile_id: profileId,
+      message: messageWithMeta,
+      message_type: 'ama'
+    })
+
+  if (error) throw error
+  return { success: true }
+}
 
 export async function markConfessionAsRead(id: string) {
   const supabase = await createSupabaseServerClient()

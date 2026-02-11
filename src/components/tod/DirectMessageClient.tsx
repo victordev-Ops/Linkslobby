@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Send, Loader2, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, MessageCircle, Image as ImageIcon, Camera, Plus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { sendDirectMessage } from '@/actions/direct-messages'
+import { uploadDmPhoto } from '@/actions/dm-photos'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -38,9 +39,10 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
     const router = useRouter()
     const [messages, setMessages] = useState<Message[]>([])
     const [inputText, setInputText] = useState('')
-    const [isSending, setIsSending] = useState(false)
+    const [isUploading, setIsUploading] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     // Typing State
     const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
@@ -192,11 +194,11 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
         }, 1500);
     }
 
-    const handleSend = async () => {
-        if (!inputText.trim()) return
+    const handleSend = async (overrideContent?: string) => {
+        const content = overrideContent || inputText
+        if (!content.trim()) return
 
-        const content = inputText
-        const tempId = `temp-${Date.now()}`
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
         // Optimistic Update
         const optimisticMsg: Message = {
@@ -208,14 +210,17 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
         }
 
         setMessages(prev => [...prev, optimisticMsg])
-        setInputText('')
-        setIsSending(true)
+        if (!overrideContent) setInputText('')
+
         setTimeout(scrollToBottom, 50)
 
         try {
             const result = await sendDirectMessage(targetUserId, content)
 
-            if (!result.success) {
+            if (result.success && result.id) {
+                // Update optimistic message with real ID and clear optimistic flag
+                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: result.id!, isOptimistic: false } : m))
+            } else {
                 console.error("Failed to send:", result.error)
                 toast.error("Failed to send message")
                 setMessages(prev => prev.filter(m => m.id !== tempId))
@@ -224,8 +229,38 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             console.error("Exception sending message:", err)
             toast.error("Error sending message")
             setMessages(prev => prev.filter(m => m.id !== tempId))
+        }
+    }
+
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error("Photo is too large (max 5MB)")
+            return
+        }
+
+        setIsUploading(true)
+        const toastId = toast.loading("Uploading photo...")
+
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+
+            const result = await uploadDmPhoto(formData)
+            if (result.success && result.url) {
+                toast.success("Photo uploaded!", { id: toastId })
+                // Send as a special message format
+                await handleSend(`[IMG:${result.url}]`)
+            } else {
+                toast.error(result.error || "Upload failed", { id: toastId })
+            }
+        } catch (err) {
+            toast.error("Error uploading photo", { id: toastId })
         } finally {
-            setIsSending(false)
+            setIsUploading(false)
+            if (fileInputRef.current) fileInputRef.current.value = ''
         }
     }
 
@@ -241,26 +276,33 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
     return (
         <div className="flex flex-col h-[100dvh] bg-neutral-950 text-neutral-200">
             {/* Header */}
-            <div className="flex-shrink-0 px-4 py-3 bg-neutral-900/50 backdrop-blur-md border-b border-white/5 flex items-center gap-3 sticky top-0 z-10">
-                <Link
-                    href="/tod/game"
-                    className="p-2 -ml-2 rounded-full hover:bg-white/5 transition-colors text-neutral-400 hover:text-white"
-                >
-                    <ArrowLeft size={24} />
-                </Link>
+            <div className="flex-shrink-0 px-6 py-4 bg-neutral-900/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between sticky top-0 z-10">
+                <div className="flex items-center gap-4">
+                    <Link
+                        href="/inbox"
+                        className="p-2 -ml-2 rounded-full hover:bg-white/5 transition-colors text-neutral-400 hover:text-white"
+                    >
+                        <ArrowLeft size={24} />
+                    </Link>
 
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-900/20">
-                        {targetUsername.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                        <h1 className="font-bold text-white text-base leading-tight">
-                            {targetUsername}
-                        </h1>
-                        <p className="text-xs text-green-400 font-medium flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                            Active Now
-                        </p>
+                    <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 via-indigo-500 to-blue-500 flex items-center justify-center text-white font-black text-xl shadow-lg ring-2 ring-white/10">
+                            {targetUsername.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                            <h1 className="font-black text-white text-lg tracking-tight leading-none">
+                                {targetUsername}
+                            </h1>
+                            <div className="flex items-center gap-2 mt-1.5">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                </span>
+                                <p className="text-[11px] text-neutral-400 font-bold uppercase tracking-widest">
+                                    Active Now
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -288,20 +330,33 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                             className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                         >
                             <div
-                                className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-5 py-3 text-[15px] leading-relaxed shadow-sm ${msg.isOwn
-                                    ? 'bg-purple-600 text-white rounded-br-none'
-                                    : 'bg-neutral-800 text-neutral-200 rounded-bl-none'
-                                    }`}
+                                className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-5 py-3 text-[15px] leading-relaxed shadow-md transition-all ${msg.isOwn
+                                    ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-br-none'
+                                    : 'bg-neutral-800 text-neutral-200 rounded-bl-none border border-white/5'
+                                    } ${msg.content.startsWith('[IMG:') ? 'p-1.5' : ''}`}
                             >
-                                <p>{msg.content}</p>
-                                <p className={`text-[10px] mt-1.5 text-right font-medium ${msg.isOwn ? 'text-purple-200/70' : 'text-neutral-500'}`}>
-                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {msg.content.startsWith('[IMG:') ? (
+                                    <div className="relative group">
+                                        <img
+                                            src={msg.content.match(/\[IMG:(.*)\]/)?.[1]}
+                                            alt="Shared photo"
+                                            className="rounded-xl w-full h-auto max-h-[300px] object-cover cursor-pointer"
+                                            onClick={() => window.open(msg.content.match(/\[IMG:(.*)\]/)?.[1], '_blank')}
+                                        />
+                                    </div>
+                                ) : (
+                                    <p className="font-medium">{msg.content}</p>
+                                )}
+                                <div className={`flex items-center justify-end gap-1.5 mt-2 ${msg.isOwn ? 'text-purple-200/60' : 'text-neutral-500'}`}>
+                                    <span className="text-[10px] font-bold uppercase tracking-tighter">
+                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
                                     {msg.isOwn && (
-                                        <span className="ml-1">
-                                            {msg.isOptimistic ? '🕒' : msg.isRead ? '✅' : '✓'}
+                                        <span className={`text-[11px] ml-1 font-bold ${msg.isRead ? 'text-blue-400' : ''}`}>
+                                            {msg.isOptimistic ? '...' : msg.isRead ? '✓✓' : '✓'}
                                         </span>
                                     )}
-                                </p>
+                                </div>
                             </div>
                         </div>
                     ))
@@ -322,26 +377,44 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             </div>
 
             {/* Input Area */}
-            <div className="flex-shrink-0 p-4 bg-neutral-900/80 backdrop-blur-xl border-t border-white/5 pb-8 sm:pb-4">
-                <div className="flex items-end gap-2 bg-neutral-900 rounded-[1.5rem] p-1.5 border border-white/10 focus-within:border-purple-500/50 focus-within:ring-1 focus-within:ring-purple-500/20 transition-all shadow-lg">
-                    <textarea
-                        value={inputText}
-                        onChange={(e) => {
-                            setInputText(e.target.value)
-                            handleTyping()
-                        }}
-                        onKeyDown={handleKeyPress}
-                        placeholder="Message..."
-                        className="flex-1 bg-transparent text-neutral-200 text-base resize-none focus:outline-none max-h-32 py-3 px-4 min-h-[48px] custom-scrollbar"
-                        rows={1}
-                    />
+            <div className="flex-shrink-0 p-4 bg-neutral-900 border-t border-white/5 pb-10 sm:pb-6">
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handlePhotoSelect}
+                />
+
+                <div className="flex items-end gap-2">
                     <button
-                        onClick={handleSend}
-                        disabled={!inputText.trim() || isSending}
-                        className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full disabled:opacity-50 disabled:hover:bg-purple-600 transition-all active:scale-95 shadow-lg shadow-purple-900/20 mb-0.5 mr-0.5"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="p-3.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-full transition-all active:scale-90 border border-white/5 mb-0.5"
                     >
-                        {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} className="ml-0.5" />}
+                        {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={22} />}
                     </button>
+
+                    <div className="flex-1 flex items-end gap-3 bg-neutral-800/50 rounded-[2rem] p-2 border border-white/10 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 transition-all shadow-inner">
+                        <textarea
+                            value={inputText}
+                            onChange={(e) => {
+                                setInputText(e.target.value)
+                                handleTyping()
+                            }}
+                            onKeyDown={handleKeyPress}
+                            placeholder="Message..."
+                            className="flex-1 bg-transparent text-neutral-100 text-[16px] resize-none focus:outline-none max-h-32 py-3 px-5 min-h-[48px] custom-scrollbar"
+                            rows={1}
+                        />
+                        <button
+                            onClick={() => handleSend()}
+                            disabled={!inputText.trim()}
+                            className="p-3.5 bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full disabled:opacity-30 transition-all active:scale-90 shadow-xl shadow-purple-900/40 flex-shrink-0"
+                        >
+                            <Send size={20} className="ml-0.5" />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

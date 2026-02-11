@@ -3,6 +3,24 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { XP_COSTS } from '@/hooks/xp'
 
+function getFriendlyUA(ua: string) {
+    if (!ua) return "Unknown Device"
+    if (ua.includes('iPhone')) return 'iPhone'
+    if (ua.includes('Android')) return 'Android Phone'
+    if (ua.includes('iPad')) return 'iPad'
+    if (ua.includes('Windows')) return 'Windows PC'
+    if (ua.includes('Macintosh')) return 'Mac'
+    return 'Web Browser'
+}
+
+function getFriendlyBrowser(ua: string) {
+    if (ua.includes('Firefox')) return 'Firefox'
+    if (ua.includes('Chrome')) return 'Chrome'
+    if (ua.includes('Safari') && !ua.includes('Chrome')) return 'Safari'
+    if (ua.includes('Edge')) return 'Edge'
+    return 'Browser'
+}
+
 export type RevealResult = {
     success: boolean
     message?: string
@@ -44,13 +62,39 @@ export async function revealSenderHint(messageId: string, isPro: boolean = false
 
         console.log('✅ XP spent successfully:', xpResult)
 
-        // 2. Fetch Hint (Logic depends on how hints are stored/generated)
-        // For now, we'll return a placeholder or partial data since implementation details of hints weren't provided.
-        // Assuming backend might generate a hint on the fly or fetch metadata.
+        // 2. Fetch Hint from Metadata
+        const { data: confession } = await supabase
+            .from('confessions')
+            .select('message')
+            .eq('id', messageId)
+            .single()
+
+        let hint = "Sender is using a mobile device"
+
+        if (confession?.message) {
+            const metaMatch = confession.message.match(/\[META:(.*)\]$/s)
+            if (metaMatch && metaMatch[1]) {
+                try {
+                    const meta = JSON.parse(metaMatch[1])
+                    const device = getFriendlyUA(meta.ua)
+                    const browser = getFriendlyBrowser(meta.ua)
+
+                    // Add some variability or depth for Pro users later if needed
+                    hint = `The sender is using ${device} on ${browser}`
+
+                    if (isPro) {
+                        // For Pro, we can add more info like language or approximate location if we had a geo lookup
+                        hint += `. Browser language: ${meta.lang.split(',')[0]}`
+                    }
+                } catch (e) {
+                    console.error("Failed to parse metadata", e)
+                }
+            }
+        }
 
         return {
             success: true,
-            data: { hint: "Generic Hint: Sender is using an iPhone" } // Replace with actual hint logic 
+            data: { hint }
         }
 
     } catch (error) {

@@ -1,5 +1,6 @@
 // app/confess/[slug]/page.tsx
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import ConfessionForm from './AnonymousForm'
@@ -23,11 +24,19 @@ export async function sendConfessionAction(profileId: string, formData: FormData
     return { error: 'Message must be between 1 and 1000 characters.' }
   }
 
+  const headersList = await headers()
+  const ua = headersList.get('user-agent') || 'unknown'
+  const lang = headersList.get('accept-language') || 'unknown'
+  const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
+
+  const metadata = JSON.stringify({ ua, lang, ip, t: Date.now() })
+  const messageWithMeta = `${message}\n\n[META:${metadata}]`
+
   const { error: insertError } = await supabase
     .from('confessions')
     .insert({
       profile_id: profileId,
-      message,
+      message: messageWithMeta,
       message_type: 'anonymous'
     })
 

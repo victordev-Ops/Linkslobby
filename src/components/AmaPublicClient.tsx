@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Send, Loader2, CheckCircle2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { createClient } from '@/lib/supabase/client'
+import { sendAmaQuestion } from '@/actions/confessions'
 
 const MAX_CHARS = 100 // Limit for AMA questions
 
@@ -17,23 +17,13 @@ export default function AmaPublicClient({
   const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [sent, setSent] = useState(false)
-  const supabase = createClient()
 
   const handleSubmit = async () => {
     if (!message.trim() || message.length > MAX_CHARS) return
 
     setIsSending(true)
     try {
-      const { error } = await supabase
-        .from('confessions')
-        .insert({
-          profile_id: profileId,
-          message: message.trim(),
-          is_read: false,
-          message_type: 'ama'
-        })
-
-      if (error) throw error
+      await sendAmaQuestion(profileId, message.trim())
       setSent(true)
     } catch (err) {
       console.error(err)

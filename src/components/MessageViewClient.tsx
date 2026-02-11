@@ -23,6 +23,10 @@ type Props = {
   onClose?: () => void
 }
 
+function stripMetadata(message: string): string {
+  return message.replace(/\n\n\[META:.*\]$/s, '').trim()
+}
+
 const GRADIENTS = [
   "bg-gradient-to-r from-rose-500 via-red-500 to-orange-500",
   "bg-gradient-to-r from-purple-600 to-blue-500",
@@ -185,7 +189,7 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
 
               <div className="px-8 pt-12 pb-12 min-h-[250px] flex flex-col items-center justify-center bg-white">
                 <p className={`text-center text-gray-800 font-bold break-words whitespace-pre-wrap w-full ${textSizeClass}`}>
-                  {confession.message}
+                  {stripMetadata(confession.message)}
                 </p>
                 <div className="mt-12 flex items-center gap-1.5 opacity-30">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">

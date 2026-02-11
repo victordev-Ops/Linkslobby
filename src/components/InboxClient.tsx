@@ -62,6 +62,10 @@ const formatRelativeTime = (dateString: string): string => {
   return then.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
+function stripMetadata(message: string): string {
+  return message.replace(/\n\n\[META:.*\]$/s, '').trim()
+}
+
 export default function InboxClient({
   initialConfessions,
   userId,
@@ -220,16 +224,52 @@ export default function InboxClient({
     fetchLatest(true)
   }, [fetchLatest])
 
-  const filteredConfessions = useMemo(() => {
-    if (activeTab === 'All') return confessions
-    return confessions.filter(c => {
+  const { conversations, otherMessages } = useMemo(() => {
+    const grouped = new Map<string, { latest: Confession; unreadCount: number; senderName: string }>()
+    const others: Confession[] = []
+
+    confessions.forEach(c => {
+      if (c.message_type === 'confession' && c.message.startsWith('[DM:')) {
+        const match = c.message.match(/^\[DM:([a-f0-9-]+):?([^\]]*)\]/)
+        if (match) {
+          const senderId = match[1]
+          const senderName = match[2] || 'Someone'
+          const existing = grouped.get(senderId)
+          if (!existing || new Date(c.created_at) > new Date(existing.latest.created_at)) {
+            grouped.set(senderId, {
+              latest: c,
+              unreadCount: (existing?.unreadCount || 0) + (c.is_read ? 0 : 1),
+              senderName
+            })
+          } else if (!c.is_read) {
+            existing.unreadCount++
+          }
+          return
+        }
+      }
+      others.push(c)
+    })
+
+    return {
+      conversations: Array.from(grouped.values()).sort((a, b) =>
+        new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime()
+      ),
+      otherMessages: others
+    }
+  }, [confessions])
+
+  const filteredItems = useMemo(() => {
+    if (activeTab === 'DMs') return conversations
+
+    // For other tabs, use otherMessages (which excludes DMs)
+    if (activeTab === 'All') return otherMessages
+    return otherMessages.filter(c => {
       if (activeTab === 'Confessions') return c.message_type === 'confession'
       if (activeTab === 'AMA') return c.message_type === 'ama'
       if (activeTab === 'Anonymous') return c.message_type === 'anonymous'
-      if (activeTab === 'DMs') return c.message_type === 'confession' && c.message.startsWith('[DM:');
-      return true;
+      return true
     })
-  }, [confessions, activeTab])
+  }, [activeTab, conversations, otherMessages])
 
   const openMessage = useCallback(async (confession: Confession) => {
     // 0. CHECK IF DM
@@ -305,7 +345,7 @@ export default function InboxClient({
       {/* Message List */}
       <div className="divide-y divide-gray-50 dark:divide-white/5">
         <AnimatePresence mode="popLayout" initial={false}>
-          {filteredConfessions.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <motion.div
               key="empty"
               initial={{ opacity: 0 }}
@@ -314,10 +354,61 @@ export default function InboxClient({
             >
               <EmptyState />
             </motion.div>
+          ) : activeTab === 'DMs' ? (
+            // --- CONVERSATION LIST (MESSENGER STYLE) ---
+            (filteredItems as any[]).map((conv) => {
+              const c = conv.latest
+              const rawMsg = stripMetadata(c.message).replace(/^\[DM:[a-f0-9-]+:?[^\]]*\]\s*/, '')
+              const isImage = rawMsg.startsWith('[IMG:')
+              const cleanMsg = isImage ? '📷 Photo' : rawMsg
+              const initials = conv.senderName.substring(0, 2).toUpperCase()
+              const match = c.message.match(/^\[DM:([a-f0-9-]+)/)
+              const senderId = match ? match[1] : ''
+
+              return (
+                <motion.button
+                  key={senderId}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  onClick={() => router.push(`/messages/${senderId}`)}
+                  className="w-full text-left px-6 py-5 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors active:bg-gray-100 dark:active:bg-white/10 group relative"
+                >
+                  <div className="relative flex-shrink-0">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-lg font-bold shadow-md">
+                      {initials}
+                    </div>
+                    {conv.unreadCount > 0 && (
+                      <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-blue-500 rounded-full border-2 border-white dark:border-[#0f0a1e]" />
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-0.5">
+                      <h3 className={`text-base truncate ${conv.unreadCount > 0 ? 'font-black text-gray-900 dark:text-white' : 'font-bold text-gray-700 dark:text-gray-300'}`}>
+                        {conv.senderName}
+                      </h3>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+                        {formatRelativeTime(c.created_at)}
+                      </span>
+                    </div>
+                    <p className={`text-sm truncate leading-relaxed ${conv.unreadCount > 0 ? 'text-gray-900 dark:text-gray-100 font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {cleanMsg}
+                    </p>
+                  </div>
+
+                  {conv.unreadCount > 0 && (
+                    <div className="w-2.5 h-2.5 bg-blue-500 rounded-full ml-2 flex-shrink-0" />
+                  )}
+                  <ChevronRight size={18} className="text-gray-300 dark:text-gray-600 ml-1 group-hover:translate-x-1 transition-transform" />
+                </motion.button>
+              )
+            })
           ) : (
-            filteredConfessions.map((c) => {
+            // --- STANDARD MESSAGE LIST ---
+            (filteredItems as Confession[]).map((c) => {
+              const cleanMessage = stripMetadata(c.message)
               const isSecret = !c.is_read && (c.message_type === 'confession' || c.message_type === 'anonymous')
-              const displayMessage = isSecret ? 'Locked message - Tap to reveal' : (c.message.length > 80 ? c.message.slice(0, 80) + '...' : c.message)
+              const displayMessage = isSecret ? 'Locked message - Tap to reveal' : (cleanMessage.length > 80 ? cleanMessage.slice(0, 80) + '...' : cleanMessage)
 
               return (
                 <motion.button
@@ -335,7 +426,7 @@ export default function InboxClient({
                       ? 'bg-gray-100 dark:bg-white/10 grayscale dark:grayscale-0 dark:opacity-50'
                       : 'bg-gradient-to-tr from-purple-500 to-pink-500 shadow-purple-200 dark:shadow-purple-900/20'
                       }`}>
-                      {c.message_type === 'ama' ? '❓' : (c.message_type === 'confession' && c.message.startsWith('[DM:')) ? '💬' : '💌'}
+                      {c.message_type === 'ama' ? '❓' : '💌'}
                     </div>
                     {!c.is_read && (
                       <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-[#0f0a1e]" />
@@ -373,7 +464,7 @@ export default function InboxClient({
       </div>
 
       {/* Load More Button */}
-      {hasMore && filteredConfessions.length > 0 && (
+      {hasMore && filteredItems.length > 0 && (
         <div className="px-6 py-4">
           <button
             onClick={loadMore}
