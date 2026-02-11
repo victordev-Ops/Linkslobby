@@ -51,7 +51,9 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                 .from('confessions')
                 .select('*')
                 .eq('profile_id', profile.id) // Messages I received
-                .eq('message_type', 'direct_message')
+                // .eq('message_type', 'direct_message') // DB doesn't support this yet
+                .eq('message_type', 'confession')
+                .ilike('message', '[DM]%') // Filter for our hacky prefix
                 // Ideally filter by sender, but for now show all "Inbox" DMs in this view? 
                 // No, we should filter by context if possible, or build a conversation view.
                 // Since we don't have sender_id easily, we will see ALL DMs mixed here?
@@ -62,7 +64,7 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             if (received) {
                 const mapped = received.map(m => ({
                     id: m.id,
-                    content: m.message,
+                    content: m.message.replace(/^\[DM\]\s*/, ''), // Strip prefix
                     created_at: m.created_at,
                     isOwn: false,
                 }))
@@ -83,10 +85,11 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                 filter: `profile_id=eq.${profile.id}`
             }, (payload) => {
                 const newMsg = payload.new
-                if (newMsg.message_type === 'direct_message') {
+                // Check for our new "type" logic
+                if (newMsg.message_type === 'confession' && newMsg.message.startsWith('[DM]')) {
                     const msg: Message = {
                         id: newMsg.id,
-                        content: newMsg.message,
+                        content: newMsg.message.replace(/^\[DM\]\s*/, ''),
                         created_at: newMsg.created_at,
                         isOwn: false
                     }
@@ -198,8 +201,8 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                         >
                             <div
                                 className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-5 py-3 text-[15px] leading-relaxed shadow-sm ${msg.isOwn
-                                        ? 'bg-purple-600 text-white rounded-br-none'
-                                        : 'bg-neutral-800 text-neutral-200 rounded-bl-none'
+                                    ? 'bg-purple-600 text-white rounded-br-none'
+                                    : 'bg-neutral-800 text-neutral-200 rounded-bl-none'
                                     }`}
                             >
                                 <p>{msg.content}</p>

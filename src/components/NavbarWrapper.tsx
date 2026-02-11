@@ -28,7 +28,8 @@ export default function NavbarWrapper() {
             pathname.startsWith("/confess/") ||
             pathname.startsWith("/auth/") ||
             pathname.startsWith("/tod/") ||
-            pathname.startsWith("/anonymous/");
+            pathname.startsWith("/anonymous/") ||
+            pathname.startsWith("/messages/");
 
         // Check if modal=dykm is present in query params
         const isDykmModalOpen = searchParams.get('modal') === 'dykm';

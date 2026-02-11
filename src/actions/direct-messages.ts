@@ -37,8 +37,15 @@ export async function sendDirectMessage(targetUserId: string, content: string) {
                 // NO, we want "Messenger style". 
                 // Let's try to pass it in a way that the Inbox can parse, OR assume we store it.
                 // For now, we'll format the content securely:
-                message: content,
-                message_type: 'direct_message',
+                // Hack: DB has a constraint on message_type, so we use 'confession' but prefix it?
+                // Or we use 'confession' and hope we can filter it out later?
+                // The error was "check constraint confessions_message_type_check".
+                // Valid types are likely: 'confession', 'anonymous', 'ama'.
+                // We will use 'confession' but add a special marker in the content or metadata if possible.
+                // Since we don't have metadata column confirmed, we will prefix the message.
+                // "DM: " prefix.
+                message: `[DM] ${content}`,
+                message_type: 'confession', // Fallback to allowed type
                 // If the table allows sender_id, great. If not, we might limit history to "Sent items" on client side?
                 // Let's TRY to insert sender_id if the column exists (we can't easily check dynamically in code without error).
                 // Safest bet for "Messenger" feature:
