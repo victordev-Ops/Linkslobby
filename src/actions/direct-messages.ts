@@ -44,7 +44,8 @@ export async function sendDirectMessage(targetUserId: string, content: string) {
                 // We will use 'confession' but add a special marker in the content or metadata if possible.
                 // Since we don't have metadata column confirmed, we will prefix the message.
                 // "DM: " prefix.
-                message: `[DM] ${content}`,
+                // Update: We need sender_id to reply. So we encode it: [DM:sender_id]
+                message: `[DM:${user.id}] ${content}`,
                 message_type: 'confession', // Fallback to allowed type
                 // If the table allows sender_id, great. If not, we might limit history to "Sent items" on client side?
                 // Let's TRY to insert sender_id if the column exists (we can't easily check dynamically in code without error).

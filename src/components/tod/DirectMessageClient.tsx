@@ -21,7 +21,17 @@ interface Message {
     created_at: string
     isOwn: boolean
     isOptimistic?: boolean
+    isRead?: boolean
 }
+
+// Helper to extract sender ID from message
+const getSenderId = (content: string) => {
+    const match = content.match(/^\[DM:([a-f0-9-]+)\]/);
+    return match ? match[1] : null;
+}
+
+// Helper to clean message
+const cleanMessage = (content: string) => content.replace(/^\[DM:[a-f0-9-]+\]\s*/, '');
 
 export default function DirectMessageClient({ targetUserId, targetUsername }: DirectMessageClientProps) {
     const { profile } = useAuth()
@@ -31,6 +41,10 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
     const [isSending, setIsSending] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+
+    // Typing State
+    const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
     const supabase = createClient()
 
@@ -46,29 +60,49 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
         const fetchMessages = async () => {
             setIsLoading(true)
 
-            // Fetch received messages
-            const { data: received, error } = await supabase
+            // We need to fetch both SENT (by me to them) and RECEIVED (by them to me)
+            // But 'confessions' table owner is the 'profile_id'.
+            // RECEIVED: profile_id = ME, content starts with [DM:THEM]
+            // SENT: profile_id = THEM, content starts with [DM:ME]
+
+            const { data: allMessages, error } = await supabase
                 .from('confessions')
                 .select('*')
-                .eq('profile_id', profile.id) // Messages I received
-                // .eq('message_type', 'direct_message') // DB doesn't support this yet
+                .in('profile_id', [profile.id, targetUserId])
                 .eq('message_type', 'confession')
-                .ilike('message', '[DM]%') // Filter for our hacky prefix
-                // Ideally filter by sender, but for now show all "Inbox" DMs in this view? 
-                // No, we should filter by context if possible, or build a conversation view.
-                // Since we don't have sender_id easily, we will see ALL DMs mixed here?
-                // That's a limitation we accepted in the plan.
+                .ilike('message', '[DM:%')
                 .order('created_at', { ascending: true })
-                .limit(50)
+                .limit(100)
 
-            if (received) {
-                const mapped = received.map(m => ({
+            if (allMessages) {
+                const filtered = allMessages.filter(m => {
+                    const senderId = getSenderId(m.message);
+                    const isReceived = m.profile_id === profile.id && senderId === targetUserId;
+                    const isSent = m.profile_id === targetUserId && senderId === profile.id;
+                    return isReceived || isSent;
+                }).map(m => ({
                     id: m.id,
-                    content: m.message.replace(/^\[DM\]\s*/, ''), // Strip prefix
+                    content: cleanMessage(m.message),
                     created_at: m.created_at,
-                    isOwn: false,
-                }))
-                setMessages(mapped)
+                    isOwn: m.profile_id === targetUserId, // If it's on THEIR profile, I sent it
+                    isRead: m.is_read
+                }));
+                setMessages(filtered);
+
+                // Mark unread received messages as read
+                const unreadIds = allMessages
+                    .filter(m => m.profile_id === profile.id && !m.is_read)
+                    .map(m => m.id);
+
+                if (unreadIds.length > 0) {
+                    await supabase.rpc('mark_confessions_read', { confession_ids: unreadIds })
+                        .catch(async () => {
+                            // Fallback loop if RPC missing
+                            for (const id of unreadIds) {
+                                await supabase.from('confessions').update({ is_read: true }).eq('id', id);
+                            }
+                        });
+                }
             }
             setIsLoading(false)
             setTimeout(scrollToBottom, 100)
@@ -76,33 +110,87 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
 
         fetchMessages()
 
-        const channel = supabase
-            .channel(`dm-page-${profile.id}`)
+        // Realtime Subscription for Messages
+        const msgChannel = supabase
+            .channel(`dm-chat-${profile.id}-${targetUserId}`)
             .on('postgres_changes', {
-                event: 'INSERT',
+                event: '*', // Listen for inserts (new msgs) and updates (read receipts)
                 schema: 'public',
                 table: 'confessions',
-                filter: `profile_id=eq.${profile.id}`
+                filter: `profile_id=in.(${profile.id},${targetUserId})`
             }, (payload) => {
-                const newMsg = payload.new
-                // Check for our new "type" logic
-                if (newMsg.message_type === 'confession' && newMsg.message.startsWith('[DM]')) {
-                    const msg: Message = {
-                        id: newMsg.id,
-                        content: newMsg.message.replace(/^\[DM\]\s*/, ''),
-                        created_at: newMsg.created_at,
-                        isOwn: false
+                if (payload.eventType === 'INSERT') {
+                    const newMsg = payload.new;
+                    const senderId = getSenderId(newMsg.message);
+
+                    // Check if relevant
+                    const isReceived = newMsg.profile_id === profile.id && senderId === targetUserId;
+                    const isSent = newMsg.profile_id === targetUserId && senderId === profile.id;
+
+                    if (isReceived || isSent) {
+                        const msg: Message = {
+                            id: newMsg.id,
+                            content: cleanMessage(newMsg.message),
+                            created_at: newMsg.created_at,
+                            isOwn: isSent,
+                            isRead: newMsg.is_read
+                        }
+                        setMessages(prev => {
+                            // Avoid dupes
+                            if (prev.some(m => m.id === msg.id)) return prev;
+                            return [...prev, msg];
+                        })
+                        setTimeout(scrollToBottom, 100)
+
+                        // If received, mark read
+                        if (isReceived) {
+                            supabase.from('confessions').update({ is_read: true }).eq('id', newMsg.id).then();
+                        }
                     }
-                    setMessages(prev => [...prev, msg])
-                    setTimeout(scrollToBottom, 100)
+                } else if (payload.eventType === 'UPDATE') {
+                    const updated = payload.new;
+                    setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, isRead: updated.is_read } : m));
                 }
             })
             .subscribe()
 
+        // Presence Channel for Typing
+        const presenceChannel = supabase.channel(`dm-presence-${[profile.id, targetUserId].sort().join('-')}`)
+            .on('presence', { event: 'sync' }, () => {
+                // Check who is typing
+                const state = presenceChannel.presenceState();
+                const typing = new Set<string>();
+                Object.values(state).forEach((p: any) => {
+                    p.forEach((u: any) => {
+                        if (u.isTyping && u.user_id !== profile.id) {
+                            typing.add(u.user_id);
+                        }
+                    })
+                });
+                setTypingUsers(typing);
+                if (typing.size > 0) setTimeout(scrollToBottom, 50);
+            })
+            .subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                    await presenceChannel.track({ user_id: profile.id, isTyping: false });
+                }
+            });
+
         return () => {
-            supabase.removeChannel(channel)
+            supabase.removeChannel(msgChannel)
+            supabase.removeChannel(presenceChannel)
         }
-    }, [profile?.id, supabase])
+    }, [profile?.id, targetUserId, supabase])
+
+    const handleTyping = async () => {
+        const presenceChannel = supabase.channel(`dm-presence-${[profile!.id, targetUserId].sort().join('-')}`);
+        await presenceChannel.track({ user_id: profile!.id, isTyping: true });
+
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(async () => {
+            await presenceChannel.track({ user_id: profile!.id, isTyping: false });
+        }, 1500);
+    }
 
     const handleSend = async () => {
         if (!inputText.trim()) return
@@ -208,10 +296,27 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                                 <p>{msg.content}</p>
                                 <p className={`text-[10px] mt-1.5 text-right font-medium ${msg.isOwn ? 'text-purple-200/70' : 'text-neutral-500'}`}>
                                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {msg.isOwn && (
+                                        <span className="ml-1">
+                                            {msg.isOptimistic ? '🕒' : msg.isRead ? '✅' : '✓'}
+                                        </span>
+                                    )}
                                 </p>
                             </div>
                         </div>
                     ))
+                )}
+
+                {typingUsers.size > 0 && (
+                    <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300 px-5">
+                        <div className="bg-neutral-800 rounded-2xl rounded-bl-none px-4 py-3">
+                            <div className="flex gap-1">
+                                <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce" />
+                            </div>
+                        </div>
+                    </div>
                 )}
                 <div ref={messagesEndRef} className="h-4" />
             </div>
@@ -221,7 +326,10 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                 <div className="flex items-end gap-2 bg-neutral-900 rounded-[1.5rem] p-1.5 border border-white/10 focus-within:border-purple-500/50 focus-within:ring-1 focus-within:ring-purple-500/20 transition-all shadow-lg">
                     <textarea
                         value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
+                        onChange={(e) => {
+                            setInputText(e.target.value)
+                            handleTyping()
+                        }}
                         onKeyDown={handleKeyPress}
                         placeholder="Message..."
                         className="flex-1 bg-transparent text-neutral-200 text-base resize-none focus:outline-none max-h-32 py-3 px-4 min-h-[48px] custom-scrollbar"
