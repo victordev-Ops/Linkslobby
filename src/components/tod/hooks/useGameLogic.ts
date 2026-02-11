@@ -538,6 +538,34 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }
   };
 
+  const removeParticipant = async (participantId: string) => {
+    if (!lobby || userId !== lobby.host_id) return;
+
+    const targetUser = participants.find(p => p.id === participantId);
+    if (!targetUser) return;
+
+    const { error } = await supabase
+      .from('tod_participants')
+      .delete()
+      .eq('id', participantId);
+
+    if (error) {
+      toast.error('Failed to remove participant');
+      return;
+    }
+
+    // Send system message
+    await supabase.from('tod_messages').insert({
+      lobby_id: lobbyId,
+      user_id: userId,
+      content: `${targetUser.profiles?.username || 'A player'} has been removed from the lobby.`,
+      message_type: 'system'
+    });
+
+    toast.success('Participant removed');
+    fetchData();
+  };
+
   const cleanup = () => {
     // Cleanup function for component unmount
   };
@@ -599,6 +627,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     hasMoreMessages,
     onlineUsers,
     typingUsers,
-    setTypingIndicator
+    setTypingIndicator,
+    removeParticipant
   };
 };

@@ -56,7 +56,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     deleteLobby,
     onlineUsers,
     typingUsers,
-    setTypingIndicator
+    setTypingIndicator,
+    removeParticipant
   } = useGameLogic(lobbyId, profile?.id);
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -824,6 +825,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                     onlineUsers={onlineUsers}
                     currentAskerId={lobby.current_asker_id}
                     lobbyName={lobby.name}
+                    onRemoveParticipant={removeParticipant}
                   />
                 </div>
               </motion.div>

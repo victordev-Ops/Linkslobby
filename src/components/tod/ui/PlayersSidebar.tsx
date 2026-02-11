@@ -1,5 +1,8 @@
 // src/components/tod/ui/PlayersSidebar.tsx
-import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, StopCircle, UserPlus, Check, X, Ban, ShieldOff } from 'lucide-react';
+import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, StopCircle, UserPlus, Check, X, Ban, ShieldOff, MoreVertical, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { DirectMessageChat } from './DirectMessageChat';
 
 import { Participant } from '../hooks/useGameLogic';
 
@@ -24,6 +27,7 @@ interface PlayersSidebarProps {
   onDeclineRequest?: (userId: string) => void;
   onBanParticipant?: (participantId: string) => void;
   onUnbanParticipant?: (participantId: string) => void;
+  onRemoveParticipant?: (participantId: string) => void;
   isHost?: boolean;
   onlineUsers?: Set<string>;
   currentAskerId?: string;
@@ -43,11 +47,14 @@ export const PlayersSidebar = ({
   onDeclineRequest,
   onBanParticipant,
   onUnbanParticipant,
+  onRemoveParticipant,
   isHost = false,
   onlineUsers = new Set(),
   currentAskerId,
   lobbyName
 }: PlayersSidebarProps) => {
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [chatTarget, setChatTarget] = useState<{ id: string; username: string } | null>(null);
 
   // Filter for game events: truth/dare questions, system messages (start/end)
   const gameEvents = messages.filter(m =>
@@ -218,16 +225,81 @@ export const PlayersSidebar = ({
                   {isAsker && (
                     <MessageCircle size={14} className="text-blue-400 animate-bounce [animation-duration:2s]" />
                   )}
-                  {/* Ban button - only show for host and not for themselves */}
-                  {isHost && participant.user_id !== hostId && onBanParticipant && (
-                    <button
-                      onClick={() => onBanParticipant(participant.id)}
-                      className="ml-1 w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition group/ban"
-                      title="Ban player"
-                    >
-                      <Ban size={12} className="text-red-400 group-hover/ban:scale-110 transition-transform" />
-                    </button>
-                  )}
+                  {/* Player Actions Menu */}
+                  <div className="relative">
+                    {(participant.user_id !== (participants.find(p => p.user_id === hostId)?.user_id) || isHost) && ( // Show for everyone except maybe self? Logic: everyone can DM everyone
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(activeMenuId === participant.id ? null : participant.id);
+                        }}
+                        className="ml-1 w-6 h-6 rounded hover:bg-slate-800 flex items-center justify-center transition text-slate-400 hover:text-white"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                    )}
+
+                    <AnimatePresence>
+                      {activeMenuId === participant.id && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-[50]"
+                            onClick={() => setActiveMenuId(null)}
+                          />
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                            className="absolute right-0 top-full mt-1 w-40 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-[60] overflow-hidden flex flex-col p-1"
+                          >
+                            <button
+                              onClick={() => {
+                                setChatTarget({
+                                  id: participant.user_id,
+                                  username: participant.profiles?.username || 'Unknown'
+                                });
+                                setActiveMenuId(null);
+                              }}
+                              className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
+                            >
+                              <MessageCircle size={14} className="text-blue-400" />
+                              Message
+                            </button>
+
+                            {isHost && participant.user_id !== hostId && (
+                              <>
+                                <div className="h-px bg-slate-800 my-1" />
+                                {onRemoveParticipant && (
+                                  <button
+                                    onClick={() => {
+                                      onRemoveParticipant(participant.id);
+                                      setActiveMenuId(null);
+                                    }}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
+                                  >
+                                    <LogOut size={14} className="text-orange-400" />
+                                    Remove
+                                  </button>
+                                )}
+                                {onBanParticipant && (
+                                  <button
+                                    onClick={() => {
+                                      onBanParticipant(participant.id);
+                                      setActiveMenuId(null);
+                                    }}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/10 rounded-lg transition-colors text-left w-full"
+                                  >
+                                    <Ban size={14} className="text-red-400" />
+                                    Ban Player
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
             );
@@ -354,6 +426,17 @@ export const PlayersSidebar = ({
           </div>
         </div>
       </div>
-    </aside>
+
+
+      {/* Direct Message Chat Overlay */}
+      <AnimatePresence>
+        {chatTarget && (
+          <DirectMessageChat
+            targetUser={chatTarget}
+            onClose={() => setChatTarget(null)}
+          />
+        )}
+      </AnimatePresence>
+    </aside >
   );
 };
