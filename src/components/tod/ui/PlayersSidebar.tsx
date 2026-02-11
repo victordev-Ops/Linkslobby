@@ -2,7 +2,7 @@
 import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, StopCircle, UserPlus, Check, X, Ban, ShieldOff, MoreVertical, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { DirectMessageChat } from './DirectMessageChat';
+import { useRouter } from 'next/navigation';
 
 import { Participant } from '../hooks/useGameLogic';
 
@@ -53,8 +53,8 @@ export const PlayersSidebar = ({
   currentAskerId,
   lobbyName
 }: PlayersSidebarProps) => {
+  const router = useRouter();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-  const [chatTarget, setChatTarget] = useState<{ id: string; username: string } | null>(null);
 
   // Filter for game events: truth/dare questions, system messages (start/end)
   const gameEvents = messages.filter(m =>
@@ -254,10 +254,7 @@ export const PlayersSidebar = ({
                           >
                             <button
                               onClick={() => {
-                                setChatTarget({
-                                  id: participant.user_id,
-                                  username: participant.profiles?.username || 'Unknown'
-                                });
+                                router.push(`/messages/${participant.user_id}`);
                                 setActiveMenuId(null);
                               }}
                               className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
@@ -426,17 +423,6 @@ export const PlayersSidebar = ({
           </div>
         </div>
       </div>
-
-
-      {/* Direct Message Chat Overlay */}
-      <AnimatePresence>
-        {chatTarget && (
-          <DirectMessageChat
-            targetUser={chatTarget}
-            onClose={() => setChatTarget(null)}
-          />
-        )}
-      </AnimatePresence>
     </aside >
   );
 };

@@ -7,8 +7,13 @@ export async function sendDirectMessage(targetUserId: string, content: string) {
     const supabase = await createSupabaseServerClient()
 
     try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error('Unauthorized')
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) {
+            console.error('Send DM: Unauthorized', authError)
+            throw new Error('Unauthorized')
+        }
+
+        console.log(`Send DM: User ${user.id} sending to ${targetUserId}`)
 
         // 1. Get Sender Profile (for caching/display purposes if needed)
         const { data: senderProfile } = await supabase
@@ -45,7 +50,12 @@ export async function sendDirectMessage(targetUserId: string, content: string) {
                 // But wait, the InboxClient has a 'profiles' join? No, it joins on profile_id (owner).
             })
 
-        if (error) throw error
+        if (error) {
+            console.error('Send DM: Insert Error', error)
+            throw error
+        }
+
+        console.log('Send DM: Success')
 
         return { success: true }
     } catch (error) {
