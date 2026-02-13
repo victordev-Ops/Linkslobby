@@ -136,6 +136,26 @@ export default function XPBalance() {
     }
   }, [])
 
+  // Infinite Scroll Observer
+  const observerTarget = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !loadingHistory) {
+          loadMore()
+        }
+      },
+      { threshold: 1.0 }
+    )
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current)
+    }
+
+    return () => observer.disconnect()
+  }, [hasMore, loadingHistory])
+
   const fetchBalance = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -229,7 +249,7 @@ export default function XPBalance() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const limit = 20
+      const limit = 10
       const from = pageNum * limit
       const to = from + limit - 1
 
@@ -481,7 +501,7 @@ export default function XPBalance() {
               </div>
 
               {/* Transaction List */}
-              <div ref={listRef} className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/10">
+              <div ref={listRef} className="flex-1 overflow-y-auto p-2 pb-24 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/10">
                 {transactions.length === 0 && !loadingHistory ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <div className="relative mb-4">
@@ -545,23 +565,10 @@ export default function XPBalance() {
                       </motion.div>
                     ))}
 
-                    {/* Load More Trigger */}
+                    {/* Infinite Scroll Trigger */}
                     {hasMore && (
-                      <div className="pt-2 pb-4 flex justify-center">
-                        <button
-                          onClick={loadMore}
-                          disabled={loadingHistory}
-                          className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-purple-500 dark:hover:text-purple-400 transition-colors flex items-center gap-2"
-                        >
-                          {loadingHistory ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              Show Older Activity
-                              <ChevronDown className="w-4 h-4" />
-                            </>
-                          )}
-                        </button>
+                      <div ref={observerTarget} className="py-4 flex justify-center">
+                        <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
                       </div>
                     )}
                   </div>
