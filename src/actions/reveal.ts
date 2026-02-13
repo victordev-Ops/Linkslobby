@@ -27,13 +27,21 @@ export type RevealResult = {
     data?: any
 }
 
-export async function revealSenderHint(messageId: string, isPro: boolean = false): Promise<RevealResult> {
+export async function revealSenderHint(messageId: string): Promise<RevealResult> {
     const supabase = await createSupabaseServerClient()
 
     try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { success: false, message: 'Not authenticated' }
 
+        // Fetch is_pro from DB instead of trusting client parameter
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_pro')
+            .eq('id', user.id)
+            .single()
+
+        const isPro = profile?.is_pro ?? false
         const cost = isPro ? XP_COSTS.REVEAL_SENDER_HINT_PRO : XP_COSTS.REVEAL_SENDER_HINT
 
         // 1. Spend XP

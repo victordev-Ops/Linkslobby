@@ -26,13 +26,14 @@ interface Message {
 }
 
 // Helper to extract sender ID from message
+// Matches both [DM:uuid] and [DM:uuid:username] formats
 const getSenderId = (content: string) => {
-    const match = content.match(/^\[DM:([a-f0-9-]+)\]/);
+    const match = content.match(/^\[DM:([a-f0-9-]+)(?::[^\]]+)?\]/);
     return match ? match[1] : null;
 }
 
-// Helper to clean message
-const cleanMessage = (content: string) => content.replace(/^\[DM:[a-f0-9-]+\]\s*/, '');
+// Helper to clean message - strips [DM:uuid:username] prefix
+const cleanMessage = (content: string) => content.replace(/^\[DM:[a-f0-9-]+(?::[^\]]+)?\]\s*/, '');
 
 export default function DirectMessageClient({ targetUserId, targetUsername }: DirectMessageClientProps) {
     const { profile } = useAuth()

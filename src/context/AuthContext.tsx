@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mounted) setProfile(profileData);
 
           // Trigger Daily Login Check
-          checkDailyLogin(profileData?.is_pro || false).then(result => {
+          checkDailyLogin().then(result => {
             if (result.success && result.awarded) {
               toast.success(result.message || "Daily Login Bonus!", {
                 description: `+${result.xp} XP`,

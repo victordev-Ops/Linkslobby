@@ -10,12 +10,21 @@ export type DailyLoginResult = {
     message?: string
 }
 
-export async function checkDailyLogin(isPro: boolean = false): Promise<DailyLoginResult> {
+export async function checkDailyLogin(): Promise<DailyLoginResult> {
     const supabase = await createSupabaseServerClient()
 
     try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { success: false, awarded: false, message: 'Not authenticated' }
+
+        // Fetch is_pro from DB instead of trusting client parameter
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_pro')
+            .eq('id', user.id)
+            .single()
+
+        const isPro = profile?.is_pro ?? false
 
         const today = new Date().toISOString().split('T')[0]
 
@@ -35,10 +44,6 @@ export async function checkDailyLogin(isPro: boolean = false): Promise<DailyLogi
         const amount = applyProRewardMultiplier(XP_REWARDS.DAILY_LOGIN, isPro)
         const reason = formatRewardReason('Daily Login', isPro)
 
-        // 2. Add XP
-        // Note: detailed transaction logging happens in the DB trigger/RPC usually, 
-        // or we can call rpc here if earnXP wasn't client-side only. 
-        // Since earnXP logic in hooks/xp.ts is client-side/mixed, we use RPC directly here for server action.
         const { error: xpError } = await supabase.rpc('add_xp', {
             p_user_id: user.id,
             p_amount: amount,

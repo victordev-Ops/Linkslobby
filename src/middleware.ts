@@ -69,7 +69,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // 5. Profile Completion Check - Apply to all protected routes
-  const protectedRoutesRequiringProfile = ['/dashboard', '/inbox', '/settings', '/notifications', '/profile', '/tod']
+  const protectedRoutesRequiringProfile = ['/dashboard', '/inbox', '/settings', '/notifications', '/profile', '/tod', '/hot-seat']
   const needsProfileCheck = user && protectedRoutesRequiringProfile.some(route =>
     pathname === route || pathname.startsWith(route + '/')
   )

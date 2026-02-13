@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Star, TrendingUp, TrendingDown, Clock, ChevronDown, Loader2, Flame, Zap } from "lucide-react"
+import { Star, TrendingUp, TrendingDown, Clock, ChevronDown, Loader2, Flame, Zap, X } from "lucide-react"
 import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion"
 
 interface XPTransaction {
@@ -408,12 +408,11 @@ export default function XPBalance() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 100, scale: 0.95 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 sm:bottom-auto sm:top-20 sm:right-4 sm:left-auto sm:w-96 max-h-[80vh] sm:max-h-[600px] bg-white dark:bg-[#1a1429] rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-white/10 z-[70] overflow-hidden flex flex-col"
+              className="fixed bottom-0 left-0 right-0 h-[100dvh] sm:h-auto sm:bottom-auto sm:top-20 sm:right-4 sm:left-auto sm:w-96 sm:max-h-[600px] bg-white dark:bg-[#1a1429] sm:rounded-2xl shadow-2xl border-t sm:border border-white/10 z-[70] overflow-hidden flex flex-col"
             >
-              {/* Drag Handle (Mobile only) - Click to close */}
+              {/* Mobile drag handle */}
               <div
-                className="w-full flex justify-center pt-3 pb-3 sm:hidden cursor-pointer active:opacity-70"
-                onClick={() => setShowHistory(false)}
+                className="w-full flex justify-center pt-3 pb-1 sm:hidden"
               >
                 <div className="w-12 h-1.5 rounded-full bg-slate-200 dark:bg-white/10" />
               </div>
@@ -435,12 +434,12 @@ export default function XPBalance() {
                         </span>
                       </div>
 
-                      {/* Close Button */}
+                      {/* Close Button — always visible */}
                       <button
                         onClick={() => setShowHistory(false)}
-                        className="p-1.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors sm:hidden"
+                        className="p-1.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors active:scale-90"
                       >
-                        <ChevronDown className="w-5 h-5" />
+                        <X className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -451,12 +450,12 @@ export default function XPBalance() {
                   {/* Streak Info */}
                   {streak >= 1 && (
                     <div className={`mt-3 flex items-center gap-3 p-2.5 rounded-xl border ${streak >= 7
-                        ? 'bg-gradient-to-r from-orange-500/10 to-red-500/10 border-orange-500/20'
-                        : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10'
+                      ? 'bg-gradient-to-r from-orange-500/10 to-red-500/10 border-orange-500/20'
+                      : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10'
                       }`}>
                       <div className={`w-9 h-9 rounded-full flex items-center justify-center ${streak >= 7
-                          ? 'bg-gradient-to-br from-orange-500 to-red-500 text-white'
-                          : 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400'
+                        ? 'bg-gradient-to-br from-orange-500 to-red-500 text-white'
+                        : 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400'
                         }`}>
                         <Flame className="w-5 h-5" />
                       </div>
