@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Send, Loader2, MessageCircle, Image as ImageIcon, Camera, Plus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -48,7 +48,7 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
     const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-    const supabase = createClient()
+    const supabase = useMemo(() => createClient(), [])
 
     // Scroll to bottom helper
     const scrollToBottom = () => {
@@ -69,10 +69,10 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
 
             const { data: allMessages, error } = await supabase
                 .from('confessions')
-                .select('*')
+                .select('id, message, created_at, profile_id, is_read')
                 .in('profile_id', [profile.id, targetUserId])
                 .eq('message_type', 'confession')
-                .ilike('message', '[DM:%')
+                .like('message', '[DM:%')
                 .order('created_at', { ascending: true })
                 .limit(100)
 
@@ -310,8 +310,13 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
                 {isLoading ? (
-                    <div className="flex h-full items-center justify-center">
-                        <Loader2 className="animate-spin text-purple-500 w-8 h-8" />
+                    <div className="flex flex-col gap-3 px-2 py-4">
+                        {[...Array(6)].map((_, i) => (
+                            <div key={i} className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
+                                <div className={`rounded-2xl ${i % 2 === 0 ? 'rounded-bl-none' : 'rounded-br-none'} animate-pulse ${i % 2 === 0 ? 'bg-neutral-800' : 'bg-purple-900/40'}`}
+                                    style={{ width: `${40 + Math.random() * 35}%`, height: `${36 + (i % 3) * 14}px` }} />
+                            </div>
+                        ))}
                     </div>
                 ) : messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-[60vh] text-neutral-600 space-y-4 opacity-100 animate-fade-in">

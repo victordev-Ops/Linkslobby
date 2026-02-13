@@ -1,12 +1,11 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 import BottomNavbar from "./BottomNavbar";
 
 export default function NavbarWrapper() {
     const pathname = usePathname();
-    const searchParams = useSearchParams();
 
     const shouldHideNavbar = useMemo(() => {
         const hideNavbarPaths = [
@@ -31,11 +30,8 @@ export default function NavbarWrapper() {
             pathname.startsWith("/anonymous/") ||
             pathname.startsWith("/messages/");
 
-        // Check if modal=dykm is present in query params
-        const isDykmModalOpen = searchParams.get('modal') === 'dykm';
-
-        return isExactMatch || isPrefixMatch || isDykmModalOpen;
-    }, [pathname, searchParams]);
+        return isExactMatch || isPrefixMatch;
+    }, [pathname]);
 
     if (shouldHideNavbar) return null;
 

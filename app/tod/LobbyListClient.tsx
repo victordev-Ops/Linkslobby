@@ -621,9 +621,9 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
             {/* Create Lobby Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
-                    <div className="bg-slate-950 border border-slate-800 w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="p-8 border-b border-slate-900 flex items-center justify-between">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-xl">
+                    <div className="bg-slate-950 border border-slate-800 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90dvh] flex flex-col">
+                        <div className="p-5 sm:p-8 border-b border-slate-900 flex items-center justify-between shrink-0">
                             <div>
                                 <h3 className="text-2xl font-black text-white italic tracking-tight">NEW PARTY</h3>
                                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Configure your game</p>
@@ -636,7 +636,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             </button>
                         </div>
 
-                        <div className="p-8 space-y-8">
+                        <div className="p-5 sm:p-8 space-y-5 sm:space-y-8 overflow-y-auto flex-1">
                             <div>
                                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Party Name</label>
                                 <input
@@ -650,7 +650,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
                             <div>
                                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Vibe</label>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-4 gap-2 sm:gap-3">
                                     {CATEGORIES.map(cat => (
                                         <button
                                             key={cat}
@@ -694,7 +694,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             </div>
                         </div>
 
-                        <div className="p-8 bg-slate-900/30 border-t border-slate-900">
+                        <div className="p-5 sm:p-8 bg-slate-900/30 border-t border-slate-900 shrink-0">
                             <button
                                 onClick={createNewLobby}
                                 disabled={isCreating}

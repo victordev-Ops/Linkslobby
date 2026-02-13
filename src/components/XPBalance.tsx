@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Star, TrendingUp, TrendingDown, Clock, ChevronDown, Loader2 } from "lucide-react"
+import { Star, TrendingUp, TrendingDown, Clock, ChevronDown, Loader2, Flame, Zap } from "lucide-react"
 import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion"
 
 interface XPTransaction {
@@ -43,8 +43,12 @@ export default function XPBalance() {
   const [hasMore, setHasMore] = useState(true)
   const [loadingHistory, setLoadingHistory] = useState(false)
 
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const listRef = useRef<HTMLDivElement>(null)
+
+  // Streak state
+  const [streak, setStreak] = useState(0)
+  const [streakLoading, setStreakLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
@@ -122,6 +126,7 @@ export default function XPBalance() {
     }
 
     fetchBalance()
+    fetchStreak()
     setupSubscription()
 
     return () => {
@@ -151,6 +156,70 @@ export default function XPBalance() {
     } catch (error) {
       console.error('Error fetching XP balance:', error)
       setLoading(false)
+    }
+  }
+
+  // Fetch login streak from xp_transactions
+  const fetchStreak = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Get all daily_login transactions ordered by date desc
+      const { data: logins, error } = await supabase
+        .from('xp_transactions')
+        .select('created_at')
+        .eq('user_id', user.id)
+        .ilike('reason', '%Daily Login%')
+        .order('created_at', { ascending: false })
+        .limit(60)
+
+      if (error || !logins || logins.length === 0) {
+        setStreak(0)
+        setStreakLoading(false)
+        return
+      }
+
+      // Count consecutive days starting from today/yesterday
+      let consecutiveDays = 0
+      const now = new Date()
+      const todayStr = now.toISOString().split('T')[0]
+
+      // Group logins by date
+      const loginDates = new Set(
+        logins.map(l => new Date(l.created_at).toISOString().split('T')[0])
+      )
+
+      // Check if logged in today or yesterday to start counting
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = yesterday.toISOString().split('T')[0]
+
+      if (!loginDates.has(todayStr) && !loginDates.has(yesterdayStr)) {
+        setStreak(0)
+        setStreakLoading(false)
+        return
+      }
+
+      // Count backwards from today
+      for (let i = 0; i < 60; i++) {
+        const checkDate = new Date(now)
+        checkDate.setDate(checkDate.getDate() - i)
+        const dateStr = checkDate.toISOString().split('T')[0]
+
+        if (loginDates.has(dateStr)) {
+          consecutiveDays++
+        } else if (i > 0) {
+          // Allow skipping today if we haven't logged in today yet
+          break
+        }
+      }
+
+      setStreak(consecutiveDays)
+      setStreakLoading(false)
+    } catch (error) {
+      console.error('Error fetching streak:', error)
+      setStreakLoading(false)
     }
   }
 
@@ -230,7 +299,7 @@ export default function XPBalance() {
         {/* Main button */}
         <motion.button
           onClick={handleClick}
-          className="relative flex items-center gap-1.5 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 px-3 py-1.5 rounded-full shadow-md overflow-hidden"
+          className="relative flex items-center gap-1.5 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 px-3 py-1.5 rounded-full shadow-md overflow-hidden min-w-fit"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           animate={shouldPulse ? {
@@ -271,9 +340,20 @@ export default function XPBalance() {
             <div className="absolute -top-0.5 -right-0.5 w-1 h-1 bg-orange-100 rounded-full animate-pulse"></div>
           </motion.div>
 
-          <span className="text-xs font-black text-orange-900 drop-shadow-sm tracking-tight relative z-10">
+          <span className="text-xs font-black text-orange-900 drop-shadow-sm tracking-tight relative z-10 whitespace-nowrap">
             {loading ? '...' : <AnimatedCounter value={balance} />}
           </span>
+
+          {/* Streak badge */}
+          {!streakLoading && streak >= 2 && (
+            <span className="flex items-center gap-0.5 text-[10px] font-black text-orange-900 relative z-10 whitespace-nowrap">
+              <Flame className="w-3 h-3" />
+              {streak}
+              {streak >= 7 && (
+                <span className="ml-0.5 text-[8px] bg-orange-900/20 px-1 py-0.5 rounded-full font-black">2x</span>
+              )}
+            </span>
+          )}
 
           {/* Particle burst on balance increase */}
           <AnimatePresence>
@@ -367,6 +447,37 @@ export default function XPBalance() {
                   <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pr-8">
                     Track your earnings and spending. Earn more stars by logging in daily! 🌟
                   </p>
+
+                  {/* Streak Info */}
+                  {streak >= 1 && (
+                    <div className={`mt-3 flex items-center gap-3 p-2.5 rounded-xl border ${streak >= 7
+                        ? 'bg-gradient-to-r from-orange-500/10 to-red-500/10 border-orange-500/20'
+                        : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10'
+                      }`}>
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${streak >= 7
+                          ? 'bg-gradient-to-br from-orange-500 to-red-500 text-white'
+                          : 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400'
+                        }`}>
+                        <Flame className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                          {streak} Day Streak {streak >= 7 ? '🔥' : ''}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {streak >= 7
+                            ? 'Earnings are doubled! Keep it up!'
+                            : `${7 - streak} more day${7 - streak === 1 ? '' : 's'} until 2x earnings`
+                          }
+                        </p>
+                      </div>
+                      {streak >= 7 && (
+                        <div className="shrink-0 px-2 py-1 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] font-black">
+                          2x
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
