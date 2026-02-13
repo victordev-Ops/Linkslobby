@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Send, Loader2, MessageCircle, Image as ImageIcon, Camera, Plus } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, MessageCircle, Image as ImageIcon, Camera, Plus, ChevronUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { sendDirectMessage } from '@/actions/direct-messages'
@@ -25,6 +25,8 @@ interface Message {
     isRead?: boolean
 }
 
+const PAGE_SIZE = 10
+
 // Helper to extract sender ID from message
 // Matches [DM:uuid...] and captures the uuid
 const getSenderId = (content: string) => {
@@ -42,8 +44,12 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
     const [inputText, setInputText] = useState('')
     const [isUploading, setIsUploading] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false)
+    const [hasMore, setHasMore] = useState(true)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const messagesContainerRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const initialScrollDone = useRef(false)
 
     // Typing State
     const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
@@ -52,72 +58,88 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
     const supabase = useMemo(() => createClient(), [])
 
     // Scroll to bottom helper
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+        messagesEndRef.current?.scrollIntoView({ behavior })
     }
+
+    // Fetch messages with pagination (loads newest first, then reverses for display)
+    const fetchMessages = useCallback(async (offset: number, prepend = false) => {
+        if (!profile?.id) return null
+
+        const { data: allMessages, error } = await supabase
+            .from('confessions')
+            .select('id, message, created_at, profile_id, is_read')
+            .in('profile_id', [profile.id, targetUserId])
+            .eq('message_type', 'confession')
+            .like('message', '[DM:%')
+            .order('created_at', { ascending: false })
+            .range(offset, offset + PAGE_SIZE * 3 - 1) // Fetch more from DB since we filter client-side
+
+        if (error || !allMessages) return null
+
+        const filtered = allMessages.filter(m => {
+            const senderId = getSenderId(m.message);
+            const isReceived = m.profile_id === profile.id && senderId === targetUserId;
+            const isSent = m.profile_id === targetUserId && senderId === profile.id;
+            return isReceived || isSent;
+        }).map(m => ({
+            id: m.id,
+            content: cleanMessage(m.message),
+            created_at: m.created_at,
+            isOwn: m.profile_id === targetUserId,
+            isRead: m.is_read
+        }))
+
+        // Reverse to chronological order (oldest first for display)
+        filtered.reverse()
+
+        return { filtered, rawCount: allMessages.length }
+    }, [profile?.id, targetUserId, supabase])
 
     // Initial Fetch & Subscription
     useEffect(() => {
         if (!profile?.id) return
 
-        const fetchMessages = async () => {
+        const loadInitial = async () => {
             setIsLoading(true)
 
-            // We need to fetch both SENT (by me to them) and RECEIVED (by them to me)
-            // But 'confessions' table owner is the 'profile_id'.
-            // RECEIVED: profile_id = ME, content starts with [DM:THEM]
-            // SENT: profile_id = THEM, content starts with [DM:ME]
+            const result = await fetchMessages(0)
+            if (!result) { setIsLoading(false); return }
 
-            const { data: allMessages, error } = await supabase
-                .from('confessions')
-                .select('id, message, created_at, profile_id, is_read')
-                .in('profile_id', [profile.id, targetUserId])
-                .eq('message_type', 'confession')
-                .like('message', '[DM:%')
-                .order('created_at', { ascending: true })
-                .limit(100)
+            const { filtered, rawCount } = result
 
-            if (allMessages) {
-                const filtered = allMessages.filter(m => {
-                    const senderId = getSenderId(m.message);
-                    const isReceived = m.profile_id === profile.id && senderId === targetUserId;
-                    const isSent = m.profile_id === targetUserId && senderId === profile.id;
-                    return isReceived || isSent;
-                }).map(m => ({
-                    id: m.id,
-                    content: cleanMessage(m.message),
-                    created_at: m.created_at,
-                    isOwn: m.profile_id === targetUserId, // If it's on THEIR profile, I sent it
-                    isRead: m.is_read
-                }));
-                setMessages(filtered);
+            // Take only the last PAGE_SIZE messages for initial display
+            const initialMessages = filtered.slice(-PAGE_SIZE)
+            setMessages(initialMessages)
+            setHasMore(filtered.length > PAGE_SIZE || rawCount >= PAGE_SIZE * 3)
 
-                // Mark unread received messages as read
-                const unreadIds = allMessages
-                    .filter(m => m.profile_id === profile.id && !m.is_read)
-                    .map(m => m.id);
+            // Mark unread received messages as read
+            const unreadToMark = filtered
+                .filter(m => !m.isOwn && !m.isRead)
+                .map(m => m.id)
 
-                if (unreadIds.length > 0) {
-                    await supabase.rpc('mark_confessions_read', { confession_ids: unreadIds })
-                        .catch(async () => {
-                            // Fallback loop if RPC missing
-                            for (const id of unreadIds) {
-                                await supabase.from('confessions').update({ is_read: true }).eq('id', id);
-                            }
-                        });
-                }
+            if (unreadToMark.length > 0) {
+                supabase.rpc('mark_confessions_read', { confession_ids: unreadToMark })
+                    .catch(async () => {
+                        for (const id of unreadToMark) {
+                            await supabase.from('confessions').update({ is_read: true }).eq('id', id);
+                        }
+                    });
             }
+
             setIsLoading(false)
-            setTimeout(scrollToBottom, 100)
+            // Scroll to bottom after initial load
+            setTimeout(() => scrollToBottom('instant'), 50)
+            initialScrollDone.current = true
         }
 
-        fetchMessages()
+        loadInitial()
 
         // Realtime Subscription for Messages
         const msgChannel = supabase
             .channel(`dm-chat-${profile.id}-${targetUserId}`)
             .on('postgres_changes', {
-                event: '*', // Listen for inserts (new msgs) and updates (read receipts)
+                event: '*',
                 schema: 'public',
                 table: 'confessions',
                 filter: `profile_id=in.(${profile.id},${targetUserId})`
@@ -126,7 +148,6 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                     const newMsg = payload.new;
                     const senderId = getSenderId(newMsg.message);
 
-                    // Check if relevant
                     const isReceived = newMsg.profile_id === profile.id && senderId === targetUserId;
                     const isSent = newMsg.profile_id === targetUserId && senderId === profile.id;
 
@@ -139,13 +160,11 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                             isRead: newMsg.is_read
                         }
                         setMessages(prev => {
-                            // Avoid dupes
                             if (prev.some(m => m.id === msg.id)) return prev;
                             return [...prev, msg];
                         })
                         setTimeout(scrollToBottom, 100)
 
-                        // If received, mark read
                         if (isReceived) {
                             supabase.from('confessions').update({ is_read: true }).eq('id', newMsg.id).then();
                         }
@@ -160,7 +179,6 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
         // Presence Channel for Typing
         const presenceChannel = supabase.channel(`dm-presence-${[profile.id, targetUserId].sort().join('-')}`)
             .on('presence', { event: 'sync' }, () => {
-                // Check who is typing
                 const state = presenceChannel.presenceState();
                 const typing = new Set<string>();
                 Object.values(state).forEach((p: any) => {
@@ -185,6 +203,99 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
         }
     }, [profile?.id, targetUserId, supabase])
 
+    // Load older messages on scroll-up
+    const loadOlderMessages = useCallback(async () => {
+        if (isLoadingOlder || !hasMore || !profile?.id) return
+
+        setIsLoadingOlder(true)
+        const container = messagesContainerRef.current
+        const prevScrollHeight = container?.scrollHeight || 0
+
+        // We need to figure out how many raw rows to skip
+        // Use the oldest message's created_at as a cursor
+        const oldestMsg = messages[0]
+        if (!oldestMsg) { setIsLoadingOlder(false); return }
+
+        try {
+            const { data: olderRaw, error } = await supabase
+                .from('confessions')
+                .select('id, message, created_at, profile_id, is_read')
+                .in('profile_id', [profile.id, targetUserId])
+                .eq('message_type', 'confession')
+                .like('message', '[DM:%')
+                .lt('created_at', oldestMsg.created_at)
+                .order('created_at', { ascending: false })
+                .limit(PAGE_SIZE * 3)
+
+            if (error || !olderRaw) {
+                setIsLoadingOlder(false)
+                return
+            }
+
+            const filtered = olderRaw.filter(m => {
+                const senderId = getSenderId(m.message);
+                const isReceived = m.profile_id === profile.id && senderId === targetUserId;
+                const isSent = m.profile_id === targetUserId && senderId === profile.id;
+                return isReceived || isSent;
+            }).map(m => ({
+                id: m.id,
+                content: cleanMessage(m.message),
+                created_at: m.created_at,
+                isOwn: m.profile_id === targetUserId,
+                isRead: m.is_read
+            }))
+
+            // Reverse to chronological order
+            filtered.reverse()
+
+            // Take last PAGE_SIZE
+            const olderMessages = filtered.slice(-PAGE_SIZE)
+
+            if (olderMessages.length === 0) {
+                setHasMore(false)
+                setIsLoadingOlder(false)
+                return
+            }
+
+            // Prepend older messages
+            setMessages(prev => {
+                const existingIds = new Set(prev.map(m => m.id))
+                const newOnes = olderMessages.filter(m => !existingIds.has(m.id))
+                return [...newOnes, ...prev]
+            })
+
+            setHasMore(olderMessages.length >= PAGE_SIZE)
+
+            // Preserve scroll position after prepending
+            requestAnimationFrame(() => {
+                if (container) {
+                    const newScrollHeight = container.scrollHeight
+                    container.scrollTop = newScrollHeight - prevScrollHeight
+                }
+            })
+        } catch (err) {
+            console.error('Error loading older messages:', err)
+        } finally {
+            setIsLoadingOlder(false)
+        }
+    }, [isLoadingOlder, hasMore, messages, profile?.id, targetUserId, supabase])
+
+    // Scroll-up detection
+    useEffect(() => {
+        const container = messagesContainerRef.current
+        if (!container) return
+
+        const handleScroll = () => {
+            // When scrolled near the top, load older messages
+            if (container.scrollTop < 80 && hasMore && !isLoadingOlder && initialScrollDone.current) {
+                loadOlderMessages()
+            }
+        }
+
+        container.addEventListener('scroll', handleScroll)
+        return () => container.removeEventListener('scroll', handleScroll)
+    }, [hasMore, isLoadingOlder, loadOlderMessages])
+
     const handleTyping = async () => {
         const presenceChannel = supabase.channel(`dm-presence-${[profile!.id, targetUserId].sort().join('-')}`);
         await presenceChannel.track({ user_id: profile!.id, isTyping: true });
@@ -201,7 +312,6 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
 
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
-        // Optimistic Update
         const optimisticMsg: Message = {
             id: tempId,
             content: content,
@@ -219,7 +329,6 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             const result = await sendDirectMessage(targetUserId, content)
 
             if (result.success && result.id) {
-                // Update optimistic message with real ID and clear optimistic flag
                 setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: result.id!, isOptimistic: false } : m))
             } else {
                 console.error("Failed to send:", result.error)
@@ -252,7 +361,6 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             const result = await uploadDmPhoto(formData)
             if (result.success && result.url) {
                 toast.success("Photo uploaded!", { id: toastId })
-                // Send as a special message format
                 await handleSend(`[IMG:${result.url}]`)
             } else {
                 toast.error(result.error || "Upload failed", { id: toastId })
@@ -272,7 +380,7 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
         }
     }
 
-    if (!profile) return null // Or loading state
+    if (!profile) return null
 
     return (
         <div className="flex flex-col h-[100dvh] bg-neutral-950 text-neutral-200">
@@ -309,7 +417,24 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+                {/* Load Older Messages Indicator */}
+                {!isLoading && hasMore && (
+                    <div className="flex justify-center py-2">
+                        {isLoadingOlder ? (
+                            <Loader2 size={18} className="text-neutral-500 animate-spin" />
+                        ) : (
+                            <button
+                                onClick={loadOlderMessages}
+                                className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 active:scale-95"
+                            >
+                                <ChevronUp size={14} />
+                                Load older messages
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {isLoading ? (
                     <div className="flex flex-col gap-3 px-2 py-4">
                         {[...Array(6)].map((_, i) => (
