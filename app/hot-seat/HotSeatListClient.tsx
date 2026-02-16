@@ -53,14 +53,14 @@ export default function HotSeatListClient({ profile, sessions }: HotSeatListClie
                     is_private: isPrivate,
                     status: 'waiting'
                 })
-                .select('slug')
+                .select('id, slug')
                 .single()
 
             if (error) throw error
 
             // Auto-join as host participant
             await supabase.from('hot_seat_participants').insert({
-                session_id: session.slug ? undefined : undefined, // We need the ID
+                session_id: session.id,
                 user_id: profile.id,
                 status: 'joined'
             })

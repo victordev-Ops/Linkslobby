@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { User, Session } from "@supabase/supabase-js";
 import { checkDailyLogin } from '@/actions/daily-login';
 import { toast } from "sonner";
+import { db, clearAllCachedData } from "@/lib/db";
 
 type Profile = {
   id: string;
@@ -34,6 +35,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
+      // 1. Try cached profile from Dexie first
+      const cached = await db.profiles.get(userId);
+      if (cached) {
+        // Return cached immediately, but still fetch fresh in background
+        const cachedProfile: Profile = { id: cached.id, username: cached.username, slug: cached.slug, is_pro: cached.is_pro };
+        // Fire-and-forget background sync
+        supabase
+          .from("profiles")
+          .select("id, username, slug, is_pro")
+          .eq("id", userId)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data) {
+              db.profiles.put({ ...data, cached_at: Date.now() });
+              setProfile(data as Profile);
+            }
+          })
+          .catch(() => { });
+        return cachedProfile;
+      }
+
+      // 2. No cache — fetch from Supabase
       const { data, error } = await supabase
         .from("profiles")
         .select("id, username, slug, is_pro")
@@ -44,6 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Error fetching profile:", error.message);
         return null;
       }
+
+      // 3. Cache the result
+      if (data) {
+        await db.profiles.put({ ...data, cached_at: Date.now() });
+      }
+
       return data as Profile;
     } catch (err) {
       return null;
@@ -112,8 +141,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       setUser(null);
 
-      // 3. Force a hard redirect to ensure complete logout
-      // Using window.location.href ensures middleware catches the logout state
+      // 3. Clear all Dexie cached data
+      await clearAllCachedData();
+
+      // 4. Force a hard redirect to ensure complete logout
       window.location.href = '/login';
 
     } catch (error) {
@@ -121,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Fallback: Clear state and redirect even if Supabase call fails
       setProfile(null);
       setUser(null);
+      await clearAllCachedData().catch(() => { });
       window.location.href = '/login';
     }
   };

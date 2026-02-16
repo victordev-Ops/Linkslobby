@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Star, Flame } from "lucide-react"
 import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion"
 import { useRouter } from "next/navigation"
+import { db } from '@/lib/db'
 
 // Animated counter component
 function AnimatedCounter({ value }: { value: number }) {
@@ -40,6 +41,17 @@ export default function XPBalance() {
     let mounted = true
     let profileChannel: ReturnType<typeof supabase.channel> | null = null
 
+    // Load cached balance from Dexie immediately
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user || !mounted) return
+      db.profiles.get(user.id).then(cached => {
+        if (cached && cached.xp_balance !== undefined && mounted) {
+          setBalance(cached.xp_balance)
+          setLoading(false)
+        }
+      }).catch(() => { })
+    })
+
     const setupSubscription = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user || !mounted) return
@@ -60,6 +72,9 @@ export default function XPBalance() {
             if (payload.new && 'xp_balance' in payload.new) {
               const newBalance = payload.new.xp_balance as number
               const oldBalance = payload.old?.xp_balance as number
+
+              // Update Dexie cache
+              db.profiles.update(payload.new.id as string, { xp_balance: newBalance }).catch(() => { })
 
               if (oldBalance !== undefined) {
                 setBalance(newBalance)
@@ -105,6 +120,8 @@ export default function XPBalance() {
 
       if (profile) {
         setBalance(profile.xp_balance || 0)
+        // Update Dexie cache
+        db.profiles.update(user.id, { xp_balance: profile.xp_balance || 0 }).catch(() => { })
       }
       setLoading(false)
     } catch (error) {

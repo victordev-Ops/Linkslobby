@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Flame, Send, Loader2, Clock, Play, AlertCircle, MessageCircle, X } from "lucide-react"
+import { ArrowLeft, Flame, Send, Loader2, Clock, Play, AlertCircle, MessageCircle, X, Users, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { penalizeHotSeatTimeout } from "@/actions/hot-seat-xp"
@@ -34,6 +34,8 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
 
     // Participant State
     const [participantCount, setParticipantCount] = useState(0)
+    const [participants, setParticipants] = useState<any[]>([])
+    const [showParticipants, setShowParticipants] = useState(false)
     const [newQuestion, setNewQuestion] = useState("")
     const [isSending, setIsSending] = useState(false)
 
@@ -46,19 +48,24 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     // Initial Data Fetch
     useEffect(() => {
         const fetchState = async () => {
-            // Join session
-            await supabase.from('hot_seat_participants').upsert({
-                session_id: session.id,
-                user_id: userProfile.id,
-                status: 'joined'
-            })
+            // Join session via server action to avoid RLS issues with upsert
+            // strict RLS might block client-side upsert if it counts as 'update' on existing rows
+            // but we only have insert policy.
+            // Using server action bypasses this nicely.
+            const { joinHotSeatSession } = await import('@/actions/hot-seat')
+            await joinHotSeatSession(session.id)
 
             // Fetch questions
-            const { data: qData } = await supabase
+            const { data: qData, error: qError } = await supabase
                 .from('hot_seat_questions')
                 .select('*')
                 .eq('session_id', session.id)
                 .order('created_at', { ascending: true })
+
+            if (qError) {
+                console.error('Error fetching questions:', qError)
+                toast.error("Failed to load questions")
+            }
 
             if (qData) {
                 setQuestions(qData)
@@ -66,17 +73,32 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                 if (active) setCurrentQuestion(active)
             }
 
-            // Fetch participant count
-            const { count } = await supabase
-                .from('hot_seat_participants')
-                .select('*', { count: 'exact', head: true })
-                .eq('session_id', session.id)
-
-            setParticipantCount(count || 0)
+            // Fetch participants
+            fetchParticipants()
         }
 
         fetchState()
     }, [])
+
+    const fetchParticipants = async () => {
+        const { data, count, error } = await supabase
+            .from('hot_seat_participants')
+            .select('*, user:profiles!hot_seat_participants_user_id_fkey(username, slug, id, is_pro)', { count: 'exact' })
+            .eq('session_id', session.id)
+
+        if (error) {
+            console.error('Error fetching participants:', error)
+            return
+        }
+
+        if (data) {
+            setParticipants(data.map(p => ({
+                ...p.user,
+                joined_at: p.created_at
+            })))
+        }
+        setParticipantCount(count || 0)
+    }
 
     // Realtime Subscriptions
     useEffect(() => {
@@ -85,7 +107,10 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                 if (payload.eventType === 'INSERT') {
                     setQuestions(prev => [...prev, payload.new as Question])
                     if (!currentQuestion && isHost && status === 'active') {
-                        // Auto-activate next question logic could go here, or manual
+                        toast('New question received!', {
+                            icon: '🔥',
+                            description: 'A new question has been added to the queue.'
+                        })
                     }
                 } else if (payload.eventType === 'UPDATE') {
                     const updated = payload.new as Question
@@ -97,7 +122,6 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                     } else if (['answered', 'skipped', 'timed_out'].includes(updated.status)) {
                         if (currentQuestion?.id === updated.id) {
                             setCurrentQuestion(null)
-                            // Clean up timer if needed logic
                         }
                     }
                 }
@@ -107,11 +131,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                 setStatus(newStatus)
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'hot_seat_participants', filter: `session_id=eq.${session.id}` }, async () => {
-                const { count } = await supabase
-                    .from('hot_seat_participants')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('session_id', session.id)
-                setParticipantCount(count || 0)
+                await fetchParticipants()
             })
             .subscribe()
 
@@ -148,9 +168,6 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
 
         // Call server action for penalty
         await penalizeHotSeatTimeout(session.id, currentQuestion.id)
-
-        // Update local state is handled by realtime subscription usually, 
-        // but we can optimistic update or just wait. Server action should update DB.
     }
 
     // Host Actions
@@ -194,15 +211,19 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
         if (!newQuestion.trim()) return
         setIsSending(true)
         try {
-            await supabase.from('hot_seat_questions').insert({
+            const { error } = await supabase.from('hot_seat_questions').insert({
                 session_id: session.id,
                 asker_id: userProfile.id,
                 question: newQuestion.trim(),
                 status: 'pending'
             })
+
+            if (error) throw error
+
             setNewQuestion("")
             toast.success("Question submitted!")
         } catch (e) {
+            console.error('Error sending question:', e)
             toast.error("Failed to send question")
         } finally {
             setIsSending(false)
@@ -213,9 +234,15 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     const answeredQuestions = questions.filter(q => ['answered', 'timed_out', 'skipped'].includes(q.status)).reverse()
 
     return (
-        <div className="min-h-screen bg-[#0a0a0f] text-white pb-20">
+        <div className="min-h-screen bg-[#0a0a0f] text-white pb-20 relative overflow-hidden">
+            {/* Background Effects */}
+            <div className="fixed inset-0 z-0 pointer-events-none">
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-amber-600/10 blur-[100px] rounded-full" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-red-600/10 blur-[100px] rounded-full" />
+            </div>
+
             {/* Header */}
-            <div className="sticky top-0 z-20 bg-[#0a0a0f]/80 backdrop-blur-md border-b border-white/5 px-4 py-3 flex items-center justify-between">
+            <div className="sticky top-0 z-30 bg-[#0a0a0f]/80 backdrop-blur-md border-b border-white/5 px-4 py-3 flex items-center justify-between">
                 <button onClick={() => router.push('/hot-seat')} className="p-2 rounded-full hover:bg-white/5 text-white/60 hover:text-white transition">
                     <ArrowLeft size={20} />
                 </button>
@@ -228,13 +255,16 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                         {status === 'waiting' ? 'Waiting for host...' : status === 'active' ? 'LIVE' : 'Ended'}
                     </p>
                 </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-full border border-white/5">
+                <button
+                    onClick={() => setShowParticipants(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-full border border-white/5 transition"
+                >
                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                     <span className="text-[10px] font-bold text-white/60">{participantCount}</span>
-                </div>
+                </button>
             </div>
 
-            <main className="max-w-md mx-auto p-4 space-y-6">
+            <main className="max-w-md mx-auto p-4 space-y-6 relative z-10">
 
                 {/* Host Controls - Waiting Room */}
                 {isHost && status === 'waiting' && (
@@ -381,43 +411,114 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                 <div className="space-y-4 pt-4 pb-20">
                     <h3 className="text-xs font-black text-white/20 uppercase tracking-widest px-2">History</h3>
 
-                    {answeredQuestions.length === 0 ? (
-                        <div className="text-center py-10 opacity-30">
-                            <p className="text-sm">No answers yet.</p>
-                        </div>
-                    ) : (
-                        answeredQuestions.map(q => (
-                            <div key={q.id} className="bg-white/5 border border-white/5 p-4 rounded-2xl space-y-3">
-                                <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shrink-0 text-[10px] font-bold">
-                                        ?
-                                    </div>
-                                    <p className="text-white font-medium leading-normal text-sm pt-1">
-                                        {q.question}
-                                    </p>
-                                </div>
-
-                                {q.status === 'answered' ? (
-                                    <div className="flex items-start gap-3 pl-4 border-l-2 border-amber-500/30 ml-4">
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-amber-400 font-bold text-sm leading-normal">
-                                                {q.answer}
-                                            </p>
+                    <AnimatePresence mode="popLayout">
+                        {answeredQuestions.length === 0 ? (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="text-center py-10 opacity-30"
+                            >
+                                <p className="text-sm">No answers yet.</p>
+                            </motion.div>
+                        ) : (
+                            answeredQuestions.map(q => (
+                                <motion.div
+                                    key={q.id}
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    className="bg-white/5 border border-white/5 p-4 rounded-2xl space-y-3"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                                            ?
                                         </div>
+                                        <p className="text-white font-medium leading-normal text-sm pt-1">
+                                            {q.question}
+                                        </p>
                                     </div>
-                                ) : (
-                                    <div className="flex items-center gap-2 pl-4 ml-4 opacity-50">
-                                        <AlertCircle size={14} className="text-red-400" />
-                                        <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
-                                            {q.status === 'timed_out' ? 'Timed Out (-10 XP)' : 'Skipped (-10 XP)'}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        ))
-                    )}
+
+                                    {q.status === 'answered' ? (
+                                        <div className="flex items-start gap-3 pl-4 border-l-2 border-amber-500/30 ml-4">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-amber-400 font-bold text-sm leading-normal">
+                                                    {q.answer}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 pl-4 ml-4 opacity-50">
+                                            <AlertCircle size={14} className="text-red-400" />
+                                            <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
+                                                {q.status === 'timed_out' ? 'Timed Out (-10 XP)' : 'Skipped (-10 XP)'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            ))
+                        )}
+                    </AnimatePresence>
                 </div>
             </main>
+
+            {/* Participants Modal/Drawer */}
+            <AnimatePresence>
+                {showParticipants && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowParticipants(false)}
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40"
+                        />
+                        <motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 20 }}
+                            className="fixed right-0 top-0 bottom-0 w-full max-w-xs bg-[#13131f] border-l border-white/10 z-50 p-4 flex flex-col"
+                        >
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                                    <Users size={18} /> Participants
+                                </h3>
+                                <button
+                                    onClick={() => setShowParticipants(false)}
+                                    className="p-2 rounded-full hover:bg-white/5 transition"
+                                >
+                                    <X size={20} className="text-white/60" />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto space-y-3">
+                                {participants.length === 0 ? (
+                                    <p className="text-center text-white/30 text-sm py-10">No one here yet...</p>
+                                ) : (
+                                    participants.map(p => (
+                                        <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
+                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center font-bold text-white text-sm">
+                                                {p.username?.[0]?.toUpperCase() || '?'}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="font-bold text-white text-sm truncate">{p.username}</p>
+                                                    {p.is_pro && <Sparkles size={12} className="text-amber-500" />}
+                                                </div>
+                                                <p className="text-[10px] text-white/40">Joined</p>
+                                            </div>
+                                            {session.host_id === p.id && (
+                                                <span className="text-[10px] font-bold bg-amber-500 text-black px-1.5 py-0.5 rounded uppercase">Host</span>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     )
 }
+

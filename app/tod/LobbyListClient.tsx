@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check, ChevronLeft, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
+import { db } from '@/lib/db';
 
 export interface Lobby {
     id: string;
@@ -217,15 +218,59 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
         } catch (error: any) {
             console.error('Error fetching lobbies:', error);
-            // toast.error("Failed to load lobbies");
         } finally {
             setIsLoading(false);
             setIsLoadingMorePublic(false);
             setIsLoadingMorePrivate(false);
+
+            // Cache all fetched lobbies in Dexie
+            const allLobbies = [...joinedLobbies, ...publicLobbies, ...privateLobbies];
+            if (allLobbies.length > 0) {
+                const now = Date.now();
+                db.todLobbies.bulkPut(
+                    allLobbies.map(l => ({
+                        id: l.id,
+                        host_id: l.host_id,
+                        name: l.name,
+                        slug: l.slug,
+                        category: l.category,
+                        is_private: l.is_private,
+                        status: l.status,
+                        created_at: l.created_at,
+                        host_username: l.host_profile?.username,
+                        participant_count: l.participant_count,
+                        is_participant: l.is_participant,
+                        user_status: l.user_status,
+                        cached_at: now,
+                    }))
+                ).catch(() => { });
+            }
         }
     }, [effectiveUserId, supabase, joinedLobbies, publicLobbies.length, privateLobbies.length]);
 
     useEffect(() => {
+        // Load cached lobbies from Dexie on mount for instant display
+        db.todLobbies
+            .where('status')
+            .anyOf('waiting', 'active')
+            .reverse()
+            .sortBy('created_at')
+            .then(cached => {
+                if (cached.length > 0) {
+                    const pub = cached.filter(l => !l.is_private).map(l => ({
+                        ...l,
+                        host_profile: l.host_username ? { username: l.host_username } : undefined,
+                    })) as any[];
+                    const priv = cached.filter(l => l.is_private).map(l => ({
+                        ...l,
+                        host_profile: l.host_username ? { username: l.host_username } : undefined,
+                    })) as any[];
+                    if (publicLobbies.length === 0 && pub.length > 0) setPublicLobbies(pub);
+                    if (privateLobbies.length === 0 && priv.length > 0) setPrivateLobbies(priv);
+                }
+            })
+            .catch(() => { });
+
         fetchLobbies();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveUserId]);

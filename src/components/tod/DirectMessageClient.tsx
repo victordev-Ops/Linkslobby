@@ -10,6 +10,8 @@ import { uploadDmPhoto } from '@/actions/dm-photos'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { db, buildConversationKey } from '@/lib/db'
+import { queueOfflineAction, useAutoFlush } from '@/lib/sync'
 
 interface DirectMessageClientProps {
     targetUserId: string
@@ -57,6 +59,14 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
 
     const supabase = useMemo(() => createClient(), [])
 
+    // Auto-flush queued messages when coming back online
+    useAutoFlush()
+
+    const conversationKey = useMemo(() =>
+        profile?.id ? buildConversationKey(profile.id, targetUserId) : '',
+        [profile?.id, targetUserId]
+    )
+
     // Scroll to bottom helper
     const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
         messagesEndRef.current?.scrollIntoView({ behavior })
@@ -103,6 +113,30 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
         const loadInitial = async () => {
             setIsLoading(true)
 
+            // 1. Load cached messages from Dexie first for instant display
+            if (conversationKey) {
+                try {
+                    const cached = await db.messages
+                        .where('conversation_key')
+                        .equals(conversationKey)
+                        .sortBy('created_at')
+                    if (cached.length > 0) {
+                        const cachedMsgs = cached.slice(-PAGE_SIZE).map(m => ({
+                            id: m.id,
+                            content: m.content,
+                            created_at: m.created_at,
+                            isOwn: m.is_own,
+                            isOptimistic: m.is_optimistic,
+                            isRead: m.is_read,
+                        }))
+                        setMessages(cachedMsgs)
+                        setHasMore(cached.length > PAGE_SIZE)
+                        setTimeout(() => scrollToBottom('instant'), 50)
+                    }
+                } catch { } // Dexie may fail on first load, that's fine
+            }
+
+            // 2. Fetch from Supabase (always — to get fresh data)
             const result = await fetchMessages(0)
             if (!result) { setIsLoading(false); return }
 
@@ -112,6 +146,24 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             const initialMessages = filtered.slice(-PAGE_SIZE)
             setMessages(initialMessages)
             setHasMore(filtered.length > PAGE_SIZE || rawCount >= PAGE_SIZE * 3)
+
+            // 3. Cache messages in Dexie
+            if (conversationKey && filtered.length > 0) {
+                const now = Date.now()
+                db.messages.bulkPut(
+                    filtered.map(m => ({
+                        id: m.id,
+                        conversation_key: conversationKey,
+                        content: m.content,
+                        sender_id: m.isOwn ? profile!.id : targetUserId,
+                        created_at: m.created_at,
+                        is_own: m.isOwn,
+                        is_read: m.isRead,
+                        is_optimistic: false,
+                        cached_at: now,
+                    }))
+                ).catch(() => { })
+            }
 
             // Mark unread received messages as read
             const unreadToMark = filtered
@@ -201,7 +253,7 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             supabase.removeChannel(msgChannel)
             supabase.removeChannel(presenceChannel)
         }
-    }, [profile?.id, targetUserId, supabase])
+    }, [profile?.id, targetUserId, supabase, conversationKey])
 
     // Load older messages on scroll-up
     const loadOlderMessages = useCallback(async () => {
@@ -326,19 +378,60 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
         setTimeout(scrollToBottom, 50)
 
         try {
-            const result = await sendDirectMessage(targetUserId, content)
+            if (navigator.onLine) {
+                const result = await sendDirectMessage(targetUserId, content)
 
-            if (result.success && result.id) {
-                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: result.id!, isOptimistic: false } : m))
+                if (result.success && result.id) {
+                    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: result.id!, isOptimistic: false } : m))
+                    // Update Dexie with real ID
+                    if (conversationKey) {
+                        db.messages.delete(tempId).catch(() => { })
+                        db.messages.put({
+                            id: result.id,
+                            conversation_key: conversationKey,
+                            content,
+                            sender_id: profile!.id,
+                            created_at: new Date().toISOString(),
+                            is_own: true,
+                            is_read: false,
+                            is_optimistic: false,
+                            cached_at: Date.now(),
+                        }).catch(() => { })
+                    }
+                } else {
+                    console.error("Failed to send:", result.error)
+                    toast.error("Failed to send message")
+                    setMessages(prev => prev.filter(m => m.id !== tempId))
+                    db.messages.delete(tempId).catch(() => { })
+                }
             } else {
-                console.error("Failed to send:", result.error)
-                toast.error("Failed to send message")
-                setMessages(prev => prev.filter(m => m.id !== tempId))
+                // Offline: queue for later sync
+                queueOfflineAction('confessions', 'insert', {
+                    profile_id: targetUserId,
+                    message: `[DM:${profile!.id}:${profile!.username || 'Someone'}] ${content}`,
+                    message_type: 'confession',
+                })
+                // Keep optimistic message in Dexie
+                if (conversationKey) {
+                    db.messages.put({
+                        id: tempId,
+                        conversation_key: conversationKey,
+                        content,
+                        sender_id: profile!.id,
+                        created_at: new Date().toISOString(),
+                        is_own: true,
+                        is_read: false,
+                        is_optimistic: true,
+                        cached_at: Date.now(),
+                    }).catch(() => { })
+                }
+                toast.info("Message queued — will send when online")
             }
         } catch (err) {
             console.error("Exception sending message:", err)
             toast.error("Error sending message")
             setMessages(prev => prev.filter(m => m.id !== tempId))
+            db.messages.delete(tempId).catch(() => { })
         }
     }
 

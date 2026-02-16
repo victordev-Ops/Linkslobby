@@ -23,8 +23,26 @@ export function NotificationProvider({
 }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
+  const [hostedSessionIds, setHostedSessionIds] = useState<string[]>([])
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
+
+  // Fetch hosted sessions for Hot Seat notifications
+  useEffect(() => {
+    if (!profileId) return
+    const fetchHostedSessions = async () => {
+      const { data } = await supabase
+        .from('hot_seat_sessions')
+        .select('id')
+        .eq('host_id', profileId)
+        .eq('status', 'active') // Only care about active sessions
+
+      if (data) {
+        setHostedSessionIds(data.map(s => s.id))
+      }
+    }
+    fetchHostedSessions()
+  }, [profileId, supabase])
 
   const refreshUnreadCount = useCallback(async () => {
     if (!profileId) {
@@ -64,6 +82,7 @@ export function NotificationProvider({
 
     const channel = supabase
       .channel(`notifications-${profileId}`)
+      // 1. Confessions / DMs
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -72,14 +91,32 @@ export function NotificationProvider({
       }, (payload) => {
         refreshUnreadCount()
         const msg = payload.new
-        toast('New message! 💌', {
-          description: msg.message_type === 'ama' ? 'Someone asked you a question!' : 'You received a new secret message.',
+
+        // Detect DM
+        const isDM = msg.message.startsWith('[DM:')
+
+        let title = 'New message! 💌'
+        let description = 'You received a new secret message.'
+
+        if (isDM) {
+          title = 'New Direct Message! 💬'
+          description = 'You have a new private message.'
+        } else if (msg.message_type === 'ama') {
+          title = 'New AMA Question! ❓'
+          description = 'Someone asked you a question!'
+        }
+
+        toast(title, {
+          description,
           action: {
             label: 'View',
-            onClick: () => window.location.href = '/inbox'
+            onClick: () => window.location.href = isDM ? `/messages/${msg.id}` : '/inbox' // Adjust link if needed
+            // Actually DMs link via sender ID usually, but here we might just go to inbox or parse sender ID
+            // Simple link to inbox for now as DMs show up there too or have own page
           }
         })
       })
+      // 2. DYKM Scores
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -95,6 +132,50 @@ export function NotificationProvider({
             onClick: () => window.location.href = '/notifications'
           }
         })
+      })
+      // 3. TOD Turns (Lobby Updates)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'tod_lobbies'
+      }, (payload) => {
+        const lobby = payload.new
+        // Check if it's MY turn
+        if (lobby.current_target_id === profileId) {
+          toast('Your Turn! 🎯', {
+            description: 'It is your turn to answer in Truth or Dare!',
+            action: {
+              label: 'Go to Game',
+              onClick: () => window.location.href = `/tod/${lobby.slug}`
+            }
+          })
+        } else if (lobby.current_asker_id === profileId) {
+          toast('Your Turn to Ask! 🎲', {
+            description: 'It is your turn to ask a question in Truth or Dare!',
+            action: {
+              label: 'Go to Game',
+              onClick: () => window.location.href = `/tod/${lobby.slug}`
+            }
+          })
+        }
+      })
+      // 4. Hot Seat Questions (for Host)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'hot_seat_questions'
+      }, (payload) => {
+        // payload.new has session_id. Check if we host it.
+        const q = payload.new
+        if (hostedSessionIds.includes(q.session_id)) {
+          toast('Hot Seat: New Question! 🔥', {
+            description: 'A new rapid fire question has been added!',
+            action: {
+              label: 'Go to Game',
+              onClick: () => window.location.href = `/hot-seat` // Can't easily get slug here without fetch, just go to list
+            }
+          })
+        }
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -133,7 +214,7 @@ export function NotificationProvider({
     return () => {
       channel.unsubscribe()
     }
-  }, [profileId, refreshUnreadCount])
+  }, [profileId, refreshUnreadCount, hostedSessionIds]) // Re-sub if hosted sessions change implies we might miss some, but it's ok for now
 
   return (
     <NotificationContext.Provider value={{

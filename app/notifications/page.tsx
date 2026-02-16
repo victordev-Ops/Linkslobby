@@ -40,17 +40,36 @@ export default async function NotificationsPage() {
         .eq("is_hidden", false)
         .order("created_at", { ascending: false })
 
-    // Fetch Lobby Events
+    // Fetch XP Transactions
+    const xpPromise = supabase
+        .from("xp_transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+
+    // Fetch lobbies hosted by the user (for lobby events)
     const lobbiesPromise = supabase
         .from("tod_participants")
         .select("lobby_id")
         .eq("user_id", user.id)
+        .eq("status", "joined")
 
-    const [confessionsRes, dykmRes, lobbiesRes, profileRes] = await Promise.all([
+    // Fetch Hot Seat Questions for sessions hosted by user
+    const hotSeatPromise = supabase
+        .from("hot_seat_questions")
+        .select("*, session:hot_seat_sessions!inner(host_id, name, slug)")
+        .eq("session.host_id", user.id) // This works with !inner join filtering
+        .order("created_at", { ascending: false })
+        .limit(20)
+
+    const [confessionsRes, dykmRes, lobbiesRes, profileRes, xpRes, hotSeatRes] = await Promise.all([
         confessionsPromise,
         dykmScoresPromise,
         lobbiesPromise,
-        supabase.from("profiles").select("is_pro, username").eq("id", user.id).single()
+        supabase.from("profiles").select("is_pro, username").eq("id", user.id).single(),
+        xpPromise,
+        hotSeatPromise
     ])
 
     let lobbyEvents: any[] = []
@@ -72,6 +91,8 @@ export default async function NotificationsPage() {
     const confessions = (confessionsRes.data || []).filter(c => !hiddenIds.has(c.id))
     const dykmScores = (dykmRes.data || []).filter(s => !hiddenIds.has(s.id))
     const filteredLobbyEvents = lobbyEvents.filter(e => !hiddenIds.has(e.id))
+    const xpTransactions = (xpRes.data || []).filter(x => !hiddenIds.has(x.id))
+    const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id))
 
     console.log('--- Debug Notifications ---')
     console.log('User ID:', user.id)
@@ -81,6 +102,8 @@ export default async function NotificationsPage() {
         console.log('Sample Lobby Event ID:', lobbyEvents[0].id)
     }
     console.log('Filtered Lobby Events:', filteredLobbyEvents.length)
+    console.log('XP Transactions:', xpTransactions.length)
+    console.log('Hot Seat Questions:', hotSeatQuestions.length)
     console.log('---------------------------')
 
     return (
@@ -88,6 +111,8 @@ export default async function NotificationsPage() {
             initialConfessions={confessions}
             initialDykmScores={dykmScores}
             initialLobbyEvents={filteredLobbyEvents}
+            initialXpTransactions={xpTransactions}
+            initialHotSeatQuestions={hotSeatQuestions}
             isPro={profileRes.data?.is_pro || false}
             username={profileRes.data?.username || ""}
             profileId={user.id}

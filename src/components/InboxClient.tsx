@@ -9,8 +9,9 @@ import { markConfessionAsRead } from '@/actions/confessions'
 import { useNotifications } from '@/context/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-// IMPORT THE VIEW COMPONENT
 import MessageViewClient from './MessageViewClient'
+import { db } from '@/lib/db'
+import { queueOfflineAction } from '@/lib/sync'
 
 type Confession = {
   id: string
@@ -120,6 +121,11 @@ export default function InboxClient({
 
       if (data) {
         setConfessions(prev => mergeConfessions(prev, data))
+        // Cache in Dexie
+        const now = Date.now()
+        db.confessions.bulkPut(
+          data.map((c: any) => ({ ...c, cached_at: now }))
+        ).catch(() => { })
         queueMicrotask(() => {
           refreshUnreadCount().catch(console.error)
         })
@@ -165,17 +171,38 @@ export default function InboxClient({
     }
   }, [confessions, userId, supabase, hasMore, loadingMore])
 
-  // --- 2. SYNC SERVER PROPS ---
+  // --- 2. SYNC SERVER PROPS + DEXIE CACHE ---
   useEffect(() => {
     setConfessions(prev => mergeConfessions(prev, initialConfessions))
     const unread = initialConfessions.filter(c => !c.is_read).length
     setUnreadCount(unread)
 
+    // Cache initial confessions in Dexie
+    if (initialConfessions.length > 0) {
+      const now = Date.now()
+      db.confessions.bulkPut(
+        initialConfessions.map(c => ({ ...c, cached_at: now }))
+      ).catch(() => { })
+    }
+
+    // Load any extra cached confessions from Dexie (older ones not in initial SSR)
+    db.confessions
+      .where('profile_id')
+      .equals(userId)
+      .reverse()
+      .sortBy('created_at')
+      .then(cached => {
+        if (cached.length > 0) {
+          setConfessions(prev => mergeConfessions(prev, cached as Confession[]))
+        }
+      })
+      .catch(() => { })
+
     if (!hasMounted.current) {
       fetchLatest(false)
       hasMounted.current = true
     }
-  }, [initialConfessions, setUnreadCount, fetchLatest])
+  }, [initialConfessions, setUnreadCount, fetchLatest, userId])
 
   // --- 3. REALTIME LISTENER ---
   useEffect(() => {
@@ -291,10 +318,17 @@ export default function InboxClient({
         prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
       )
 
-      // Fire and forget server update
-      markConfessionAsRead(confession.id).catch(err => {
-        console.error('Mark as read error:', err)
-      })
+      // Optimistic update in Dexie
+      db.confessions.update(confession.id, { is_read: true }).catch(() => { })
+
+      // Fire and forget server update (queue if offline)
+      if (navigator.onLine) {
+        markConfessionAsRead(confession.id).catch(err => {
+          console.error('Mark as read error:', err)
+        })
+      } else {
+        queueOfflineAction('confessions', 'update', { id: confession.id, is_read: true })
+      }
 
       queueMicrotask(() => debouncedRefreshUnreadCount())
     }

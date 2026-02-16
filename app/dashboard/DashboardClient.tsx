@@ -420,7 +420,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs hover:bg-amber-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-amber-200 dark:shadow-amber-900/20"
                   >
                     <Sparkles size={16} />
-                    Join Hot Seat
+                    Host Hot Seat
                   </button>
                 </div>
               )}
