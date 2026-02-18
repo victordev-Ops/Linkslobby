@@ -61,3 +61,25 @@ export async function markConfessionAsRead(id: string) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
+
+export async function reportMessage(confessionId: string, reason?: string) {
+  const supabase = await createSupabaseServerClient()
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    const { error } = await supabase
+      .from('reports')
+      .upsert({
+        reporter_id: user.id,
+        confession_id: confessionId,
+        reason: reason || null,
+      }, { onConflict: 'reporter_id,confession_id', ignoreDuplicates: true })
+
+    if (error) throw error
+    return { success: true }
+  } catch (error) {
+    console.error('Report Error:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}

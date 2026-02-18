@@ -2,11 +2,12 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Share2, Lock, Camera, Loader2 } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { X, Share2, Lock, Camera, Loader2, Flag } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { toPng } from 'html-to-image'
 import { toast } from 'sonner'
 import { revealSenderHint } from '@/actions/reveal'
+import { reportMessage } from '@/actions/confessions'
 
 type Confession = {
   id: string
@@ -21,10 +22,29 @@ type Props = {
   confession: Confession
   username: string
   onClose?: () => void
+  restrictedWords?: string[]
 }
 
 function stripMetadata(message: string): string {
   return message.replace(/\n\n\[META:.*\]$/s, '').trim()
+}
+
+// Render message text with restricted words blurred
+function renderWithBlur(text: string, restricted: string[]) {
+  if (!restricted.length) return <>{text}</>
+  const lower = restricted.map(w => w.toLowerCase())
+  // Split on word boundaries matching any restricted word
+  const pattern = new RegExp(`(${lower.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi')
+  const parts = text.split(pattern)
+  return (
+    <>
+      {parts.map((part, i) =>
+        lower.includes(part.toLowerCase())
+          ? <span key={i} className="blur-sm select-none cursor-pointer hover:blur-none transition-all duration-300" title="Restricted word">{part}</span>
+          : part
+      )}
+    </>
+  )
 }
 
 const GRADIENTS = [
@@ -36,7 +56,9 @@ const GRADIENTS = [
   "bg-gradient-to-r from-gray-900 to-gray-600",
 ]
 
-export default function MessageViewClient({ confession, username, onClose }: Props) {
+const REPORT_REASONS = ['Spam', 'Harassment', 'Inappropriate', 'Other']
+
+export default function MessageViewClient({ confession, username, onClose, restrictedWords = [] }: Props) {
   const router = useRouter()
   const shareWrapperRef = useRef<HTMLDivElement>(null)
 
@@ -44,6 +66,11 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
   const [isSaving, setIsSaving] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
+
+  // Report state
+  const [showReportMenu, setShowReportMenu] = useState(false)
+  const [isReporting, setIsReporting] = useState(false)
+  const [hasReported, setHasReported] = useState(false)
 
   const handleNextColor = () => setColorIndex((prev) => (prev + 1) % GRADIENTS.length)
 
@@ -60,11 +87,10 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
   const generateImage = async () => {
     if (!shareWrapperRef.current) return null
     try {
-      // Small delay to ensure DOM is ready
       await new Promise(resolve => setTimeout(resolve, 100))
       return await toPng(shareWrapperRef.current, {
         cacheBust: true,
-        pixelRatio: 3, // Higher quality for sharing
+        pixelRatio: 3,
         quality: 1,
         backgroundColor: '#F9FAFB',
       })
@@ -112,7 +138,6 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
           title: getDisplayName(confession.message_type),
         })
       } else {
-        // Fallback to download if Web Share API isn't supported
         const link = document.createElement('a')
         link.download = 'message.png'
         link.href = dataUrl
@@ -144,6 +169,25 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
     }
   }
 
+  const handleReport = async (reason: string) => {
+    if (isReporting || hasReported) return
+    setIsReporting(true)
+    setShowReportMenu(false)
+    try {
+      const result = await reportMessage(confession.id, reason)
+      if (result.success) {
+        setHasReported(true)
+        toast.success("Report submitted. Thank you!")
+      } else {
+        toast.error("Couldn't submit report. Try again.")
+      }
+    } catch {
+      toast.error("Something went wrong")
+    } finally {
+      setIsReporting(false)
+    }
+  }
+
   const getDisplayName = (type: Confession['message_type']) => {
     switch (type) {
       case 'confession': return 'Confession'
@@ -155,14 +199,57 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
 
   const isLongMessage = confession.message.length > 150
   const textSizeClass = isLongMessage ? "text-xl leading-relaxed" : "text-2xl leading-tight"
+  const cleanedMessage = stripMetadata(confession.message)
 
   return (
     <div className="fixed inset-0 bg-gray-50 dark:bg-[#0f0a1e] font-sans overflow-y-auto z-[60] transition-colors">
       {/* Background layer */}
       <div className="fixed inset-x-0 top-0 h-96 bg-gradient-to-b from-pink-100/50 dark:from-purple-900/20 to-transparent pointer-events-none" />
 
-      {/* Top Bar - Fixed and always clickable */}
-      <div className="sticky top-0 px-6 pt-6 pb-4 flex items-center justify-end z-[70]">
+      {/* Top Bar */}
+      <div className="sticky top-0 px-6 pt-6 pb-4 flex items-center justify-between z-[70]">
+        {/* Report button */}
+        <div className="relative">
+          <button
+            onClick={() => !hasReported && setShowReportMenu(v => !v)}
+            disabled={isReporting}
+            className={`p-3 shadow-xl rounded-full border transition-all group active:scale-90 ${hasReported
+                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-500/20 cursor-default'
+                : 'bg-white dark:bg-[#1a1429] border-gray-100 dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-900/10'
+              }`}
+            title={hasReported ? 'Reported' : 'Report message'}
+          >
+            {isReporting
+              ? <Loader2 size={20} className="animate-spin text-red-500" />
+              : <Flag size={20} className={hasReported ? 'text-red-500' : 'text-gray-400 dark:text-gray-500 group-hover:text-red-500 transition-colors'} />
+            }
+          </button>
+
+          {/* Report reason dropdown */}
+          <AnimatePresence>
+            {showReportMenu && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: -8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -8 }}
+                transition={{ duration: 0.15 }}
+                className="absolute left-0 top-14 z-50 bg-white dark:bg-[#1a1429] rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden min-w-[160px]"
+              >
+                <p className="px-4 pt-3 pb-1 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Report reason</p>
+                {REPORT_REASONS.map(reason => (
+                  <button
+                    key={reason}
+                    onClick={() => handleReport(reason)}
+                    className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         <button
           onClick={handleClose}
           className="p-3 bg-white dark:bg-[#1a1429] shadow-xl rounded-full border border-gray-100 dark:border-white/10 active:scale-90 transition-all group"
@@ -179,7 +266,6 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
         >
           {/* THE CAPTURE AREA */}
           <div ref={shareWrapperRef} className="p-4 bg-transparent">
-            {/* Kept as white for sharing consistency, but you could offer dark mode variants later if requested */}
             <div className="w-full rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border border-gray-100">
               <div className={`${GRADIENTS[colorIndex]} px-8 py-12 text-center transition-colors duration-500`}>
                 <h1 className="text-white text-lg font-black tracking-tighter uppercase italic">
@@ -189,7 +275,7 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
 
               <div className="px-8 pt-12 pb-12 min-h-[250px] flex flex-col items-center justify-center bg-white">
                 <p className={`text-center text-gray-800 font-bold break-words whitespace-pre-wrap w-full ${textSizeClass}`}>
-                  {stripMetadata(confession.message)}
+                  {renderWithBlur(cleanedMessage, restrictedWords)}
                 </p>
                 <div className="mt-12 flex items-center gap-1.5 opacity-30">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
@@ -244,6 +330,11 @@ export default function MessageViewClient({ confession, username, onClose }: Pro
           </div>
         </motion.div>
       </div>
+
+      {/* Dismiss report menu on outside click */}
+      {showReportMenu && (
+        <div className="fixed inset-0 z-40" onClick={() => setShowReportMenu(false)} />
+      )}
     </div>
   )
 }

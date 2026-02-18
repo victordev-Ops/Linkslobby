@@ -3,9 +3,9 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import {
-  XP_REWARDS,
-  applyProRewardMultiplier,
-  formatRewardReason,
+    XP_REWARDS,
+    applyProRewardMultiplier,
+    formatRewardReason,
 } from '@/hooks/xp'
 
 /**
@@ -181,3 +181,26 @@ export async function checkSlugAvailability(slug: string) {
 
     return { available: true }
 }
+
+export async function updateRestrictedWords(words: string[]) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    // Sanitize: lowercase, trim, deduplicate, max 50 words
+    const cleaned = [...new Set(words.map(w => w.toLowerCase().trim()).filter(w => w.length > 0))].slice(0, 50)
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({ restricted_words: cleaned })
+        .eq('id', user.id)
+
+    if (error) {
+        console.error('updateRestrictedWords error:', error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath('/settings')
+    return { success: true, words: cleaned }
+}
+

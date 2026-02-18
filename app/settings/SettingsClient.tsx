@@ -1,35 +1,113 @@
 "use client"
 
+import { useState, useRef, useTransition } from "react"
 import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
-import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home } from "lucide-react"
+import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home, Shield, Trash2, X, Plus, UserX, AlertTriangle, Loader2 } from "lucide-react"
 import PushToggle from "@/components/PushToggle"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { updateRestrictedWords } from "@/actions/profile"
+import { unblockUser } from "@/actions/blocked-users"
+import { deleteAccount } from "@/actions/auth"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
+import type { BlockedUser } from "@/actions/blocked-users"
 
 interface SettingsClientProps {
   initialUser: any
   initialUsername: string
   initialPushEnabled: boolean
+  initialRestrictedWords: string[]
+  initialBlockedUsers: BlockedUser[]
 }
 
 export default function SettingsClient({
   initialUser,
   initialUsername,
   initialPushEnabled,
+  initialRestrictedWords,
+  initialBlockedUsers,
 }: SettingsClientProps) {
   const user = initialUser
   const username = initialUsername
+  const router = useRouter()
+
+  // Restricted words state
+  const [words, setWords] = useState<string[]>(initialRestrictedWords)
+  const [wordInput, setWordInput] = useState("")
+  const [isSavingWords, startSavingWords] = useTransition()
+
+  // Blocked users state
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>(initialBlockedUsers)
+  const [unblockingId, setUnblockingId] = useState<string | null>(null)
+
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState("")
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const addWord = () => {
+    const w = wordInput.toLowerCase().trim()
+    if (!w || words.includes(w) || words.length >= 50) return
+    const newWords = [...words, w]
+    setWords(newWords)
+    setWordInput("")
+    startSavingWords(async () => {
+      const result = await updateRestrictedWords(newWords)
+      if (!result.success) toast.error("Failed to save word filter")
+    })
+  }
+
+  const removeWord = (word: string) => {
+    const newWords = words.filter(w => w !== word)
+    setWords(newWords)
+    startSavingWords(async () => {
+      const result = await updateRestrictedWords(newWords)
+      if (!result.success) toast.error("Failed to save word filter")
+    })
+  }
+
+  const handleUnblock = async (blockedId: string) => {
+    setUnblockingId(blockedId)
+    const result = await unblockUser(blockedId)
+    if (result.success) {
+      setBlockedUsers(prev => prev.filter(u => u.blocked_id !== blockedId))
+      toast.success("User unblocked")
+    } else {
+      toast.error("Failed to unblock user")
+    }
+    setUnblockingId(null)
+  }
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirm !== "DELETE") return
+    setIsDeleting(true)
+    try {
+      const result = await deleteAccount()
+      if (result.success) {
+        toast.success("Account deleted. Goodbye!")
+        router.push("/login")
+      } else {
+        toast.error(result.message || "Failed to delete account")
+      }
+    } catch {
+      toast.error("Something went wrong")
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteModal(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0f0a1e] transition-colors duration-300">
 
-      {/* Background Ambience (Dark Mode only) */}
+      {/* Background Ambience */}
       <div className="fixed inset-0 pointer-events-none hidden dark:block">
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]" />
       </div>
 
-      {/* Header - Fixed/Sticky and ensured to be on top */}
+      {/* Header */}
       <div className="bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-xl border-b dark:border-white/10 sticky top-0 z-50 transition-all duration-300">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link
@@ -93,7 +171,6 @@ export default function SettingsClient({
                   <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">Customization</p>
                 </div>
               </div>
-
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
                 <div>
                   <p className="font-bold dark:text-white text-sm">Theme Mode</p>
@@ -115,15 +192,114 @@ export default function SettingsClient({
                     <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">Notifications</p>
                   </div>
                 </div>
+                <PushToggle userId={user.id} initialPushEnabled={initialPushEnabled} />
+              </div>
+            )}
 
-                <div className="space-y-4">
-                  <PushToggle userId={user.id} initialPushEnabled={initialPushEnabled} />
-                  <div className="p-3 bg-blue-50/50 dark:bg-blue-500/5 rounded-xl border border-blue-100/50 dark:border-blue-500/10">
-                    <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed font-medium">
-                      Receive instant alerts on your device whenever someone sends you an anonymous confession.
-                    </p>
+            {/* Content Filter Card */}
+            {user && (
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                    <Shield size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white">Content Filter</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">Restricted Words</p>
                   </div>
                 </div>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  Words added here will be blurred in messages you receive. Hover to reveal.
+                </p>
+
+                {/* Word input */}
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={wordInput}
+                    onChange={e => setWordInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addWord() } }}
+                    placeholder="Add a word..."
+                    maxLength={30}
+                    className="flex-1 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400/40 transition-all"
+                  />
+                  <button
+                    onClick={addWord}
+                    disabled={!wordInput.trim() || words.length >= 50}
+                    className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-40 flex items-center gap-1.5"
+                  >
+                    <Plus size={16} />
+                    Add
+                  </button>
+                </div>
+
+                {/* Word chips */}
+                {words.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {words.map(word => (
+                      <span
+                        key={word}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-300 rounded-full text-xs font-bold border border-orange-200 dark:border-orange-500/20"
+                      >
+                        {word}
+                        <button
+                          onClick={() => removeWord(word)}
+                          className="hover:text-red-500 transition-colors"
+                          aria-label={`Remove ${word}`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    {isSavingWords && <Loader2 size={14} className="text-gray-400 animate-spin self-center" />}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 dark:text-gray-600 italic">No restricted words yet</p>
+                )}
+                <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-3">{words.length}/50 words</p>
+              </div>
+            )}
+
+            {/* Blocked Users Card */}
+            {user && (
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-600 dark:text-red-400">
+                    <UserX size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white">Blocked Users</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">{blockedUsers.length} blocked</p>
+                  </div>
+                </div>
+
+                {blockedUsers.length === 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-gray-600 italic">You haven't blocked anyone yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {blockedUsers.map(bu => (
+                      <div
+                        key={bu.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center text-white font-black text-sm">
+                            {bu.username.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-bold text-sm text-gray-900 dark:text-white">@{bu.username}</span>
+                        </div>
+                        <button
+                          onClick={() => handleUnblock(bu.blocked_id)}
+                          disabled={unblockingId === bu.blocked_id}
+                          className="text-xs font-bold text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors px-3 py-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-500/10 active:scale-95 disabled:opacity-50"
+                        >
+                          {unblockingId === bu.blocked_id ? <Loader2 size={14} className="animate-spin" /> : 'Unblock'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -172,6 +348,35 @@ export default function SettingsClient({
                 )}
               </div>
             </div>
+
+            {/* Danger Zone */}
+            {user && (
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-red-100 dark:border-red-500/20 p-8 transition-all">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-600 dark:text-red-400">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-red-700 dark:text-red-400">Danger Zone</h3>
+                    <p className="text-xs text-red-400 dark:text-red-500 font-medium uppercase tracking-wider">Irreversible actions</p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-red-50 dark:bg-red-500/5 rounded-2xl border border-red-100 dark:border-red-500/10 mb-4">
+                  <p className="text-xs text-red-700 dark:text-red-300 font-medium leading-relaxed">
+                    Deleting your account is permanent. All your messages, XP, and data will be erased and cannot be recovered.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="w-full py-3.5 rounded-2xl border-2 border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 font-bold text-sm hover:bg-red-50 dark:hover:bg-red-500/10 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} />
+                  Delete My Account
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -193,15 +398,12 @@ export default function SettingsClient({
                     <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">{link.label}</span>
                   </Link>
                 ))}
-                <div className="mt-4 pt-4 border-t dark:border-white/5">
-                  <p className="text-[10px] font-bold text-gray-300 dark:text-gray-600 italic">More settings coming soon...</p>
-                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Mobile-only back button - Redesigned to be less intrusive */}
+        {/* Mobile back button */}
         <div className="fixed bottom-24 left-6 right-6 sm:hidden z-20 pointer-events-none">
           <Link
             href="/dashboard"
@@ -211,8 +413,44 @@ export default function SettingsClient({
           </Link>
         </div>
       </div>
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="bg-white dark:bg-[#1a1429] rounded-[2rem] shadow-2xl border border-red-100 dark:border-red-500/20 w-full max-w-sm p-8 animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 bg-red-100 dark:bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5">
+              <Trash2 size={28} className="text-red-500" />
+            </div>
+            <h2 className="text-xl font-black text-center text-gray-900 dark:text-white mb-2">Delete Account?</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
+              This is permanent and cannot be undone. Type <strong className="text-red-500">DELETE</strong> to confirm.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirm}
+              onChange={e => setDeleteConfirm(e.target.value)}
+              placeholder="Type DELETE to confirm"
+              className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-400/40 mb-4 transition-all"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowDeleteModal(false); setDeleteConfirm("") }}
+                className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 font-bold text-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirm !== "DELETE" || isDeleting}
+                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
-

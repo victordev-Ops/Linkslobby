@@ -3,17 +3,10 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
-import { Bell, BellOff, Loader2, AlertCircle } from "lucide-react"
+import { Bell, BellOff, BellRing, Loader2, AlertCircle, ShieldOff } from "lucide-react"
 import { usePushSubscription } from "@/hooks/use-push"
-import { createClient } from "@/lib/supabase/client"
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-
-const CHECK_TIMEOUT = 5000 // 5 second timeout for checking status
+type PermissionState = 'granted' | 'denied' | 'default' | 'unsupported'
 
 export default function PushToggle({
   userId,
@@ -23,143 +16,89 @@ export default function PushToggle({
   initialPushEnabled?: boolean
 }) {
   const { subscribe, unsubscribe, syncSubscription } = usePushSubscription()
-  const [isEnabled, setIsEnabled] = useState(initialPushEnabled)
-  const [loading, setLoading] = useState(true)
-  const [isSupported, setIsSupported] = useState(true)
 
-  const supabase = useRef(createClient()).current
+  // Determine initial state synchronously — no loading flash when we already know
+  const getInitialPermission = (): PermissionState => {
+    if (typeof window === 'undefined') return 'default'
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) return 'unsupported'
+    return Notification.permission as PermissionState
+  }
+
+  const [permission, setPermission] = useState<PermissionState>(getInitialPermission)
+  const [isEnabled, setIsEnabled] = useState(
+    initialPushEnabled && getInitialPermission() === 'granted'
+  )
+  const [loading, setLoading] = useState(false)
   const mountedRef = useRef(true)
-  const hasCheckedRef = useRef(false)
-  // const timeoutRef = useRef<NodeJS.Timeout>()
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     mountedRef.current = true
+    const perm = getInitialPermission()
+    setPermission(perm)
 
-    // Prevent multiple checks
-    if (hasCheckedRef.current) return
-    hasCheckedRef.current = true
-
-    const checkStatus = async () => {
-      try {
-        // Set a timeout to prevent infinite loading
-        timeoutRef.current = setTimeout(() => {
-          if (mountedRef.current && loading) {
-            console.warn("Push check timeout - defaulting to disabled")
-            setLoading(false)
-            setIsEnabled(false)
-          }
-        }, CHECK_TIMEOUT)
-
-        // Check browser support
-        if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-          if (mountedRef.current) {
-            setIsSupported(false)
-            setLoading(false)
-          }
-          return
-        }
-
-        const hasPermission = Notification.permission === "granted"
-
-        // If we already have the initial state from server, and it matches browser permission, 
-        // we can finish loading early
-        if (initialPushEnabled && hasPermission && mountedRef.current) {
-          setIsEnabled(true)
-          setLoading(false)
-          // Still sync in background
-          syncSubscription(userId).catch(console.error)
-          return
-        }
-
-        // If permission granted, sync subscription in background
-        if (hasPermission) {
-          // Don't await this - let it run in background
-          syncSubscription(userId).catch(console.error)
-        }
-
-        // Check DB subscription status ONLY if we don't have initialPushEnabled or if it's false
-        // (to verify if it was enabled elsewhere)
-        let hasSubscription = initialPushEnabled
-
-        if (!initialPushEnabled) {
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("push_subscription")
-            .eq("id", userId)
-            .single()
-
-          if (error) {
-            console.error("Error checking subscription:", error)
-          } else {
-            hasSubscription = !!data?.push_subscription
-          }
-        }
-
-        if (mountedRef.current) {
-          setIsEnabled(hasPermission && hasSubscription)
-          setLoading(false)
-        }
-      } catch (err) {
-        console.error("Status check error:", err)
-        if (mountedRef.current) {
-          setIsEnabled(false)
-          setLoading(false)
-        }
-      } finally {
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current)
-        }
+    if (perm === 'granted') {
+      // If server says enabled and browser agrees — we're done, no DB query needed
+      if (initialPushEnabled) {
+        setIsEnabled(true)
+        // Background sync to keep subscription fresh
+        syncSubscription(userId).catch(console.error)
+        return
       }
+      // Permission granted but server says not enabled — sync subscription
+      syncSubscription(userId).catch(console.error)
+      setIsEnabled(false)
+    } else {
+      setIsEnabled(false)
     }
 
-    checkStatus()
-
-    return () => {
-      mountedRef.current = false
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-    }
-  }, [userId]) // Only depend on userId, not supabase
+    return () => { mountedRef.current = false }
+  }, [userId, initialPushEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggle = async () => {
-    if (loading) return
+    if (loading || permission === 'denied' || permission === 'unsupported') return
     setLoading(true)
 
     try {
-      let success = false
-
       if (isEnabled) {
-        success = await unsubscribe(userId)
-        if (success && mountedRef.current) {
-          setIsEnabled(false)
-        }
+        const success = await unsubscribe(userId)
+        if (success && mountedRef.current) setIsEnabled(false)
       } else {
-        success = await subscribe(userId)
+        const success = await subscribe(userId)
         if (success && mountedRef.current) {
           setIsEnabled(true)
+          setPermission('granted')
+        } else if (mountedRef.current) {
+          // User may have denied during the prompt
+          setPermission(Notification.permission as PermissionState)
         }
       }
     } catch (error) {
       console.error("Toggle error:", error)
     } finally {
-      if (mountedRef.current) {
-        setLoading(false)
-      }
+      if (mountedRef.current) setLoading(false)
     }
   }
 
-  if (!isSupported) {
+  if (permission === 'unsupported') {
     return (
-      <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-2xl border border-yellow-200">
-        <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+      <div className="flex items-center gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-2xl border border-yellow-200 dark:border-yellow-500/20">
+        <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
         <div>
-          <p className="text-sm font-medium text-yellow-900">
-            Push notifications not supported
-          </p>
-          <p className="text-xs text-yellow-700 mt-1">
-            Try using Chrome on Android or Safari on iOS 16.4+
+          <p className="text-sm font-bold text-yellow-900 dark:text-yellow-300">Not supported</p>
+          <p className="text-xs text-yellow-700 dark:text-yellow-500 mt-0.5">Use Chrome on Android or Safari on iOS 16.4+</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (permission === 'denied') {
+    return (
+      <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-200 dark:border-red-500/20">
+        <ShieldOff className="h-5 w-5 text-red-500 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-bold text-red-900 dark:text-red-300">Blocked in browser</p>
+          <p className="text-xs text-red-700 dark:text-red-400 mt-0.5">
+            Go to your browser settings → Site permissions → Notifications → Allow
           </p>
         </div>
       </div>
@@ -167,23 +106,15 @@ export default function PushToggle({
   }
 
   return (
-    <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
       <div className="flex items-center gap-3">
-        <div className={cn(
-          "p-2 rounded-lg transition-colors",
-          isEnabled ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
-        )}>
-          {isEnabled ? <Bell size={20} /> : <BellOff size={20} />}
+        <div className={`p-2 rounded-xl transition-colors ${isEnabled ? 'bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400'}`}>
+          {isEnabled ? <BellRing size={20} /> : <BellOff size={20} />}
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-900">Push Notifications</p>
-          <p className="text-xs text-gray-600">
-            {loading
-              ? "Checking..."
-              : isEnabled
-                ? "You'll receive notifications"
-                : "Get notified of new confessions"
-            }
+          <p className="text-sm font-bold text-gray-900 dark:text-white">Push Notifications</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {isEnabled ? 'You\'ll be notified of new messages' : 'Tap to get instant alerts'}
           </p>
         </div>
       </div>
@@ -191,21 +122,16 @@ export default function PushToggle({
       <button
         onClick={handleToggle}
         disabled={loading}
-        className="relative h-7 w-12 cursor-pointer outline-none disabled:cursor-not-allowed"
+        className="relative h-7 w-12 cursor-pointer outline-none disabled:cursor-not-allowed flex-shrink-0"
         aria-label="Toggle push notifications"
       >
-        <div className={cn(
-          "h-full w-full rounded-full transition-colors duration-300",
-          isEnabled ? "bg-green-600" : "bg-gray-300",
-          loading && "opacity-50"
-        )} />
-
+        <div className={`h-full w-full rounded-full transition-colors duration-300 ${isEnabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-white/20'} ${loading ? 'opacity-60' : ''}`} />
         <motion.div
           className="absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-md"
           animate={{ x: isEnabled ? 20 : 0 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         >
-          {loading && <Loader2 size={12} className="animate-spin text-gray-600" />}
+          {loading && <Loader2 size={12} className="animate-spin text-gray-500" />}
         </motion.div>
       </button>
     </div>

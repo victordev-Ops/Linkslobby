@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import SettingsClient from './SettingsClient'
-// REMOVE: import { unstable_cache } from 'next/cache'
+import { getBlockedUsers } from '@/actions/blocked-users'
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient()
@@ -9,19 +9,24 @@ export default async function SettingsPage() {
 
   let username = 'Anonymous'
   let initialPushEnabled = false
+  let restrictedWords: string[] = []
+  let blockedUsers: Awaited<ReturnType<typeof getBlockedUsers>> = []
 
-  // DIRECT FETCH: Get the username and push status directly
   if (user) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('username, push_subscription')
-      .eq('id', user.id)
-      .single()
+    const [profileResult, blockedResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('username, push_subscription, restricted_words')
+        .eq('id', user.id)
+        .single(),
+      getBlockedUsers(),
+    ])
 
-    if (data?.username) {
-      username = data.username
-    }
+    const data = profileResult.data
+    if (data?.username) username = data.username
     initialPushEnabled = !!data?.push_subscription
+    restrictedWords = data?.restricted_words || []
+    blockedUsers = blockedResult
   }
 
   return (
@@ -29,6 +34,8 @@ export default async function SettingsPage() {
       initialUser={user}
       initialUsername={username}
       initialPushEnabled={initialPushEnabled}
+      initialRestrictedWords={restrictedWords}
+      initialBlockedUsers={blockedUsers}
     />
   )
 }
