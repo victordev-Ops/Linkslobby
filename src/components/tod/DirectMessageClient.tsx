@@ -25,6 +25,8 @@ interface Message {
     isOwn: boolean
     isOptimistic?: boolean
     isRead?: boolean
+    isFirstInGroup?: boolean
+    isLastInGroup?: boolean
 }
 
 const PAGE_SIZE = 10
@@ -38,6 +40,28 @@ const getSenderId = (content: string) => {
 
 // Helper to clean message - strips [DM:...] tag
 const cleanMessage = (content: string) => content.replace(/^\[DM:[^\]]+\]\s*/, '');
+
+// Annotate messages with group metadata for messenger-style rendering
+function groupMessages(msgs: Message[]): Message[] {
+    return msgs.map((msg, i) => {
+        const prev = msgs[i - 1]
+        const next = msgs[i + 1]
+        const isFirstInGroup = !prev || prev.isOwn !== msg.isOwn
+        const isLastInGroup = !next || next.isOwn !== msg.isOwn
+        return { ...msg, isFirstInGroup, isLastInGroup }
+    })
+}
+
+// Format a date for the separator label
+function formatDateSeparator(dateStr: string): string {
+    const d = new Date(dateStr)
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(today.getDate() - 1)
+    if (d.toDateString() === today.toDateString()) return 'Today'
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
+    return d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
+}
 
 export default function DirectMessageClient({ targetUserId, targetUsername }: DirectMessageClientProps) {
     const { profile } = useAuth()
@@ -209,7 +233,8 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                             content: cleanMessage(newMsg.message),
                             created_at: newMsg.created_at,
                             isOwn: isSent,
-                            isRead: newMsg.is_read
+                            // Optimistically mark received messages as read immediately
+                            isRead: isReceived ? true : newMsg.is_read
                         }
                         setMessages(prev => {
                             if (prev.some(m => m.id === msg.id)) return prev;
@@ -218,12 +243,22 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                         setTimeout(scrollToBottom, 100)
 
                         if (isReceived) {
-                            supabase.from('confessions').update({ is_read: true }).eq('id', newMsg.id).then();
+                            // Mark as read with proper error handling
+                            supabase.from('confessions')
+                                .update({ is_read: true })
+                                .eq('id', newMsg.id)
+                                .then(({ error }) => {
+                                    if (error) {
+                                        console.error('Failed to mark message as read:', error)
+                                    }
+                                })
                         }
                     }
                 } else if (payload.eventType === 'UPDATE') {
                     const updated = payload.new;
-                    setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, isRead: updated.is_read } : m));
+                    setMessages(prev => prev.map(m =>
+                        m.id === updated.id ? { ...m, isRead: updated.is_read === true } : m
+                    ));
                 }
             })
             .subscribe()
@@ -510,7 +545,7 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
             </div>
 
             {/* Messages Area */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 scroll-smooth">
                 {/* Load Older Messages Indicator */}
                 {!isLoading && hasMore && (
                     <div className="flex justify-center py-2">
@@ -548,42 +583,68 @@ export default function DirectMessageClient({ targetUserId, targetUsername }: Di
                         </div>
                     </div>
                 ) : (
-                    messages.map((msg) => (
-                        <div
-                            key={msg.id}
-                            className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
-                        >
-                            <div
-                                className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-5 py-3 text-[15px] leading-relaxed shadow-md transition-all ${msg.isOwn
-                                    ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-br-none'
-                                    : 'bg-neutral-800 text-neutral-200 rounded-bl-none border border-white/5'
-                                    } ${msg.content.startsWith('[IMG:') ? 'p-1.5' : ''}`}
-                            >
-                                {msg.content.startsWith('[IMG:') ? (
-                                    <div className="relative group">
-                                        <img
-                                            src={msg.content.match(/\[IMG:(.*)\]/)?.[1]}
-                                            alt="Shared photo"
-                                            className="rounded-xl w-full h-auto max-h-[300px] object-cover cursor-pointer"
-                                            onClick={() => window.open(msg.content.match(/\[IMG:(.*)\]/)?.[1], '_blank')}
-                                        />
-                                    </div>
-                                ) : (
-                                    <p className="font-medium">{msg.content}</p>
-                                )}
-                                <div className={`flex items-center justify-end gap-1.5 mt-2 ${msg.isOwn ? 'text-purple-200/60' : 'text-neutral-500'}`}>
-                                    <span className="text-[10px] font-bold uppercase tracking-tighter">
-                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                    {msg.isOwn && (
-                                        <span className={`text-[11px] ml-1 font-bold ${msg.isRead ? 'text-blue-400' : ''}`}>
-                                            {msg.isOptimistic ? '...' : msg.isRead ? '✓✓' : '✓'}
+                    groupMessages(messages).map((msg, i, grouped) => {
+                        // Date separator: show when date changes between messages
+                        const prevMsg = grouped[i - 1]
+                        const showDateSep = !prevMsg ||
+                            new Date(msg.created_at).toDateString() !== new Date(prevMsg.created_at).toDateString()
+
+                        // Bubble shape: tail only on last message of a group
+                        const ownShape = msg.isLastInGroup ? 'rounded-br-none' : 'rounded-br-2xl'
+                        const otherShape = msg.isLastInGroup ? 'rounded-bl-none' : 'rounded-bl-2xl'
+                        const isImg = msg.content.startsWith('[IMG:')
+
+                        return (
+                            <div key={msg.id}>
+                                {showDateSep && (
+                                    <div className="flex items-center gap-3 my-3">
+                                        <div className="flex-1 h-px bg-white/5" />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">
+                                            {formatDateSeparator(msg.created_at)}
                                         </span>
-                                    )}
+                                        <div className="flex-1 h-px bg-white/5" />
+                                    </div>
+                                )}
+                                <div
+                                    className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} ${msg.isFirstInGroup ? 'mt-3' : 'mt-0.5'
+                                        } animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                                >
+                                    <div
+                                        className={`max-w-[85%] sm:max-w-[70%] rounded-2xl text-[15px] leading-relaxed shadow-md transition-all ${msg.isOwn
+                                            ? `bg-gradient-to-br from-purple-600 to-indigo-600 text-white ${ownShape}`
+                                            : `bg-neutral-800 text-neutral-200 ${otherShape} border border-white/5`
+                                            } ${isImg ? 'p-1.5' : 'px-5 py-3'}`}
+                                    >
+                                        {isImg ? (
+                                            <div className="relative group">
+                                                <img
+                                                    src={msg.content.match(/\[IMG:(.*)\]/)?.[1]}
+                                                    alt="Shared photo"
+                                                    className="rounded-xl w-full h-auto max-h-[300px] object-cover cursor-pointer"
+                                                    onClick={() => window.open(msg.content.match(/\[IMG:(.*)\]/)?.[1], '_blank')}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <p className="font-medium">{msg.content}</p>
+                                        )}
+                                        {/* Timestamp + read receipt: only on last message of group */}
+                                        {msg.isLastInGroup && (
+                                            <div className={`flex items-center justify-end gap-1.5 mt-1.5 ${msg.isOwn ? 'text-purple-200/60' : 'text-neutral-500'}`}>
+                                                <span className="text-[10px] font-bold uppercase tracking-tighter">
+                                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                                {msg.isOwn && (
+                                                    <span className={`text-[11px] ml-0.5 font-bold ${msg.isRead ? 'text-blue-400' : ''}`}>
+                                                        {msg.isOptimistic ? '···' : msg.isRead ? '✓✓' : '✓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))
+                        )
+                    })
                 )}
 
                 {typingUsers.size > 0 && (

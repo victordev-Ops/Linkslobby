@@ -1,5 +1,6 @@
 import { defaultCache } from "@serwist/next/worker";
-import { Serwist, NetworkOnly, StaleWhileRevalidate } from "serwist";
+import { Serwist, NetworkOnly, StaleWhileRevalidate, CacheFirst } from "serwist";
+import { ExpirationPlugin } from "serwist";
 
 // Use 'any' to bypass Next.js missing Service Worker global types
 declare const self: any;
@@ -35,6 +36,17 @@ const serwist = new Serwist({
       // This includes both REST API and Realtime connections
       matcher: /^https:\/\/.*\.supabase\.co\/.*$/,
       handler: new NetworkOnly(),
+    },
+    {
+      // SAFE CACHING: Next.js static assets (JS/CSS chunks)
+      // These are content-hashed, so CacheFirst is safe and enables offline rendering
+      matcher: /\/_next\/static\/.*/,
+      handler: new CacheFirst({
+        cacheName: 'next-static-v1',
+        plugins: [
+          new ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 }),
+        ],
+      }),
     },
     {
       // SAFE CACHING: Navigation (Pages)
