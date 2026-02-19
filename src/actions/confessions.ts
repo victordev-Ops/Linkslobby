@@ -83,3 +83,35 @@ export async function reportMessage(confessionId: string, reason?: string) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
+
+export async function deleteMessage(confessionId: string) {
+  const supabase = await createSupabaseServerClient()
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    // Verify ownership
+    const { data: confession } = await supabase
+      .from('confessions')
+      .select('profile_id')
+      .eq('id', confessionId)
+      .single()
+
+    if (!confession || confession.profile_id !== user.id) {
+      return { success: false, error: 'Not authorized to delete this message' }
+    }
+
+    const { error } = await supabase
+      .from('confessions')
+      .delete()
+      .eq('id', confessionId)
+
+    if (error) throw error
+
+    revalidatePath('/inbox')
+    return { success: true }
+  } catch (error) {
+    console.error('Delete Message Error:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}

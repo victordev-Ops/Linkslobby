@@ -25,7 +25,18 @@ export default function Signup() {
     setMessage('')
 
     try {
-      await signUp(email)
+      const result = await signUp(email)
+
+      if (!result.success) {
+        if ((result as any).alreadyExists) {
+          setStatus('success')
+          setMessage('Account already exists! Redirecting to login...')
+          setTimeout(() => window.location.href = '/login', 2000)
+          return
+        }
+        throw new Error(result.message)
+      }
+
       setStatus('success')
       setMessage('check your inbox! we sent a link to ' + email)
       setEmail('')

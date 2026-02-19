@@ -2,12 +2,12 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Share2, Lock, Camera, Loader2, Flag } from 'lucide-react'
+import { X, Share2, Lock, Camera, Loader2, Flag, Trash2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toPng } from 'html-to-image'
 import { toast } from 'sonner'
 import { revealSenderHint } from '@/actions/reveal'
-import { reportMessage } from '@/actions/confessions'
+import { reportMessage, deleteMessage } from '@/actions/confessions'
 
 type Confession = {
   id: string
@@ -71,6 +71,7 @@ export default function MessageViewClient({ confession, username, onClose, restr
   const [showReportMenu, setShowReportMenu] = useState(false)
   const [isReporting, setIsReporting] = useState(false)
   const [hasReported, setHasReported] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleNextColor = () => setColorIndex((prev) => (prev + 1) % GRADIENTS.length)
 
@@ -188,6 +189,29 @@ export default function MessageViewClient({ confession, username, onClose, restr
     }
   }
 
+  const handleDelete = async () => {
+    if (isDeleting) return
+    setIsDeleting(true)
+    setShowReportMenu(false)
+    try {
+      const result = await deleteMessage(confession.id)
+      if (result.success) {
+        toast.success('Message deleted')
+        if (onClose) {
+          onClose()
+        } else {
+          router.push('/inbox')
+        }
+      } else {
+        toast.error(result.error || "Couldn't delete message")
+      }
+    } catch {
+      toast.error('Something went wrong')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   const getDisplayName = (type: Confession['message_type']) => {
     switch (type) {
       case 'confession': return 'Confession'
@@ -214,8 +238,8 @@ export default function MessageViewClient({ confession, username, onClose, restr
             onClick={() => !hasReported && setShowReportMenu(v => !v)}
             disabled={isReporting}
             className={`p-3 shadow-xl rounded-full border transition-all group active:scale-90 ${hasReported
-                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-500/20 cursor-default'
-                : 'bg-white dark:bg-[#1a1429] border-gray-100 dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-900/10'
+              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-500/20 cursor-default'
+              : 'bg-white dark:bg-[#1a1429] border-gray-100 dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-900/10'
               }`}
             title={hasReported ? 'Reported' : 'Report message'}
           >
@@ -245,6 +269,15 @@ export default function MessageViewClient({ confession, username, onClose, restr
                     {reason}
                   </button>
                 ))}
+                <div className="border-t border-gray-100 dark:border-white/10 my-1" />
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="w-full text-left px-4 py-3 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Delete Message
+                </button>
               </motion.div>
             )}
           </AnimatePresence>

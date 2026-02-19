@@ -8,7 +8,7 @@ export type AuthResponse = {
   message: string
 }
 
-export async function signUp(email: string): Promise<AuthResponse> {
+export async function signUp(email: string): Promise<AuthResponse & { alreadyExists?: boolean }> {
   const supabase = await createSupabaseServerClient()
 
   // 1. Dynamic Origin Resolution
@@ -17,6 +17,21 @@ export async function signUp(email: string): Promise<AuthResponse> {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
   const cleanOrigin = origin.replace(/\/$/, '')
+
+  // Check if user already exists
+  const { data: existingUser } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', email.trim().toLowerCase())
+    .single()
+
+  if (existingUser) {
+    return {
+      success: false,
+      message: 'Account already exists. Redirecting to login...',
+      alreadyExists: true
+    }
+  }
 
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim().toLowerCase(),
