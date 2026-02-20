@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Brain, Trophy } from 'lucide-react'
+import DykmResultQuestions from './DykmResultQuestions'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +28,28 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
 
     // Determine if viewer is the owner
     const isOwner = score.quiz_owner_id === user.id
+
+    // Fetch IsPro status
+    const { data: viewerProfile } = await supabase
+        .from('profiles')
+        .select('is_pro')
+        .eq('id', user.id)
+        .single()
+    const isPro = viewerProfile?.is_pro ?? false
+
+    // Fetch revealed indices if owner
+    let revealedIndices: number[] = []
+    if (isOwner && !isPro) {
+        const { data: reveals } = await supabase
+            .from('dykm_response_reveals')
+            .select('question_index')
+            .eq('score_id', scoreId)
+            .eq('viewer_id', user.id)
+
+        if (reveals) {
+            revealedIndices = reveals.map(r => r.question_index)
+        }
+    }
 
     return (
         <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] text-slate-900 dark:text-white pb-20 transition-colors duration-300">
@@ -93,6 +116,26 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
                                 </span>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Detailed Questions List */}
+                    <div className="w-full mt-10">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="font-bold text-slate-900 dark:text-white">Question Breakdown</h3>
+                            {!isPro && isOwner && (
+                                <div className="px-3 py-1 bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                    5 ★ per reveal
+                                </div>
+                            )}
+                        </div>
+
+                        <DykmResultQuestions
+                            scoreId={scoreId}
+                            answers={score.answers}
+                            revealedIndices={revealedIndices}
+                            isPro={isPro}
+                            isOwner={isOwner}
+                        />
                     </div>
                 </div>
             </main>

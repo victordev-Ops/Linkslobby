@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { markConfessionAsRead } from "@/actions/confessions"
 import { hideNotification } from "@/actions/notifications"
+import { revealDYKMRespondent } from "@/actions/reveal"
 import { useRouter } from "next/navigation"
 import { db } from '@/lib/db'
 import { queueOfflineAction } from '@/lib/sync'
@@ -269,17 +270,21 @@ export default function NotificationsClient({
     )
 
     const handleReveal = async (scoreId: string) => {
-        if (!isPro) {
-            toast.error("Upgrade to Pro to reveal who took your quiz!")
-            return
-        }
-
         setIsRevealing(scoreId)
-        setTimeout(() => {
-            setRevealedScores(prev => ({ ...prev, [scoreId]: true }))
+        try {
+            const result = await revealDYKMRespondent(scoreId)
+            if (result.success) {
+                setRevealedScores(prev => ({ ...prev, [scoreId]: true }))
+                toast.success("Identity revealed!")
+                router.refresh()
+            } else {
+                toast.error(result.message || "Failed to reveal")
+            }
+        } catch (error) {
+            toast.error("Something went wrong")
+        } finally {
             setIsRevealing(null)
-            toast.success("Identity revealed!")
-        }, 1000)
+        }
     }
 
     const getIcon = (item: any) => {
@@ -361,7 +366,10 @@ export default function NotificationsClient({
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     onClick={() => handleSelectMessage(item)}
-                                    className="relative bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border border-slate-200 dark:border-white/10 p-4 rounded-2xl shadow-sm group hover:border-purple-300 dark:hover:border-purple-500/30 transition-all cursor-pointer active:scale-[0.98]"
+                                    className={`relative p-4 rounded-2xl shadow-sm group transition-all cursor-pointer active:scale-[0.98] border ${item.type === 'dykm'
+                                            ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-500/20 hover:border-blue-400"
+                                            : "bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border-slate-200 dark:border-white/10 hover:border-purple-300 dark:hover:border-purple-500/30"
+                                        }`}
                                 >
                                     <button
                                         onClick={(e) => handleHide(e, item)}
@@ -372,7 +380,9 @@ export default function NotificationsClient({
                                     </button>
 
                                     <div className="flex gap-4 pr-6">
-                                        <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center border border-slate-100 dark:border-white/5 ${['xp', 'hot_seat'].includes(item.type) ? 'bg-amber-500/10' : 'bg-slate-50 dark:bg-white/5'
+                                        <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center border ${item.type === 'dykm'
+                                                ? 'bg-blue-100 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/30'
+                                                : ['xp', 'hot_seat'].includes(item.type) ? 'bg-amber-500/10 border-slate-100 dark:border-white/5' : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/5'
                                             }`}>
                                             {getIcon(item)}
                                         </div>
@@ -401,11 +411,11 @@ export default function NotificationsClient({
                                             {item.type === 'dykm' && (
                                                 <div className="mt-3 flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="px-2 py-0.5 bg-pink-100 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 rounded text-[10px] font-bold uppercase tracking-wider">
-                                                            Quiz Result
+                                                        <div className="px-2 py-0.5 bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded text-[10px] font-bold uppercase tracking-wider">
+                                                            Do You Know Me?
                                                         </div>
                                                         {revealedScores[item.id] && (
-                                                            <div className="px-2 py-0.5 bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded text-[10px] font-bold">
+                                                            <div className="px-2 py-0.5 bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400 rounded text-[10px] font-bold">
                                                                 @{item.responder_name}
                                                             </div>
                                                         )}
@@ -416,8 +426,8 @@ export default function NotificationsClient({
                                                             onClick={(e) => { e.stopPropagation(); handleReveal(item.id); }}
                                                             disabled={isRevealing === item.id}
                                                             className={`text-[10px] font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${isPro
-                                                                ? "bg-purple-600 text-white hover:bg-purple-700 active:scale-95"
-                                                                : "bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500"
+                                                                    ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm shadow-blue-200/50"
+                                                                    : "bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10"
                                                                 }`}
                                                         >
                                                             {isRevealing === item.id ? (
@@ -425,7 +435,7 @@ export default function NotificationsClient({
                                                             ) : isPro ? (
                                                                 <><Eye size={12} /> Reveal Identity</>
                                                             ) : (
-                                                                <><Lock size={12} /> Reveal (Pro)</>
+                                                                <><Lock size={12} /> Reveal (5 ★)</>
                                                             )}
                                                         </button>
                                                     )}

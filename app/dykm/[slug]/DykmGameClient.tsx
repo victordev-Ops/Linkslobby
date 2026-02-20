@@ -23,6 +23,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
   const [feedback, setFeedback] = useState<'idle' | 'correct' | 'wrong'>('idle')
   const [responderName, setResponderName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [answers, setAnswers] = useState<any[]>([])
   const supabase = createClient()
   const router = useRouter()
 
@@ -43,6 +44,13 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
       setFeedback('wrong')
       toast.error(`Wrong! It was: ${currentQ.answer}`)
     }
+
+    setAnswers(prev => [...prev, {
+      question: currentQ.question,
+      correct_answer: currentQ.answer,
+      your_answer: input.trim(),
+      is_correct: isCorrect
+    }])
 
     setTimeout(async () => {
       setFeedback('idle')
@@ -74,7 +82,8 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
           responder_id: user?.id || null,
           responder_name: responderName.trim(),
           score: score,
-          total_questions: questions.length
+          total_questions: questions.length,
+          answers: answers
         })
 
       if (error) throw error
@@ -116,6 +125,18 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
             >
               {isSaving ? "Saving..." : "Save Score & Continue"}
             </button>
+          </div>
+
+          <div className="pt-6 border-t border-slate-100 dark:border-white/5">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">
+              Want to see how well your friends know YOU?
+            </p>
+            <a
+              href="/dykm"
+              className="block w-full py-3 bg-white dark:bg-white/5 border-2 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 hover:border-slate-300 dark:hover:border-white/20 transition text-sm"
+            >
+              Create Your Own Quiz
+            </a>
           </div>
 
           <a href="/" className="block text-sm text-slate-400 font-medium hover:text-slate-600 transition">

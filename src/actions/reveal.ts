@@ -111,7 +111,7 @@ export async function revealSenderHint(messageId: string): Promise<RevealResult>
     }
 }
 
-export async function revealDYKMAnswerer(resultId: string): Promise<RevealResult> {
+export async function revealDYKMRespondent(scoreId: string): Promise<RevealResult> {
     const supabase = await createSupabaseServerClient()
 
     try {
@@ -121,11 +121,11 @@ export async function revealDYKMAnswerer(resultId: string): Promise<RevealResult
         const cost = XP_COSTS.REVEAL_DYKM_ANSWERER
 
         // 1. Spend XP
-        const { error: xpError } = await supabase.rpc('spend_xp', {
+        const { data: xpResult, error: xpError } = await supabase.rpc('spend_xp', {
             p_user_id: user.id,
             p_amount: cost,
-            p_reason: 'Reveal DYKM Answerer',
-            p_metadata: { result_id: resultId }
+            p_reason: 'Reveal DYKM Respondent',
+            p_metadata: { score_id: scoreId }
         })
 
         if (xpError) {
@@ -135,14 +135,73 @@ export async function revealDYKMAnswerer(resultId: string): Promise<RevealResult
             throw xpError
         }
 
-        // 2. Fetch the answerer info
-        // This assumes there's a table `dykm_responses` or similar where we can find who answered
-        // For now, we proceed as if the client handles the fetching or we return it here.
+        if (!xpResult || (xpResult as any).success === false) {
+            return { success: false, message: (xpResult as any)?.error || 'Failed to spend XP' }
+        }
 
-        return { success: true, message: 'Answerer revealed!' }
+        return { success: true, message: 'Respondent revealed!' }
 
     } catch (error) {
-        console.error('Reveal DYKM error:', error)
-        return { success: false, message: 'Failed to reveal answerer' }
+        console.error('Reveal DYKM respondent error:', error)
+        return { success: false, message: 'Failed to reveal respondent' }
+    }
+}
+
+export async function revealDYKMAnswer(scoreId: string, questionIndex: number): Promise<RevealResult> {
+    const supabase = await createSupabaseServerClient()
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { success: false, message: 'Not authenticated' }
+
+        // 1. Check if already revealed
+        const { data: existing } = await supabase
+            .from('dykm_response_reveals')
+            .select('id')
+            .eq('score_id', scoreId)
+            .eq('question_index', questionIndex)
+            .eq('viewer_id', user.id)
+            .single()
+
+        if (existing) {
+            return { success: true, message: 'Already revealed' }
+        }
+
+        // 2. Spend XP
+        const cost = XP_COSTS.REVEAL_DYKM_ANSWER
+        const { data: xpResult, error: xpError } = await supabase.rpc('spend_xp', {
+            p_user_id: user.id,
+            p_amount: cost,
+            p_reason: 'Reveal DYKM Answer',
+            p_metadata: { score_id: scoreId, question_index: questionIndex }
+        })
+
+        if (xpError) {
+            if (xpError.message.includes('Insufficient')) {
+                return { success: false, message: `Need ${cost} XP to reveal` }
+            }
+            throw xpError
+        }
+
+        if (!xpResult || (xpResult as any).success === false) {
+            return { success: false, message: (xpResult as any)?.error || 'Failed to spend XP' }
+        }
+
+        // 3. Track reveal
+        const { error: revealError } = await supabase
+            .from('dykm_response_reveals')
+            .insert({
+                score_id: scoreId,
+                question_index: questionIndex,
+                viewer_id: user.id
+            })
+
+        if (revealError) throw revealError
+
+        return { success: true, message: 'Answer revealed!' }
+
+    } catch (error) {
+        console.error('Reveal DYKM answer error:', error)
+        return { success: false, message: 'Failed to reveal answer' }
     }
 }
