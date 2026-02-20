@@ -42,7 +42,7 @@ async function ConfessionsLoader({
       .limit(50),
     supabase
       .from('profiles')
-      .select('username, slug')
+      .select('username, slug, restricted_words')
       .eq('id', userId)
       .single()
   ])
@@ -61,12 +61,14 @@ async function ConfessionsLoader({
 
   // Determine the display name for the share cards
   const username = profileRes.data?.username || profileRes.data?.slug || 'user'
+  const restrictedWords: string[] = profileRes.data?.restricted_words || []
 
   return (
     <InboxClient
       initialConfessions={confessionsRes.data || []}
       userId={userId}
-      username={username} // <--- This satisfies the TypeScript requirement
+      username={username}
+      restrictedWords={restrictedWords}
     />
   )
 }

@@ -23,6 +23,7 @@ type Props = {
   username: string
   onClose?: () => void
   restrictedWords?: string[]
+  onDeleted?: () => void
 }
 
 function stripMetadata(message: string): string {
@@ -58,7 +59,7 @@ const GRADIENTS = [
 
 const REPORT_REASONS = ['Spam', 'Harassment', 'Inappropriate', 'Other']
 
-export default function MessageViewClient({ confession, username, onClose, restrictedWords = [] }: Props) {
+export default function MessageViewClient({ confession, username, onClose, restrictedWords = [], onDeleted }: Props) {
   const router = useRouter()
   const shareWrapperRef = useRef<HTMLDivElement>(null)
 
@@ -197,7 +198,9 @@ export default function MessageViewClient({ confession, username, onClose, restr
       const result = await deleteMessage(confession.id)
       if (result.success) {
         toast.success('Message deleted')
-        if (onClose) {
+        if (onDeleted) {
+          onDeleted()
+        } else if (onClose) {
           onClose()
         } else {
           router.push('/inbox')

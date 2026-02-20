@@ -24,6 +24,10 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
     const [isLoading, setIsLoading] = useState(false)
     const router = useRouter()
 
+    // Local state for optimistic updates
+    const [displayUsername, setDisplayUsername] = useState(profile.username)
+    const [displaySlug, setDisplaySlug] = useState(profile.slug)
+
     // Slug check states
     const [slug, setSlug] = useState(profile.slug)
     const debouncedSlug = useDebounce(slug, 500)
@@ -57,7 +61,7 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
     }, [debouncedSlug, profile.slug])
 
     const copyLink = () => {
-        const link = `${window.location.origin}/u/${profile.slug}`
+        const link = `${window.location.origin}/u/${displaySlug}`
         navigator.clipboard.writeText(link)
         setCopied(true)
         toast.success('Profile link copied!')
@@ -82,6 +86,12 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
         if (result?.error) {
             toast.error(result.error)
         } else if (result?.success) {
+            // Optimistic update — reflect changes immediately
+            const newUsername = formData.get('username') as string
+            const newSlug = formData.get('slug') as string
+            if (newUsername) setDisplayUsername(newUsername)
+            if (newSlug) setDisplaySlug(newSlug)
+
             toast.success(result.success)
             setIsEditing(false)
             router.refresh()
@@ -113,17 +123,17 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
                 <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-white/10 p-8 flex flex-col items-center">
                     <div className="w-24 h-24 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg mb-4 ring-4 ring-white dark:ring-[#1a1429]">
                         <span className="text-3xl font-black italic">
-                            {profile.username ? profile.username.charAt(0).toUpperCase() : "?"}
+                            {displayUsername ? displayUsername.charAt(0).toUpperCase() : "?"}
                         </span>
                     </div>
 
                     {!isEditing ? (
                         <>
                             <h2 className="text-2xl font-bold text-slate-900 dark:text-white text-center">
-                                @{profile.username}
+                                @{displayUsername}
                             </h2>
                             <p className="text-slate-500 dark:text-slate-400 font-medium text-center mt-1 mb-6">
-                                {profile.slug}
+                                {displaySlug}
                             </p>
 
                             <button

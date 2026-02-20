@@ -1,13 +1,12 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { unstable_cache } from 'next/cache';
 import LobbyListClient, { Lobby } from './LobbyListClient';
 
-// Cache the initial lobby list — client does live realtime updates anyway
-const getInitialLobbies = unstable_cache(
-  async (userId: string | undefined) => {
-    const supabase = await createSupabaseServerClient();
+export default async function TODLobbyList() {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-    const { data: lobbyData, error: lobbyError } = await supabase
+  const [lobbyResult, profileData] = await Promise.all([
+    supabase
       .from('tod_lobbies')
       .select(`
         id,
@@ -22,24 +21,25 @@ const getInitialLobbies = unstable_cache(
       .neq('status', 'finished')
       .order('category', { ascending: true })
       .order('created_at', { ascending: false })
-      .limit(4);
+      .limit(4),
+    user
+      ? supabase.from('profiles').select('is_pro').eq('id', user.id).single().then(r => r.data)
+      : Promise.resolve(null),
+  ]);
 
-    if (lobbyError) {
-      console.error("Error fetching lobbies server-side:", lobbyError);
-      return [];
-    }
+  const lobbyData = lobbyResult.data || [];
 
-    if (!lobbyData) return [];
-
+  let lobbiesWithDetails: Lobby[] = [];
+  if (lobbyData.length > 0) {
     const lobbyIds = lobbyData.map(l => l.id);
     const { data: participantData } = await supabase
       .from('tod_participants')
       .select('lobby_id, user_id, status')
       .in('lobby_id', lobbyIds);
 
-    return lobbyData.map(lobby => {
+    lobbiesWithDetails = lobbyData.map(lobby => {
       const participants = participantData?.filter(p => p.lobby_id === lobby.id) || [];
-      const userPart = userId ? participants.find(p => p.user_id === userId) : null;
+      const userPart = user?.id ? participants.find(p => p.user_id === user.id) : null;
       return {
         ...lobby,
         host_profile: (lobby as any).profiles,
@@ -48,21 +48,7 @@ const getInitialLobbies = unstable_cache(
         user_status: userPart?.status,
       } as unknown as Lobby;
     });
-  },
-  ['tod-lobbies-initial'],
-  { revalidate: 30 } // Revalidate every 30s; client handles live updates via realtime
-);
-
-export default async function TODLobbyList() {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const [lobbiesWithDetails, profileData] = await Promise.all([
-    getInitialLobbies(user?.id),
-    user
-      ? supabase.from('profiles').select('is_pro').eq('id', user.id).single().then(r => r.data)
-      : Promise.resolve(null),
-  ]);
+  }
 
   return (
     <LobbyListClient
@@ -72,3 +58,4 @@ export default async function TODLobbyList() {
     />
   );
 }
+

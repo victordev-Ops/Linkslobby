@@ -176,6 +176,10 @@ export default function NotificationsClient({
             router.push(item.is_dm ? `/messages/${item.id}` : `/inbox/${item.id}`)
         } else if (item.type === 'hot_seat') {
             router.push(`/hot-seat/${item.session?.slug || ''}`)
+        } else if (item.type === 'xp') {
+            router.push('/stars')
+        } else if (item.type === 'lobby') {
+            router.push('/tod')
         }
     }
 
@@ -413,12 +417,21 @@ export default function NotificationsClient({
                                             )}
 
                                             {(item.type === 'message' || item.type === 'hot_seat') && (
-                                                <button
-                                                    onClick={() => handleSelectMessage(item)}
-                                                    className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline"
+                                                <span
+                                                    className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-purple-600 dark:text-purple-400"
                                                 >
                                                     View Details <ChevronRight size={12} />
-                                                </button>
+                                                </span>
+                                            )}
+                                            {item.type === 'xp' && (
+                                                <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                                                    View Stars <ChevronRight size={12} />
+                                                </span>
+                                            )}
+                                            {item.type === 'lobby' && (
+                                                <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-green-600 dark:text-green-400">
+                                                    View Lobbies <ChevronRight size={12} />
+                                                </span>
                                             )}
                                         </div>
                                     </div>

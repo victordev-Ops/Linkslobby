@@ -39,16 +39,18 @@ export default async function MessageViewPage({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('username, slug')
+    .select('username, slug, restricted_words')
     .eq('id', user.id)
     .single()
 
   const username = profile?.username || profile?.slug || 'you'
+  const restrictedWords: string[] = (profile as any)?.restricted_words || []
 
   return (
     <MessageViewClient
       confession={confession}
       username={username}
+      restrictedWords={restrictedWords}
     />
   )
 }

@@ -70,11 +70,13 @@ function stripMetadata(message: string): string {
 export default function InboxClient({
   initialConfessions,
   userId,
-  username // ADDED: Needed for the view component
+  username,
+  restrictedWords = []
 }: {
   initialConfessions: Confession[]
   userId: string
   username: string
+  restrictedWords?: string[]
 }) {
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [refreshing, setRefreshing] = useState(false)
@@ -336,6 +338,12 @@ export default function InboxClient({
 
   const closeMessage = () => setSelectedConfession(null)
 
+  const handleDeleted = (confessionId: string) => {
+    setConfessions(prev => prev.filter(c => c.id !== confessionId))
+    setSelectedConfession(null)
+    debouncedRefreshUnreadCount()
+  }
+
   // --- RENDER ---
   if (error && confessions.length === 0) {
     return <ErrorState retry={handleRefresh} message={error} />
@@ -532,6 +540,8 @@ export default function InboxClient({
               confession={selectedConfession}
               username={username}
               onClose={closeMessage}
+              restrictedWords={restrictedWords}
+              onDeleted={() => handleDeleted(selectedConfession.id)}
             />
           </motion.div>
         )}
