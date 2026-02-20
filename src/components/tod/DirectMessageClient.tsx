@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Send, Loader2, MessageCircle, Plus, ChevronUp, X, Reply } from 'lucide-react'
 import { motion, AnimatePresence, PanInfo } from 'framer-motion'
+import { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import { sendMessage, getSessionMessages, markSessionRead } from '@/actions/chat'
 import { uploadDmPhoto } from '@/actions/dm-photos'
@@ -77,6 +78,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
     const [replyingTo, setReplyingTo] = useState<Message | null>(null)
     const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+    const presenceChannelRef = useRef<RealtimeChannel | null>(null)
 
     const supabase = useMemo(() => createClient(), [])
 
@@ -184,28 +186,50 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                 // Avoid redundant add if we sent it
                 // We rely on temp ID replacement or duplicates check
                 // Here we just check ID
+                // Side effects
+                if (newMsg.sender_id !== currentUser.id) {
+                    markSessionRead(sessionId).catch(() => { })
+                }
+                setTimeout(() => scrollToBottom('smooth'), 100)
+
                 setMessages(prev => {
                     if (prev.some(m => m.id === newMsg.id)) return prev
+
                     const isOwn = newMsg.sender_id === currentUser.id
+
+                    // Check if reply object is missing but we have reply_to_id
+                    // Try to find it in current messages
+                    let replyData = undefined
+                    if (newMsg.reply_to_id) {
+                        const parent = prev.find(m => m.id === newMsg.reply_to_id)
+                        if (parent) {
+                            replyData = {
+                                id: parent.id,
+                                content: parent.content,
+                                sender_id: parent.sender_id,
+                                profiles: { username: parent.isOwn ? 'You' : targetProfile.username }
+                            }
+                        }
+                    }
+
                     return [...prev, {
                         id: newMsg.id,
                         content: newMsg.content,
                         created_at: newMsg.created_at,
                         sender_id: newMsg.sender_id,
                         isOwn: isOwn,
-                        isOptimistic: false
+                        isOptimistic: false,
+                        reply_to_id: newMsg.reply_to_id,
+                        reply: replyData
                     }]
                 })
-
-                if (newMsg.sender_id !== currentUser.id) {
-                    markSessionRead(sessionId).catch(() => { })
-                }
-                setTimeout(() => scrollToBottom('smooth'), 100)
             })
             .subscribe()
 
-        // Typing Indicator presence
         const presenceChannel = supabase.channel(`chat-presence-${sessionId}`)
+        presenceChannelRef.current = presenceChannel
+
+        presenceChannel
             .on('presence', { event: 'sync' }, () => {
                 const state = presenceChannel.presenceState()
                 const typing = new Set<string>()
@@ -243,16 +267,24 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             supabase.removeChannel(channel)
             supabase.removeChannel(presenceChannel)
             supabase.removeChannel(readReceiptChannel)
+            presenceChannelRef.current = null
         }
     }, [sessionId, currentUser.id, supabase])
 
     const handleTyping = async () => {
-        const presenceChannel = supabase.channel(`chat-presence-${sessionId}`)
-        await presenceChannel.track({ user_id: currentUser.id, isTyping: true })
+        if (!presenceChannelRef.current) return
+
+        // Only track if not already typing (optimization could be added here, but Supabase handles dedup)
+        // actually, we need to refresh the "typing" status periodically or just once?
+        // simple debounce is enough.
+
+        await presenceChannelRef.current.track({ user_id: currentUser.id, isTyping: true })
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
         typingTimeoutRef.current = setTimeout(async () => {
-            await presenceChannel.track({ user_id: currentUser.id, isTyping: false })
+            if (presenceChannelRef.current) {
+                await presenceChannelRef.current.track({ user_id: currentUser.id, isTyping: false })
+            }
         }, 1500)
     }
 

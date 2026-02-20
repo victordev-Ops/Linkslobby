@@ -84,7 +84,15 @@ export async function sendMessage(sessionId: string, content: string, replyToId?
             content: content,
             reply_to_id: replyToId
         })
-        .select()
+        .select(`
+            *,
+            reply:chat_messages!reply_to_id(
+                id,
+                content,
+                sender_id,
+                profiles(username)
+            )
+        `)
         .single()
 
     if (msgError) {
@@ -214,7 +222,8 @@ export async function getSessionMessages(sessionId: string, before?: string, lim
             reply:chat_messages!reply_to_id(
                 id,
                 content,
-                sender_id
+                sender_id,
+                profiles(username)
             )
         `)
         .eq('session_id', sessionId)
