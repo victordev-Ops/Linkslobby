@@ -23,6 +23,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
   const [feedback, setFeedback] = useState<'idle' | 'correct' | 'wrong'>('idle')
   const [responderName, setResponderName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
   const [answers, setAnswers] = useState<any[]>([])
   const supabase = createClient()
   const router = useRouter()
@@ -88,8 +89,9 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
 
       if (error) throw error
 
+      setIsSaved(true)
       toast.success("Score saved!")
-      router.push("/")
+      // No immediate redirect anymore
     } catch (err) {
       console.error(err)
       toast.error("Failed to save score")
@@ -110,29 +112,31 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
             You scored <span className="text-blue-600 font-bold text-lg">{score}</span> out of {questions.length} knowing {profile.username}.
           </p>
 
-          <div className="space-y-4 pt-4">
-            <input
-              type="text"
-              value={responderName}
-              onChange={(e) => setResponderName(e.target.value)}
-              placeholder="Enter your name to save score"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
-            />
-            <button
-              onClick={handleFinish}
-              disabled={isSaving || !responderName.trim()}
-              className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isSaving ? "Saving..." : "Save Score & Continue"}
-            </button>
-          </div>
+          {!isSaved && (
+            <div className="space-y-4 pt-4">
+              <input
+                type="text"
+                value={responderName}
+                onChange={(e) => setResponderName(e.target.value)}
+                placeholder="Enter your name to save score"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+              />
+              <button
+                onClick={handleFinish}
+                disabled={isSaving || !responderName.trim()}
+                className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSaving ? "Saving..." : "Save Score & Continue"}
+              </button>
+            </div>
+          )}
 
           <div className="pt-6 border-t border-slate-100 dark:border-white/5">
             <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">
               Want to see how well your friends know YOU?
             </p>
             <a
-              href="/dykm"
+              href="/login"
               className="block w-full py-3 bg-white dark:bg-white/5 border-2 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 hover:border-slate-300 dark:hover:border-white/20 transition text-sm"
             >
               Create Your Own Quiz
