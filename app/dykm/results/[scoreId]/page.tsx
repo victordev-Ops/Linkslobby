@@ -63,7 +63,11 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
 
             <main className="max-w-md mx-auto px-6 py-10">
                 <div className="flex flex-col items-center text-center">
-                    <div className="w-20 h-20 bg-gradient-to-tr from-pink-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-purple-500/30 mb-6 rotate-3">
+                    <div className="inline-block px-3 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 text-[10px] font-bold uppercase tracking-widest rounded-full mb-6">
+                        Do You Know Me?
+                    </div>
+
+                    <div className="w-20 h-20 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/30 mb-6 rotate-3">
                         <Brain className="w-10 h-10 text-white" />
                     </div>
 
@@ -76,7 +80,7 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
                     </p>
 
                     <div className="w-full bg-white dark:bg-[#1a1429] rounded-3xl p-8 border border-slate-100 dark:border-white/5 shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-pink-500 to-purple-600" />
+                        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600" />
 
                         <div className="flex flex-col items-center">
                             <div className="flex items-baseline gap-1">
