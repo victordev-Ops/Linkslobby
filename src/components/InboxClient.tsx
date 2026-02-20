@@ -6,6 +6,7 @@ import { RefreshCw, MessageSquare, ChevronRight, AlertCircle, Loader2 } from 'lu
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { markConfessionAsRead } from '@/actions/confessions'
+import { getSessions } from '@/actions/chat'
 import { useNotifications } from '@/context/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -20,6 +21,19 @@ type Confession = {
   is_read: boolean
   profile_id: string
   message_type: 'confession' | 'ama' | 'anonymous' | 'direct_message'
+}
+
+type ChatSession = {
+  id: string
+  updated_at: string
+  last_message_preview?: string
+  last_read_at?: string
+  unread_count: number
+  other_user: {
+    username: string | null
+    id: string
+    slug?: string | null
+  }
 }
 
 const PAGE_SIZE = 20
@@ -79,6 +93,7 @@ export default function InboxClient({
   restrictedWords?: string[]
 }) {
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
+  const [sessions, setSessions] = useState<ChatSession[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'All' | 'Confessions' | 'AMA' | 'Anonymous' | 'DMs'>('All')
@@ -112,7 +127,8 @@ export default function InboxClient({
     }
 
     try {
-      const { data, error: supabaseError } = await supabase
+      // Fetch Confessions
+      const { data: confData, error: supabaseError } = await supabase
         .from('confessions')
         .select('id, message, created_at, is_read, profile_id, message_type')
         .eq('profile_id', userId)
@@ -121,18 +137,38 @@ export default function InboxClient({
 
       if (supabaseError) throw supabaseError
 
-      if (data) {
-        setConfessions(prev => mergeConfessions(prev, data))
+      if (confData) {
+        setConfessions(prev => mergeConfessions(prev, confData))
         // Cache in Dexie
         const now = Date.now()
         db.confessions.bulkPut(
-          data.map((c: any) => ({ ...c, cached_at: now }))
+          confData.map((c: any) => ({ ...c, cached_at: now }))
         ).catch(() => { })
-        queueMicrotask(() => {
-          refreshUnreadCount().catch(console.error)
-        })
-        if (isManual) toast.success('Inbox updated')
       }
+
+      // Fetch Sessions
+      const sessionsResult = await getSessions()
+      if (sessionsResult.success && sessionsResult.data) {
+        setSessions(sessionsResult.data as unknown as ChatSession[])
+        // Cache sessions in Dexie
+        const now = Date.now()
+        db.chatSessions.bulkPut(
+          sessionsResult.data.map((s: any) => ({
+            id: s.id,
+            updated_at: s.updated_at,
+            last_message_preview: s.last_message_preview,
+            unread_count: s.unread_count,
+            other_user: s.other_user,
+            cached_at: now
+          }))
+        ).catch(() => { })
+      }
+
+      queueMicrotask(() => {
+        refreshUnreadCount().catch(console.error)
+      })
+
+      if (isManual) toast.success('Inbox updated')
     } catch (err) {
       console.error('Fetch error:', err)
       if (isManual) {
@@ -176,8 +212,16 @@ export default function InboxClient({
   // --- 2. SYNC SERVER PROPS + DEXIE CACHE ---
   useEffect(() => {
     setConfessions(prev => mergeConfessions(prev, initialConfessions))
+
+    // Initial fetch of sessions
+    getSessions().then(res => {
+      if (res.success && res.data) {
+        setSessions(res.data as unknown as ChatSession[])
+      }
+    })
+
     const unread = initialConfessions.filter(c => !c.is_read).length
-    setUnreadCount(unread)
+    setUnreadCount(unread) // Note: this might be overwritten by fetchLatest
 
     // Cache initial confessions in Dexie
     if (initialConfessions.length > 0) {
@@ -187,7 +231,7 @@ export default function InboxClient({
       ).catch(() => { })
     }
 
-    // Load any extra cached confessions from Dexie (older ones not in initial SSR)
+    // Load extra cached confessions
     db.confessions
       .where('profile_id')
       .equals(userId)
@@ -196,6 +240,27 @@ export default function InboxClient({
       .then(cached => {
         if (cached.length > 0) {
           setConfessions(prev => mergeConfessions(prev, cached as Confession[]))
+        }
+      })
+      .catch(() => { })
+
+    // Load cached sessions
+    db.chatSessions
+      .toArray()
+      .then(cached => {
+        if (cached.length > 0) {
+          // simple mapping
+          const mapped: ChatSession[] = cached.map(c => ({
+            id: c.id,
+            updated_at: c.updated_at,
+            last_message_preview: c.last_message_preview,
+            unread_count: c.unread_count || 0,
+            other_user: c.other_user || { username: 'Unknown', id: '', slug: '' }
+          }))
+          setSessions(prev => {
+            // merge? just replace for now or merge by ID
+            return mapped
+          })
         }
       })
       .catch(() => { })
@@ -226,7 +291,7 @@ export default function InboxClient({
               description: 'Tap to view',
               action: {
                 label: 'View',
-                onClick: () => setSelectedConfession(newMsg) // Update to use state
+                onClick: () => setSelectedConfession(newMsg)
               }
             })
           } else if (payload.eventType === 'UPDATE') {
@@ -237,14 +302,35 @@ export default function InboxClient({
             queueMicrotask(() => debouncedRefreshUnreadCount())
           } else if (payload.eventType === 'DELETE') {
             setConfessions((prev) => prev.filter((c) => c.id !== payload.old.id))
+            db.confessions.delete(payload.old.id).catch(() => { })
             queueMicrotask(() => debouncedRefreshUnreadCount())
           }
         }
       )
       .subscribe()
 
+    // Listen for session updates (new messages update session updated_at)
+    const sessionChannel = supabase
+      .channel(`inbox-sessions-${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'chat_sessions',
+        // We can't easily filter by user participation here without a join or knowing session IDs.
+        // But we can listen to chat_participants?
+        // Actually, just refresh sessions on any notification or periodically?
+        // Or better: Listen to chat_participants changes for this user.
+      }, () => {
+        // Basic refresh for now
+        getSessions().then(res => {
+          if (res.success && res.data) setSessions(res.data as unknown as ChatSession[])
+        })
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(channel)
+      supabase.removeChannel(sessionChannel)
     }
   }, [userId, supabase, debouncedRefreshUnreadCount])
 
@@ -253,77 +339,86 @@ export default function InboxClient({
     fetchLatest(true)
   }, [fetchLatest])
 
-  const { conversations, otherMessages } = useMemo(() => {
-    const grouped = new Map<string, { latest: Confession; unreadCount: number; senderName: string }>()
-    const others: Confession[] = []
+  // Merge legacy DMs (from confessions) and new Sessions
+  const { unifiedItems, legacyDMsCount } = useMemo(() => {
+    const items: Array<{
+      type: 'session' | 'confession',
+      data: ChatSession | Confession,
+      sortTime: string
+    }> = []
 
+    // Add Sessions
+    sessions.forEach(s => {
+      items.push({
+        type: 'session',
+        data: s,
+        sortTime: s.updated_at
+      })
+    })
+
+    // Add Confessions (excluding DMs if we want? Or keeping them as legacy?)
+    // Let's keep them but maybe identify them
+    let legacyCount = 0
     confessions.forEach(c => {
-      if (c.message_type === 'confession' && c.message.startsWith('[DM:')) {
-        const match = c.message.match(/^\[DM:([a-f0-9-]+):?([^\]]*)\]/)
-        if (match) {
-          const senderId = match[1]
-          const senderName = match[2] || 'Someone'
-          const existing = grouped.get(senderId)
-          if (!existing || new Date(c.created_at) > new Date(existing.latest.created_at)) {
-            grouped.set(senderId, {
-              latest: c,
-              unreadCount: (existing?.unreadCount || 0) + (c.is_read ? 0 : 1),
-              senderName
-            })
-          } else if (!c.is_read) {
-            existing.unreadCount++
-          }
-          return
-        }
-      }
-      others.push(c)
+      const isDM = c.message.startsWith('[DM:')
+      if (isDM) legacyCount++
+
+      items.push({
+        type: 'confession',
+        data: c,
+        sortTime: c.created_at
+      })
     })
 
     return {
-      conversations: Array.from(grouped.values()).sort((a, b) =>
-        new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime()
-      ),
-      otherMessages: others
+      unifiedItems: items.sort((a, b) => new Date(b.sortTime).getTime() - new Date(a.sortTime).getTime()),
+      legacyDMsCount: legacyCount
     }
-  }, [confessions])
+  }, [sessions, confessions])
 
   const filteredItems = useMemo(() => {
-    if (activeTab === 'DMs') return conversations
+    return unifiedItems.filter(item => {
+      if (item.type === 'session') {
+        if (activeTab === 'DMs' || activeTab === 'All') return true
+        return false
+      }
 
-    // For other tabs, use otherMessages (which excludes DMs)
-    if (activeTab === 'All') return otherMessages
-    return otherMessages.filter(c => {
-      if (activeTab === 'Confessions') return c.message_type === 'confession'
+      // Confession
+      const c = item.data as Confession
+      const isDM = c.message_type === 'confession' && c.message.startsWith('[DM:')
+
+      if (activeTab === 'All') return true
+      if (activeTab === 'DMs') return isDM
+      if (activeTab === 'Confessions') return c.message_type === 'confession' && !isDM
       if (activeTab === 'AMA') return c.message_type === 'ama'
       if (activeTab === 'Anonymous') return c.message_type === 'anonymous'
-      return true
+      return false
     })
-  }, [activeTab, conversations, otherMessages])
+  }, [activeTab, unifiedItems])
 
   const openMessage = useCallback(async (confession: Confession) => {
-    // 0. CHECK IF DM
-    if (confession.message_type === 'confession' && confession.message.startsWith('[DM:')) {
-      const match = confession.message.match(/^\[DM:([a-f0-9-]+)\]/);
-      if (match && match[1]) {
-        router.push(`/messages/${match[1]}`);
-        return;
+    const isDM = confession.message_type === 'confession' && confession.message.startsWith('[DM:')
+
+    if (isDM) {
+      const match = confession.message.match(/^\[DM:[a-f0-9-]+:?([^\]]*)\]/);
+      const username = match ? match[1] : null;
+
+      if (username) {
+        router.push(`/messages/${username}`)
+      } else {
+        toast.error("Cannot open this message (missing username)")
       }
+      return
     }
 
-    // 1. INSTANTLY OPEN (State update = ~0ms delay)
     setSelectedConfession(confession)
 
-    // 2. Background Logic (Optimistic update & Server sync)
     if (!confession.is_read) {
-      // Optimistic update local list
       setConfessions((prev) =>
         prev.map((c) => (c.id === confession.id ? { ...c, is_read: true } : c))
       )
-
-      // Optimistic update in Dexie
       db.confessions.update(confession.id, { is_read: true }).catch(() => { })
 
-      // Fire and forget server update (queue if offline)
       if (navigator.onLine) {
         markConfessionAsRead(confession.id).catch(err => {
           console.error('Mark as read error:', err)
@@ -331,7 +426,6 @@ export default function InboxClient({
       } else {
         queueOfflineAction('confessions', 'update', { id: confession.id, is_read: true })
       }
-
       queueMicrotask(() => debouncedRefreshUnreadCount())
     }
   }, [debouncedRefreshUnreadCount, router])
@@ -341,11 +435,12 @@ export default function InboxClient({
   const handleDeleted = (confessionId: string) => {
     setConfessions(prev => prev.filter(c => c.id !== confessionId))
     setSelectedConfession(null)
+    db.confessions.delete(confessionId).catch(() => { })
     debouncedRefreshUnreadCount()
   }
 
   // --- RENDER ---
-  if (error && confessions.length === 0) {
+  if (error && confessions.length === 0 && sessions.length === 0) {
     return <ErrorState retry={handleRefresh} message={error} />
   }
 
@@ -396,61 +491,62 @@ export default function InboxClient({
             >
               <EmptyState />
             </motion.div>
-          ) : activeTab === 'DMs' ? (
-            // --- CONVERSATION LIST (MESSENGER STYLE) ---
-            (filteredItems as any[]).map((conv) => {
-              const c = conv.latest
-              const rawMsg = stripMetadata(c.message).replace(/^\[DM:[a-f0-9-]+:?[^\]]*\]\s*/, '')
-              const isImage = rawMsg.startsWith('[IMG:')
-              const cleanMsg = isImage ? '📷 Photo' : rawMsg
-              const initials = conv.senderName.substring(0, 2).toUpperCase()
-              const match = c.message.match(/^\[DM:([a-f0-9-]+)/)
-              const senderId = match ? match[1] : ''
-
-              return (
-                <motion.button
-                  key={senderId}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  onClick={() => router.push(`/messages/${senderId}`)}
-                  className="w-full text-left px-6 py-5 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors active:bg-gray-100 dark:active:bg-white/10 group relative"
-                >
-                  <div className="relative flex-shrink-0">
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-lg font-bold shadow-md">
-                      {initials}
-                    </div>
-                    {conv.unreadCount > 0 && (
-                      <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-blue-500 rounded-full border-2 border-white dark:border-[#0f0a1e]" />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-0.5">
-                      <h3 className={`text-base truncate ${conv.unreadCount > 0 ? 'font-black text-gray-900 dark:text-white' : 'font-bold text-gray-700 dark:text-gray-300'}`}>
-                        {conv.senderName}
-                      </h3>
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
-                        {formatRelativeTime(c.created_at)}
-                      </span>
-                    </div>
-                    <p className={`text-sm truncate leading-relaxed ${conv.unreadCount > 0 ? 'text-gray-900 dark:text-gray-100 font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
-                      {cleanMsg}
-                    </p>
-                  </div>
-
-                  {conv.unreadCount > 0 && (
-                    <div className="w-2.5 h-2.5 bg-blue-500 rounded-full ml-2 flex-shrink-0" />
-                  )}
-                  <ChevronRight size={18} className="text-gray-300 dark:text-gray-600 ml-1 group-hover:translate-x-1 transition-transform" />
-                </motion.button>
-              )
-            })
           ) : (
-            // --- STANDARD MESSAGE LIST ---
-            (filteredItems as Confession[]).map((c) => {
+            filteredItems.map((item) => {
+              if (item.type === 'session') {
+                const s = item.data as ChatSession
+                const isUnread = s.unread_count > 0
+
+                return (
+                  <motion.button
+                    key={`session-${s.id}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    onClick={() => router.push(`/messages/${s.id}`)}
+                    className="w-full text-left px-6 py-5 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors active:bg-gray-100 dark:active:bg-white/10 group relative"
+                  >
+                    <div className="relative flex-shrink-0">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-lg font-bold shadow-md">
+                        {s.other_user.username?.substring(0, 2).toUpperCase() || "?"}
+                      </div>
+                      {isUnread && (
+                        <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-blue-500 rounded-full border-2 border-white dark:border-[#0f0a1e]" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline mb-0.5">
+                        <h3 className={`text-base truncate ${isUnread ? 'font-black text-gray-900 dark:text-white' : 'font-bold text-gray-700 dark:text-gray-300'}`}>
+                          {s.other_user.username || "Unknown"}
+                        </h3>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+                          {formatRelativeTime(s.updated_at)}
+                        </span>
+                      </div>
+                      <p className={`text-sm truncate leading-relaxed ${isUnread ? 'text-gray-900 dark:text-gray-100 font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
+                        {s.last_message_preview || "Started a chat"}
+                      </p>
+                    </div>
+
+                    {isUnread && (
+                      <div className="min-w-[1.25rem] h-5 px-1.5 bg-blue-500 rounded-full ml-2 flex items-center justify-center text-[10px] font-bold text-white">
+                        {s.unread_count > 99 ? '99+' : s.unread_count}
+                      </div>
+                    )}
+                    <ChevronRight size={18} className="text-gray-300 dark:text-gray-600 ml-1 group-hover:translate-x-1 transition-transform" />
+                  </motion.button>
+                )
+              }
+
+              // Render Confession/Legacy DM
+              const c = item.data as Confession
+              // ... (Use existing rendering logic for Confession)
               const cleanMessage = stripMetadata(c.message)
               const isSecret = !c.is_read && (c.message_type === 'confession' || c.message_type === 'anonymous')
               const displayMessage = isSecret ? 'Locked message - Tap to reveal' : (cleanMessage.length > 80 ? cleanMessage.slice(0, 80) + '...' : cleanMessage)
+
+              // Special rendering for Legacy DM to look distinct?
+              // For now, render as before.
 
               return (
                 <motion.button
@@ -458,7 +554,7 @@ export default function InboxClient({
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
-                  key={c.id}
+                  key={`confession-${c.id}`}
                   onClick={() => openMessage(c)}
                   className="w-full text-left px-6 py-5 flex items-start gap-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors active:bg-gray-100 dark:active:bg-white/10 group"
                 >
@@ -550,7 +646,6 @@ export default function InboxClient({
   )
 }
 
-// --- Sub-Components ---
 function ErrorState({ retry, message }: { retry: () => void; message: string }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">

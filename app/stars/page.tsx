@@ -317,36 +317,58 @@ export default function StarsPage() {
                             Track your earnings and spending. Earn more stars by logging in daily! 🌟
                         </p>
 
-                        {/* Streak Info */}
-                        {!streakLoading && streak >= 1 && (
-                            <div className={`mt-3 flex items-center gap-3 p-2.5 rounded-xl border ${streak >= 7
-                                ? 'bg-gradient-to-r from-orange-500/10 to-red-500/10 border-orange-500/20'
-                                : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10'
-                                }`}>
-                                <div className={`w-9 h-9 rounded-full flex items-center justify-center ${streak >= 7
-                                    ? 'bg-gradient-to-br from-orange-500 to-red-500 text-white'
-                                    : 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400'
-                                    }`}>
-                                    <Flame className="w-5 h-5" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                                        {streak} Day Streak {streak >= 7 ? '🔥' : ''}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                        {streak >= 7
-                                            ? 'Earnings are doubled! Keep it up!'
-                                            : `${7 - streak} more day${7 - streak === 1 ? '' : 's'} until 2x earnings`
-                                        }
-                                    </p>
+                        {/* Streak Progress Bar */}
+                        <div className="mt-4 p-4 rounded-xl border bg-white dark:bg-white/5 border-slate-100 dark:border-white/10 shadow-sm relative overflow-hidden group">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-red-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <div className={`p-1.5 rounded-lg ${streak >= 7 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'} dark:bg-white/10`}>
+                                        <Flame className={`w-4 h-4 ${streak >= 7 ? 'fill-orange-500 text-orange-600' : 'text-slate-400'}`} />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                                            {streak >= 7 ? '2x Bonus Active!' : 'Daily Streak'}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                            {streak >= 7
+                                                ? 'All earnings are doubled'
+                                                : `${streak}/7 days • ${7 - streak} to 2x bonus`
+                                            }
+                                        </span>
+                                    </div>
                                 </div>
                                 {streak >= 7 && (
-                                    <div className="shrink-0 px-2 py-1 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] font-black">
-                                        2x
+                                    <div className="px-2 py-1 rounded bg-gradient-to-r from-orange-500 to-red-600 text-white text-[10px] font-black animate-pulse shadow-lg shadow-orange-500/30">
+                                        2x ACTIVE
                                     </div>
                                 )}
                             </div>
-                        )}
+
+                            {/* Segments */}
+                            <div className="flex gap-1.5 h-3">
+                                {[...Array(7)].map((_, i) => {
+                                    const isFilled = i < streak
+                                    const isCurrent = i === streak
+                                    return (
+                                        <div
+                                            key={i}
+                                            className={`flex-1 rounded-full relative overflow-hidden transition-all duration-500 ${isFilled
+                                                    ? 'bg-gradient-to-r from-orange-400 to-orange-600 shadow-[0_0_10px_rgba(251,146,60,0.4)]'
+                                                    : 'bg-slate-100 dark:bg-white/10'
+                                                }`}
+                                        >
+                                            {isFilled && (
+                                                <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]" />
+                                            )}
+                                            {isCurrent && !isFilled && (
+                                                <div className="absolute inset-0 bg-orange-500/20 animate-pulse" />
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

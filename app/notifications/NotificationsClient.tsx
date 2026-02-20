@@ -173,13 +173,28 @@ export default function NotificationsClient({
         }
 
         if (item.type === 'message') {
-            router.push(item.is_dm ? `/messages/${item.id}` : `/inbox/${item.id}`)
+            if (item.is_dm) {
+                // Try to extract username from message metdata [DM:uuid:username]
+                const match = item.message.match(/^\[DM:[a-f0-9-]+:?([^\]]*)\]/)
+                const senderUsername = match ? match[1] : null
+
+                if (senderUsername) {
+                    router.push(`/messages/${senderUsername}`)
+                } else {
+                    // Fallback to inbox if no username found
+                    router.push(`/inbox/${item.id}`)
+                }
+            } else {
+                router.push(`/inbox/${item.id}`)
+            }
         } else if (item.type === 'hot_seat') {
             router.push(`/hot-seat/${item.session?.slug || ''}`)
         } else if (item.type === 'xp') {
             router.push('/stars')
         } else if (item.type === 'lobby') {
             router.push('/tod')
+        } else if (item.type === 'dykm') {
+            router.push(`/dykm/results/${item.id}`)
         }
     }
 
@@ -345,11 +360,12 @@ export default function NotificationsClient({
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.95 }}
-                                    className="relative bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border border-slate-200 dark:border-white/10 p-4 rounded-2xl shadow-sm group hover:border-purple-300 dark:hover:border-purple-500/30 transition-all"
+                                    onClick={() => handleSelectMessage(item)}
+                                    className="relative bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border border-slate-200 dark:border-white/10 p-4 rounded-2xl shadow-sm group hover:border-purple-300 dark:hover:border-purple-500/30 transition-all cursor-pointer active:scale-[0.98]"
                                 >
                                     <button
                                         onClick={(e) => handleHide(e, item)}
-                                        className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
+                                        className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 z-10"
                                         title="Hide notification"
                                     >
                                         <Trash2 size={16} />
@@ -397,7 +413,7 @@ export default function NotificationsClient({
 
                                                     {!revealedScores[item.id] && (
                                                         <button
-                                                            onClick={() => handleReveal(item.id)}
+                                                            onClick={(e) => { e.stopPropagation(); handleReveal(item.id); }}
                                                             disabled={isRevealing === item.id}
                                                             className={`text-[10px] font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${isPro
                                                                 ? "bg-purple-600 text-white hover:bg-purple-700 active:scale-95"

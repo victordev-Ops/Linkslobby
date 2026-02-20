@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { getSessions } from '@/actions/chat'
 
 type NotificationContextType = {
   unreadCount: number
@@ -50,7 +51,8 @@ export function NotificationProvider({
       return
     }
 
-    const [confRes, dykmRes] = await Promise.all([
+    const [sessionsRes, confRes, dykmRes] = await Promise.all([
+      getSessions(),
       supabase
         .from('confessions')
         .select('*', { count: 'exact', head: true })
@@ -68,8 +70,12 @@ export function NotificationProvider({
       return
     }
 
-    setUnreadCount((confRes.count || 0) + (dykmRes.count || 0))
-    setUnreadMessagesCount(confRes.count || 0)
+    const chatUnread = sessionsRes.success && sessionsRes.data
+      ? (sessionsRes.data as any[]).reduce((acc, s) => acc + (s.unread_count || 0), 0)
+      : 0
+
+    setUnreadCount((confRes.count || 0) + (dykmRes.count || 0) + chatUnread)
+    setUnreadMessagesCount((confRes.count || 0) + chatUnread)
   }, [profileId, supabase])
 
   useEffect(() => {
@@ -82,6 +88,30 @@ export function NotificationProvider({
 
     const channel = supabase
       .channel(`notifications-${profileId}`)
+      // NEW: Chat Messages
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages'
+        // RLS will filter to only messages I can see (in my sessions)
+        // But I need to filter out my own messages
+      }, async (payload) => {
+        const msg = payload.new
+        if (msg.sender_id === profileId) return // Ignore my own messages
+
+        refreshUnreadCount()
+
+        // Fetch session to get sender name? Or just show "New Message"
+        // Ideally we want "New Message from User"
+        // fast query or generic toast
+        toast('New Message! 💬', {
+          description: msg.content.substring(0, 50),
+          action: {
+            label: 'View',
+            onClick: () => window.location.href = `/messages/${msg.session_id}`
+          }
+        })
+      })
       // 1. Confessions / DMs
       .on('postgres_changes', {
         event: 'INSERT',
@@ -110,7 +140,16 @@ export function NotificationProvider({
           description,
           action: {
             label: 'View',
-            onClick: () => window.location.href = isDM ? `/messages/${msg.id}` : '/inbox' // Adjust link if needed
+            onClick: () => {
+              if (isDM) {
+                // Try to extract username from message metdata [DM:uuid:username]
+                const match = msg.message.match(/^\[DM:[a-f0-9-]+:?([^\]]*)\]/)
+                const senderUsername = match ? match[1] : null
+                window.location.href = senderUsername ? `/messages/${senderUsername}` : `/inbox/${msg.id}`
+              } else {
+                window.location.href = '/inbox'
+              }
+            }
             // Actually DMs link via sender ID usually, but here we might just go to inbox or parse sender ID
             // Simple link to inbox for now as DMs show up there too or have own page
           }

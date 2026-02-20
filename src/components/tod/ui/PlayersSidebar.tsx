@@ -254,7 +254,9 @@ export const PlayersSidebar = ({
                           >
                             <button
                               onClick={() => {
-                                router.push(`/messages/${participant.user_id}`);
+                                // Default to ID if username is missing, but prefer username
+                                const identifier = participant.profiles?.username || participant.user_id;
+                                router.push(`/messages/${identifier}`);
                                 setActiveMenuId(null);
                               }}
                               className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"

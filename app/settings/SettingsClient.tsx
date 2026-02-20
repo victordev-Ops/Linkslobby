@@ -123,17 +123,17 @@ export default function SettingsClient({
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-8 relative z-10">
-        <div className="grid gap-6 md:grid-cols-3">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 relative z-10">
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
           {/* Main Settings Column */}
-          <div className="md:col-span-2 space-y-6">
+          <div className="md:col-span-2 space-y-4 sm:space-y-6">
 
             {/* Profile Card */}
-            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all hover:shadow-md">
-              <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl sm:rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all hover:shadow-md">
+              <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
                 <div className="relative">
-                  <div className="w-24 h-24 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg ring-4 ring-white dark:ring-[#1a1429]">
-                    <span className="text-3xl font-black italic">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg ring-4 ring-white dark:ring-[#1a1429]">
+                    <span className="text-2xl sm:text-3xl font-black italic">
                       {user && username ? username.charAt(0).toUpperCase() : "?"}
                     </span>
                   </div>
@@ -161,7 +161,7 @@ export default function SettingsClient({
             </div>
 
             {/* Appearance Card */}
-            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400">
                   <Moon size={20} />
@@ -182,7 +182,7 @@ export default function SettingsClient({
 
             {/* Notifications Card */}
             {user && (
-              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
                     <Bell size={20} />
@@ -198,7 +198,7 @@ export default function SettingsClient({
 
             {/* Content Filter Card */}
             {user && (
-              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400">
                     <Shield size={20} />
@@ -263,7 +263,7 @@ export default function SettingsClient({
 
             {/* Blocked Users Card */}
             {user && (
-              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-600 dark:text-red-400">
                     <UserX size={20} />
@@ -304,7 +304,7 @@ export default function SettingsClient({
             )}
 
             {/* Account Card */}
-            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-8 transition-all">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-white">
                   <Mail size={20} />
@@ -318,14 +318,14 @@ export default function SettingsClient({
               <div className="space-y-6">
                 {user ? (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
                         <p className="text-[10px] uppercase tracking-widest font-black text-gray-400 dark:text-gray-500 mb-1">Email Address</p>
-                        <p className="font-bold text-gray-900 dark:text-white truncate">{user.email}</p>
+                        <p className="font-bold text-gray-900 dark:text-white truncate text-sm sm:text-base">{user.email}</p>
                       </div>
                       <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
                         <p className="text-[10px] uppercase tracking-widest font-black text-gray-400 dark:text-gray-500 mb-1">Public Handle</p>
-                        <p className="font-bold text-gray-900 dark:text-white">@{username}</p>
+                        <p className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">@{username}</p>
                       </div>
                     </div>
 
@@ -351,7 +351,7 @@ export default function SettingsClient({
 
             {/* Danger Zone */}
             {user && (
-              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-red-100 dark:border-red-500/20 p-8 transition-all">
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-red-100 dark:border-red-500/20 p-6 sm:p-8 transition-all">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-600 dark:text-red-400">
                     <AlertTriangle size={20} />

@@ -34,6 +34,29 @@ export interface CachedMessage {
     cached_at: number
 }
 
+export interface CachedChatSession {
+    id: string
+    updated_at: string
+    last_message_preview?: string
+    other_user?: {
+        id: string
+        username: string | null
+    }
+    unread_count?: number
+    cached_at: number
+}
+
+export interface CachedChatMessage {
+    id: string
+    session_id: string
+    sender_id: string
+    content: string
+    created_at: string
+    is_system?: boolean
+    metadata?: any
+    cached_at: number
+}
+
 export interface CachedTodLobby {
     id: string
     host_id: string
@@ -111,20 +134,27 @@ class SayAppDB extends Dexie {
     notifications!: EntityTable<CachedNotification, 'id'>
     syncQueue!: EntityTable<SyncQueueItem, 'id'>
     meta!: EntityTable<SyncMeta, 'key'>
+    chatSessions!: EntityTable<CachedChatSession, 'id'>
+    chatMessages!: EntityTable<CachedChatMessage, 'id'>
 
     constructor() {
         super('SayAppDB')
 
-        this.version(1).stores({
+        this.version(2).stores({
             profiles: 'id, username, slug',
             confessions: 'id, profile_id, created_at, is_read, message_type',
-            messages: 'id, conversation_key, created_at',
+            messages: 'id, conversation_key, created_at', // Legacy
             todLobbies: 'id, host_id, status, created_at',
             hotSeatSessions: 'id, host_id, status, created_at',
             xpTransactions: 'id, user_id, created_at',
             notifications: 'id, type, created_at',
             syncQueue: '++id, table, action, created_at',
             meta: 'key',
+
+            chatSessions: 'id, updated_at',
+            chatMessages: 'id, session_id, created_at'
+        }).upgrade(tx => {
+            // Migration logic if needed, or just let new tables be created
         })
     }
 }
@@ -145,6 +175,8 @@ export async function clearAllCachedData() {
         db.notifications.clear(),
         db.syncQueue.clear(),
         db.meta.clear(),
+        db.chatSessions.clear(),
+        db.chatMessages.clear(),
     ])
 }
 
