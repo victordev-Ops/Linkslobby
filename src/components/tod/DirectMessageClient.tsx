@@ -42,12 +42,26 @@ interface Message {
 const PAGE_SIZE = 20
 
 // Annotate messages with group metadata for messenger-style rendering
+// Annotate messages with group metadata for messenger-style rendering
 function groupMessages(msgs: Message[]): Message[] {
     return msgs.map((msg, i) => {
         const prev = msgs[i - 1]
         const next = msgs[i + 1]
-        const isFirstInGroup = !prev || prev.isOwn !== msg.isOwn
-        const isLastInGroup = !next || next.isOwn !== msg.isOwn
+
+        // Break group if sender changes OR if the message is a reply OR if the previous message was a reply
+        // This ensures replies stand out visually
+        const isFirstInGroup = !prev ||
+            prev.isOwn !== msg.isOwn ||
+            !!msg.reply ||
+            !!prev?.reply ||
+            (new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() > 2 * 60 * 1000) // 2 min gap breaks group
+
+        const isLastInGroup = !next ||
+            next.isOwn !== msg.isOwn ||
+            !!next.reply ||
+            !!msg.reply ||
+            (new Date(next.created_at).getTime() - new Date(msg.created_at).getTime() > 2 * 60 * 1000)
+
         return { ...msg, isFirstInGroup, isLastInGroup }
     })
 }
@@ -586,10 +600,12 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                                         </div>
                                     </motion.div>
 
-                                    {/* Swipe Indicator */}
-                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden sm:block">
-                                        <Reply size={16} />
-                                    </div>
+                                    {/* Swipe Indicator - Only for other's messages for now to avoid clutter */}
+                                    {!msg.isOwn && (
+                                        <div className="absolute left-6 top-1/2 -translate-y-1/2 text-neutral-500 z-0 scale-75">
+                                            <Reply size={20} />
+                                        </div>
+                                    )}
 
                                     {/* Read Receipt Avatar */}
                                     {msg.id === lastReadMessageId && (
@@ -630,7 +646,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             </div>
 
             {/* Input Area */}
-            <div className="flex-shrink-0 bg-neutral-900 border-t border-white/5 pb-10 sm:pb-6 relative z-20">
+            <div className="flex-shrink-0 bg-neutral-900 border-t border-white/5 pb-5 sm:pb-6 relative z-20">
                 <AnimatePresence>
                     {replyingTo && (
                         <motion.div
