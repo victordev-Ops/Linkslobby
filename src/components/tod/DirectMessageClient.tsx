@@ -193,7 +193,16 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                 setTimeout(() => scrollToBottom('smooth'), 100)
 
                 setMessages(prev => {
+                    // Check if the message already exists (by ID)
                     if (prev.some(m => m.id === newMsg.id)) return prev
+
+                    // Check if we have an optimistic message that roughly matches (same content, sender, and recent)
+                    // This creates a smoother transition if the temp ID hasn't been swapped yet
+                    const existingOptimisticIndex = prev.findIndex(m =>
+                        m.isOptimistic &&
+                        m.sender_id === newMsg.sender_id &&
+                        m.content === newMsg.content
+                    )
 
                     const isOwn = newMsg.sender_id === currentUser.id
 
@@ -212,7 +221,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         }
                     }
 
-                    return [...prev, {
+                    const newMessageObj: Message = {
                         id: newMsg.id,
                         content: newMsg.content,
                         created_at: newMsg.created_at,
@@ -221,7 +230,16 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         isOptimistic: false,
                         reply_to_id: newMsg.reply_to_id,
                         reply: replyData
-                    }]
+                    }
+
+                    if (existingOptimisticIndex !== -1) {
+                        // Replace the optimistic message with the real one
+                        const newMessages = [...prev]
+                        newMessages[existingOptimisticIndex] = newMessageObj
+                        return newMessages
+                    }
+
+                    return [...prev, newMessageObj]
                 })
             })
             .subscribe()
