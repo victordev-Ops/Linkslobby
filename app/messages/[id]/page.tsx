@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { DirectMessageClient } from '@/components/tod/DirectMessageClient'
+import DirectMessageClient from '@/components/tod/DirectMessageClient'
 import { getOrCreateSession } from '@/actions/chat'
 
 // Helper to check UUID format
