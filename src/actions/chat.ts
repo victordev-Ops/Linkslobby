@@ -69,7 +69,7 @@ export async function getOrCreateSession(otherUserId: string) {
     return { success: true, sessionId: newSession.id }
 }
 
-export async function sendMessage(sessionId: string, content: string) {
+export async function sendMessage(sessionId: string, content: string, replyToId?: string) {
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -81,7 +81,8 @@ export async function sendMessage(sessionId: string, content: string) {
         .insert({
             session_id: sessionId,
             sender_id: user.id,
-            content: content
+            content: content,
+            reply_to_id: replyToId
         })
         .select()
         .single()
@@ -208,7 +209,14 @@ export async function getSessionMessages(sessionId: string, before?: string, lim
 
     let query = supabase
         .from('chat_messages')
-        .select('*')
+        .select(`
+            *,
+            reply:chat_messages!reply_to_id(
+                id,
+                content,
+                sender_id
+            )
+        `)
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false }) // Newest first for pagination logic
         .limit(limit)

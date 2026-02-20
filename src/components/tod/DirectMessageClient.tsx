@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Send, Loader2, MessageCircle, Plus, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, MessageCircle, Plus, ChevronUp, X, Reply } from 'lucide-react'
+import { motion, AnimatePresence, PanInfo } from 'framer-motion'
 import { toast } from 'sonner'
 import { sendMessage, getSessionMessages, markSessionRead } from '@/actions/chat'
 import { uploadDmPhoto } from '@/actions/dm-photos'
@@ -28,6 +29,13 @@ interface Message {
     // We can infer read status from session.last_read_at if we fetched it
     isFirstInGroup?: boolean
     isLastInGroup?: boolean
+    reply_to_id?: string
+    reply?: {
+        id: string
+        content: string
+        sender_id: string
+        profiles?: { username: string } // if fetched via join
+    }
 }
 
 const PAGE_SIZE = 20
@@ -66,6 +74,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
     const initialScrollDone = useRef(false)
 
     // Typing State
+    const [replyingTo, setReplyingTo] = useState<Message | null>(null)
     const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -73,6 +82,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
 
     const [hasMore, setHasMore] = useState(false)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
+    const [lastReadByPartner, setLastReadByPartner] = useState<Date | null>(null)
 
     // Scroll to bottom helper
     const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -139,6 +149,18 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
 
                 // Mark session as read
                 markSessionRead(sessionId).catch(console.error)
+
+                // Fetch partner's last read time
+                const { data: partnerPart } = await supabase
+                    .from('chat_participants')
+                    .select('last_read_at')
+                    .eq('session_id', sessionId)
+                    .neq('user_id', currentUser.id)
+                    .single()
+
+                if (partnerPart?.last_read_at) {
+                    setLastReadByPartner(new Date(partnerPart.last_read_at))
+                }
             }
 
             setIsLoading(false)
@@ -203,9 +225,24 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                 }
             })
 
+        const readReceiptChannel = supabase
+            .channel(`chat-read-${sessionId}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'chat_participants',
+                filter: `session_id=eq.${sessionId}`
+            }, (payload) => {
+                if (payload.new.user_id !== currentUser.id) {
+                    setLastReadByPartner(new Date(payload.new.last_read_at))
+                }
+            })
+            .subscribe()
+
         return () => {
             supabase.removeChannel(channel)
             supabase.removeChannel(presenceChannel)
+            supabase.removeChannel(readReceiptChannel)
         }
     }, [sessionId, currentUser.id, supabase])
 
@@ -230,15 +267,25 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             created_at: new Date().toISOString(),
             sender_id: currentUser.id,
             isOwn: true,
-            isOptimistic: true
+            isOptimistic: true,
+            reply_to_id: replyingTo?.id,
+            reply: replyingTo ? {
+                id: replyingTo.id,
+                content: replyingTo.content,
+                sender_id: replyingTo.sender_id,
+                profiles: { username: targetProfile.username || 'User' } // Approximate
+            } : undefined
         }
 
         setMessages(prev => [...prev, optimisticMsg])
-        if (!overrideContent) setInputText('')
+        if (!overrideContent) {
+            setInputText('')
+            setReplyingTo(null)
+        }
         setTimeout(() => scrollToBottom('smooth'), 50)
 
         try {
-            const result = await sendMessage(sessionId, content)
+            const result = await sendMessage(sessionId, content, replyingTo?.id)
 
             if (result.success && result.data) {
                 setMessages(prev => prev.map(m => m.id === tempId ? {
@@ -362,6 +409,18 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
         }
     }
 
+    const lastReadMessageId = useMemo(() => {
+        if (!lastReadByPartner) return null
+        // Iterate backwards to find the latest own message that was read
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i]
+            if (m.isOwn && !m.isOptimistic && new Date(m.created_at) <= lastReadByPartner) {
+                return m.id
+            }
+        }
+        return null
+    }, [messages, lastReadByPartner])
+
     return (
         <div className="flex flex-col h-[100dvh] bg-neutral-950 text-neutral-200">
             {/* Header */}
@@ -413,7 +472,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                             const isImg = msg.content.startsWith('[IMG:')
 
                             return (
-                                <div key={msg.id}>
+                                <div key={msg.id} className="relative group">
                                     {showDateSep && (
                                         <div className="flex items-center gap-3 my-4 opacity-60">
                                             <div className="flex-1 h-px bg-white/10" />
@@ -423,11 +482,33 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                                             <div className="flex-1 h-px bg-white/10" />
                                         </div>
                                     )}
-                                    <div className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} ${msg.isFirstInGroup ? 'mt-3' : 'mt-0.5'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                                    <motion.div
+                                        drag="x"
+                                        dragConstraints={{ left: 0, right: 0 }}
+                                        dragElastic={{ right: 0.15 }}
+                                        onDragEnd={(e, info) => {
+                                            if (info.offset.x > 50) {
+                                                setReplyingTo(msg)
+                                            }
+                                        }}
+                                        className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} ${msg.isFirstInGroup ? 'mt-3' : 'mt-0.5'} relative z-10 touch-pan-y`}
+                                    >
                                         <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl text-[15px] leading-relaxed shadow-md transition-all ${msg.isOwn
                                             ? `bg-gradient-to-br from-purple-600 to-indigo-600 text-white ${ownShape}`
                                             : `bg-neutral-800 text-neutral-200 ${otherShape} border border-white/5`
                                             } ${isImg ? 'p-1.5' : 'px-5 py-3'}`}>
+
+                                            {/* Reply Context */}
+                                            {msg.reply && (
+                                                <div className={`text-xs mb-2 pl-2 border-l-2 ${msg.isOwn ? 'border-white/30 text-white/70' : 'border-purple-500 text-neutral-400'}`}>
+                                                    <div className="font-bold opacity-80 mb-0.5">
+                                                        {msg.reply.sender_id === currentUser.id ? 'You' : msg.reply.profiles?.username || 'User'}
+                                                    </div>
+                                                    <div className="truncate opacity-70 italic">
+                                                        {msg.reply.content.startsWith('[IMG:') ? '📷 Photo' : msg.reply.content}
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {isImg ? (
                                                 <img
@@ -453,65 +534,119 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                                                 </div>
                                             )}
                                         </div>
+                                    </motion.div>
+
+                                    {/* Swipe Indicator */}
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden sm:block">
+                                        <Reply size={16} />
                                     </div>
+
+                                    {/* Read Receipt Avatar */}
+                                    {msg.id === lastReadMessageId && (
+                                        <motion.div
+                                            initial={{ scale: 0, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            className="flex justify-end mt-1 mr-1"
+                                        >
+                                            <div className="w-3.5 h-3.5 rounded-full bg-purple-600 border border-neutral-950 flex items-center justify-center text-[8px] font-bold text-white shadow-sm ring-2 ring-neutral-950">
+                                                {targetProfile.username?.[0]?.toUpperCase()}
+                                            </div>
+                                        </motion.div>
+                                    )}
                                 </div>
                             )
                         })}
                     </>
                 )}
 
-                {typingUsers.size > 0 && (
-                    <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300 px-5 mt-2">
-                        <div className="bg-neutral-800 rounded-2xl rounded-bl-none px-4 py-3">
-                            <div className="flex gap-1">
-                                <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                                <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                                <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce" />
+                {/* Typing Indicator */}
+                <AnimatePresence>
+                    {typingUsers.size > 0 && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="flex justify-start px-5 mt-2 mb-1"
+                        >
+                            <div className="bg-neutral-800 border border-white/5 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm flex items-center gap-1.5 min-w-[60px]">
+                                <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" />
                             </div>
-                        </div>
-                    </div>
-                )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 <div ref={messagesEndRef} className="h-4" />
             </div>
 
             {/* Input Area */}
-            <div className="flex-shrink-0 p-4 bg-neutral-900 border-t border-white/5 pb-10 sm:pb-6">
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handlePhotoSelect}
-                />
-
-                <div className="flex items-end gap-2">
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploading}
-                        className="p-3.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-full transition-all active:scale-90 border border-white/5 mb-0.5"
-                    >
-                        {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={22} />}
-                    </button>
-
-                    <div className="flex-1 flex items-end gap-3 bg-neutral-800/50 rounded-[2rem] p-2 border border-white/10 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 transition-all shadow-inner">
-                        <textarea
-                            value={inputText}
-                            onChange={(e) => {
-                                setInputText(e.target.value)
-                                handleTyping()
-                            }}
-                            onKeyDown={handleKeyPress}
-                            placeholder="Message..."
-                            className="flex-1 bg-transparent text-neutral-100 text-[16px] resize-none focus:outline-none max-h-32 py-3 px-5 min-h-[48px] custom-scrollbar"
-                            rows={1}
-                        />
-                        <button
-                            onClick={() => handleSend()}
-                            disabled={!inputText.trim()}
-                            className="p-3.5 bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full disabled:opacity-30 transition-all active:scale-90 shadow-xl shadow-purple-900/40 flex-shrink-0"
+            <div className="flex-shrink-0 bg-neutral-900 border-t border-white/5 pb-10 sm:pb-6 relative z-20">
+                <AnimatePresence>
+                    {replyingTo && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="px-4 pt-3"
                         >
-                            <Send size={20} className="ml-0.5" />
+                            <div className="flex items-center justify-between bg-neutral-800/50 rounded-xl p-3 border-l-4 border-purple-500">
+                                <div className="flex flex-col text-sm overflow-hidden">
+                                    <span className="text-purple-400 font-medium text-xs mb-0.5">
+                                        Replying to {replyingTo.isOwn ? 'Yourself' : targetProfile.username}
+                                    </span>
+                                    <span className="text-neutral-300 truncate">
+                                        {replyingTo.content.startsWith('[IMG:') ? '📷 Photo' : replyingTo.content}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setReplyingTo(null)}
+                                    className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                                >
+                                    <X size={16} className="text-neutral-400" />
+                                </button>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="p-4">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handlePhotoSelect}
+                    />
+
+                    <div className="flex items-end gap-2">
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploading}
+                            className="p-3.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-full transition-all active:scale-90 border border-white/5 mb-0.5"
+                        >
+                            {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={22} />}
                         </button>
+
+                        <div className="flex-1 flex items-end gap-3 bg-neutral-800/50 rounded-[2rem] p-2 border border-white/10 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 transition-all shadow-inner">
+                            <textarea
+                                value={inputText}
+                                onChange={(e) => {
+                                    setInputText(e.target.value)
+                                    handleTyping()
+                                }}
+                                onKeyDown={handleKeyPress}
+                                placeholder="Message..."
+                                className="flex-1 bg-transparent text-neutral-100 text-[16px] resize-none focus:outline-none max-h-32 py-3 px-5 min-h-[48px] custom-scrollbar"
+                                rows={1}
+                            />
+                            <button
+                                onClick={() => handleSend()}
+                                disabled={!inputText.trim()}
+                                className="p-3.5 bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full disabled:opacity-30 transition-all active:scale-90 shadow-xl shadow-purple-900/40 flex-shrink-0"
+                            >
+                                <Send size={20} className="ml-0.5" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
