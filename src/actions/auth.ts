@@ -8,7 +8,7 @@ export type AuthResponse = {
   message: string
 }
 
-export async function signUp(email: string): Promise<AuthResponse & { alreadyExists?: boolean }> {
+export async function signUp(email: string, next?: string): Promise<AuthResponse & { alreadyExists?: boolean }> {
   const supabase = await createSupabaseServerClient()
 
   // 1. Dynamic Origin Resolution
@@ -36,7 +36,7 @@ export async function signUp(email: string): Promise<AuthResponse & { alreadyExi
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim().toLowerCase(),
     options: {
-      emailRedirectTo: `${cleanOrigin}/auth/confirm`,
+      emailRedirectTo: `${cleanOrigin}/auth/confirm${next ? `?next=${encodeURIComponent(next)}` : ''}`,
     },
   })
 

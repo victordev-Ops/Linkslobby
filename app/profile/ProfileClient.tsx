@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Save, Copy, Check, Loader2, User as UserIcon, XCircle, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Save, Copy, Check, Loader2, User as UserIcon, XCircle, CheckCircle, Camera } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { updateProfile, checkSlugAvailability } from '@/actions/profile'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { useDebounce } from '@/hooks/use-debounce'
+import { createClient } from '@/lib/supabase/client'
 
 interface ProfileClientProps {
     user: any
@@ -15,6 +16,7 @@ interface ProfileClientProps {
         username: string
         slug: string
         email: string
+        avatar_url?: string
     }
 }
 
@@ -27,6 +29,7 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
     // Local state for optimistic updates
     const [displayUsername, setDisplayUsername] = useState(profile.username)
     const [displaySlug, setDisplaySlug] = useState(profile.slug)
+    const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url || null)
 
     // Slug check states
     const [slug, setSlug] = useState(profile.slug)
@@ -34,6 +37,8 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
     const [isSlugChecking, setIsSlugChecking] = useState(false)
     const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
     const [slugMessage, setSlugMessage] = useState('')
+    const [isAvatarUploading, setIsAvatarUploading] = useState(false)
+    const supabaseClient = createClient()
 
     useEffect(() => {
         // Don't check if it matches initial profile slug (unless they change back and forth, but checking against DB handles 'taken by others')
@@ -73,6 +78,51 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
         copyLink()
     }
 
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        if (file.size > 2 * 1024 * 1024) {
+            toast.error("Image size must be less than 2MB")
+            return
+        }
+
+        setIsAvatarUploading(true)
+        try {
+            const fileExt = file.name.split('.').pop()
+            const fileName = `${user.id}-${Math.random()}.${fileExt}`
+            const filePath = `avatars/${fileName}`
+
+            const { error: uploadError } = await supabaseClient.storage
+                .from('avatars')
+                .upload(filePath, file)
+
+            if (uploadError) throw uploadError
+
+            const { data: { publicUrl } } = supabaseClient.storage
+                .from('avatars')
+                .getPublicUrl(filePath)
+
+            // Update profile via server action
+            const formData = new FormData()
+            formData.append('username', displayUsername)
+            formData.append('slug', displaySlug)
+            formData.append('avatar_url', publicUrl)
+
+            const result = await updateProfile(null, formData)
+            if (result.error) throw new Error(result.error)
+
+            setAvatarUrl(publicUrl)
+            toast.success("Profile picture updated!")
+            router.refresh()
+        } catch (error: any) {
+            console.error("Avatar upload error:", error)
+            toast.error(error.message || "Failed to upload image")
+        } finally {
+            setIsAvatarUploading(false)
+        }
+    }
+
     async function clientAction(formData: FormData) {
         if (slugAvailable === false) {
             toast.error("Please choose a valid and available handle.")
@@ -89,8 +139,10 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
             // Optimistic update — reflect changes immediately
             const newUsername = formData.get('username') as string
             const newSlug = formData.get('slug') as string
+            const newAvatar = formData.get('avatar_url') as string
             if (newUsername) setDisplayUsername(newUsername)
             if (newSlug) setDisplaySlug(newSlug)
+            if (newAvatar !== undefined) setAvatarUrl(newAvatar)
 
             toast.success(result.success)
             setIsEditing(false)
@@ -121,10 +173,33 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
             <main className="max-w-2xl mx-auto px-4 py-8 space-y-8">
                 {/* Profile Card */}
                 <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-white/10 p-8 flex flex-col items-center">
-                    <div className="w-24 h-24 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg mb-4 ring-4 ring-white dark:ring-[#1a1429]">
-                        <span className="text-3xl font-black italic">
-                            {displayUsername ? displayUsername.charAt(0).toUpperCase() : "?"}
-                        </span>
+                    <div className="relative group mb-4">
+                        <div className="w-32 h-32 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-xl ring-4 ring-white dark:ring-[#1a1429] overflow-hidden">
+                            {avatarUrl ? (
+                                <img src={avatarUrl} alt={displayUsername} className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-4xl font-black italic">
+                                    {displayUsername ? displayUsername.charAt(0).toUpperCase() : "?"}
+                                </span>
+                            )}
+
+                            {isAvatarUploading && (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm">
+                                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                                </div>
+                            )}
+                        </div>
+
+                        <label className="absolute bottom-0 right-0 p-2.5 bg-white dark:bg-purple-600 rounded-full shadow-lg border border-slate-200 dark:border-purple-500/50 cursor-pointer hover:scale-110 active:scale-95 transition-all text-slate-600 dark:text-white">
+                            <Camera size={18} />
+                            <input
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={handleAvatarUpload}
+                                disabled={isAvatarUploading}
+                            />
+                        </label>
                     </div>
 
                     {!isEditing ? (
@@ -153,7 +228,7 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
                                     name="username"
                                     id="username"
                                     defaultValue={profile.username}
-                                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:text-white font-bold transition-all"
+                                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 font-bold transition-all"
                                     placeholder="Your username"
                                     minLength={2}
                                     required
@@ -170,7 +245,7 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
                                         id="slug"
                                         value={slug}
                                         onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                                        className={`w-full pl-10 pr-10 py-3 rounded-2xl bg-slate-50 dark:bg-black/20 border focus:outline-none focus:ring-2 font-bold transition-all ${slugAvailable === false
+                                        className={`w-full pl-10 pr-10 py-3 rounded-2xl bg-slate-50 dark:bg-black/20 border focus:outline-none focus:ring-2 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 font-bold transition-all ${slugAvailable === false
                                             ? 'border-red-300 dark:border-red-500/50 focus:ring-red-500'
                                             : slugAvailable === true
                                                 ? 'border-green-300 dark:border-green-500/50 focus:ring-green-500'
@@ -220,6 +295,7 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
                                     Save Changes
                                 </button>
                             </div>
+                            <input type="hidden" name="avatar_url" value={avatarUrl || ''} />
                         </form>
                     )}
                 </div>

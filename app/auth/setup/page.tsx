@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { setupProfile, checkUsernameAvailability } from '@/actions/profile'
 import { useDebounce } from '@/hooks/use-debounce'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -13,8 +14,18 @@ import { createClient } from '@/lib/supabase/client'
 import { User, Loader2, Check, X, ArrowRight } from 'lucide-react'
 
 export default function SetupUsername() {
+  return (
+    <Suspense>
+      <SetupUsernameContent />
+    </Suspense>
+  )
+}
+
+function SetupUsernameContent() {
   const [username, setUsername] = useState('')
   const [message, setMessage] = useState('')
+  const searchParams = useSearchParams()
+  const next = searchParams.get('next')
   const [loading, setLoading] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
@@ -85,8 +96,8 @@ export default function SetupUsername() {
         // Allow notification animation to play
         await new Promise(resolve => setTimeout(resolve, 1500))
 
-        // Navigate to dashboard
-        window.location.href = '/dashboard'
+        // Navigate to next or dashboard
+        window.location.href = next || '/dashboard'
       }
     } catch (err) {
       console.error("Profile setup error:", err)

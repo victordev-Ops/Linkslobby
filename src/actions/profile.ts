@@ -122,6 +122,7 @@ export async function updateProfile(state: any, formData: FormData) {
 
     const username = formData.get('username') as string
     const slug = formData.get('slug') as string
+    const avatar_url = formData.get('avatar_url') as string
 
     if (!username || username.trim().length < 2) {
         return { error: 'Username must be at least 2 characters long.' }
@@ -139,7 +140,12 @@ export async function updateProfile(state: any, formData: FormData) {
     try {
         const { error } = await supabase
             .from('profiles')
-            .update({ username, slug, updated_at: new Date().toISOString() })
+            .update({
+                username,
+                slug,
+                ...(avatar_url !== undefined && { avatar_url }),
+                updated_at: new Date().toISOString()
+            })
             .eq('id', user.id)
 
         if (error) {

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { Lightbulb, Check, X, Trophy } from "lucide-react"
+import { Lightbulb, Check, X, Trophy, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import confetti from "canvas-confetti"
 import { createClient } from "@/lib/supabase/client"
@@ -25,6 +25,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
   const [isSaving, setIsSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [answers, setAnswers] = useState<any[]>([])
+  const [scoreId, setScoreId] = useState<string | null>(null)
   const supabase = createClient()
   const router = useRouter()
 
@@ -76,7 +77,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('dykm_scores')
         .insert({
           quiz_owner_id: profile.id,
@@ -86,9 +87,12 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
           total_questions: questions.length,
           answers: answers
         })
+        .select('id')
+        .single()
 
       if (error) throw error
 
+      setScoreId(data.id)
       setIsSaved(true)
       toast.success("Score saved!")
       // No immediate redirect anymore
@@ -127,6 +131,26 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
                 className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isSaving ? "Saving..." : "Save Score & Continue"}
+              </button>
+            </div>
+          )}
+
+          {isSaved && scoreId && (
+            <div className="space-y-3 pt-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
+              <button
+                onClick={async () => {
+                  const { data: { user } } = await supabase.auth.getUser()
+                  const resultsPath = `/dykm/results/${scoreId}`
+                  if (user) {
+                    router.push(resultsPath)
+                  } else {
+                    router.push(`/signup?returnTo=${resultsPath}`)
+                  }
+                }}
+                className="w-full py-3.5 bg-slate-900 text-white font-black rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98] shadow-lg shadow-slate-200/50 flex items-center justify-center gap-2 group"
+              >
+                Review Answers
+                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
           )}

@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
+  const next = searchParams.get('next') ?? ''
 
   if (token_hash && type) {
     const supabase = await createSupabaseServerClient()
@@ -34,11 +35,14 @@ export async function GET(request: NextRequest) {
 
       // 4. Redirect based on profile completion
       if (profile?.username && profile?.slug) {
-        // Profile complete -> go to dashboard
-        return NextResponse.redirect(new URL('/dashboard', request.url))
+        // Profile complete -> go to next or dashboard
+        const redirectUrl = next ? new URL(next, request.url) : new URL('/dashboard', request.url)
+        return NextResponse.redirect(redirectUrl)
       } else {
         // Profile incomplete -> go to setup
-        return NextResponse.redirect(new URL('/auth/setup', request.url))
+        const setupUrl = new URL('/auth/setup', request.url)
+        if (next) setupUrl.searchParams.set('next', next)
+        return NextResponse.redirect(setupUrl)
       }
     }
   }

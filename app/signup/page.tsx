@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { signUp } from '@/actions/auth'
 import AuthForm from '@/components/AuthForm'
 import { Loader2, Mail, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react'
@@ -8,9 +9,19 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 
 export default function Signup() {
+  return (
+    <Suspense>
+      <SignupContent />
+    </Suspense>
+  )
+}
+
+function SignupContent() {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
+  const searchParams = useSearchParams()
+  const returnTo = searchParams.get('returnTo') || undefined
 
   useEffect(() => {
     if (status === 'error') {
@@ -25,7 +36,7 @@ export default function Signup() {
     setMessage('')
 
     try {
-      const result = await signUp(email)
+      const result = await signUp(email, returnTo)
 
       if (!result.success) {
         if ((result as any).alreadyExists) {
@@ -133,7 +144,7 @@ export default function Signup() {
         <div className="text-center mt-2">
           <p className="text-xs text-white/30 font-medium">
             already have an account?{' '}
-            <Link href="/login" className="text-purple-400 hover:text-purple-300 transition-colors">
+            <Link href={`/login${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`} className="text-purple-400 hover:text-purple-300 transition-colors">
               log in
             </Link>
           </p>

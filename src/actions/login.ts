@@ -7,7 +7,7 @@ export type AuthResponse = {
     message: string
 }
 
-export async function signIn(email: string): Promise<AuthResponse> {
+export async function signIn(email: string, next?: string): Promise<AuthResponse> {
     const supabase = await createSupabaseServerClient()
 
     // Dynamic Origin Resolution - matches signup pattern
@@ -19,7 +19,7 @@ export async function signIn(email: string): Promise<AuthResponse> {
     const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
         options: {
-            emailRedirectTo: `${cleanOrigin}/auth/confirm`,
+            emailRedirectTo: `${cleanOrigin}/auth/confirm${next ? `?next=${encodeURIComponent(next)}` : ''}`,
         },
     })
 
