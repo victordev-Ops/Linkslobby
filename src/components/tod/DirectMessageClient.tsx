@@ -86,6 +86,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const messagesContainerRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const sentinelRef = useRef<HTMLDivElement>(null)
     const initialScrollDone = useRef(false)
 
     // Typing State
@@ -303,6 +304,23 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
         }
     }, [sessionId, currentUser.id, supabase])
 
+    // IntersectionObserver for infinite scroll (load older messages on scroll up)
+    useEffect(() => {
+        if (!sentinelRef.current || isLoading) return
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !isLoadingMore && initialScrollDone.current) {
+                    handleLoadMore()
+                }
+            },
+            { root: messagesContainerRef.current, threshold: 0.1 }
+        )
+
+        observer.observe(sentinelRef.current)
+        return () => observer.disconnect()
+    }, [hasMore, isLoadingMore, isLoading])
+
     const handleTyping = async () => {
         if (!presenceChannelRef.current) return
 
@@ -515,16 +533,11 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                     </div>
                 ) : (
                     <>
-                        {hasMore && (
-                            <div className="flex justify-center py-4">
-                                <button
-                                    onClick={handleLoadMore}
-                                    disabled={isLoadingMore}
-                                    className="px-4 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-400 rounded-full transition-colors flex items-center gap-2"
-                                >
-                                    {isLoadingMore && <Loader2 size={12} className="animate-spin" />}
-                                    Load previous messages
-                                </button>
+                        {/* Infinite scroll sentinel */}
+                        <div ref={sentinelRef} className="h-1" />
+                        {isLoadingMore && (
+                            <div className="flex justify-center py-3">
+                                <Loader2 size={16} className="animate-spin text-purple-400" />
                             </div>
                         )}
                         {groupMessages(messages).map((msg, i, grouped) => {

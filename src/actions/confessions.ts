@@ -12,8 +12,9 @@ export async function sendAmaQuestion(profileId: string, message: string) {
   const ua = headersList.get('user-agent') || 'unknown'
   const lang = headersList.get('accept-language') || 'unknown'
   const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
+  const referrer = headersList.get('referer') || 'direct'
 
-  const metadata = JSON.stringify({ ua, lang, ip, t: Date.now() })
+  const metadata = JSON.stringify({ ua, lang, ip, t: Date.now(), ref: referrer })
   const messageWithMeta = `${message}\n\n[META:${metadata}]`
 
   const { error } = await supabase

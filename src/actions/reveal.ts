@@ -21,6 +21,61 @@ function getFriendlyBrowser(ua: string) {
     return 'Browser'
 }
 
+function getFriendlySource(ref: string): string {
+    if (!ref || ref === 'direct') return 'Direct link'
+    try {
+        const url = new URL(ref)
+        const host = url.hostname.replace('www.', '')
+        if (host.includes('instagram')) return 'Instagram'
+        if (host.includes('snapchat')) return 'Snapchat'
+        if (host.includes('tiktok')) return 'TikTok'
+        if (host.includes('twitter') || host.includes('x.com')) return 'X (Twitter)'
+        if (host.includes('facebook') || host.includes('fb.com')) return 'Facebook'
+        if (host.includes('whatsapp')) return 'WhatsApp'
+        if (host.includes('t.me') || host.includes('telegram')) return 'Telegram'
+        if (host.includes('reddit')) return 'Reddit'
+        if (host.includes('discord')) return 'Discord'
+        if (host.includes('say-app')) return 'Say App'
+        return host
+    } catch {
+        return 'Unknown source'
+    }
+}
+
+async function getLocationFromIP(ip: string): Promise<string> {
+    if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1') return 'Unknown'
+    try {
+        const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon`, {
+            signal: AbortSignal.timeout(3000) // 3s timeout
+        })
+        if (!res.ok) return 'Unknown'
+        const data = await res.json()
+        if (data.status === 'success') {
+            return `${data.city}, ${data.regionName}, ${data.country}`
+        }
+        return 'Unknown'
+    } catch {
+        return 'Unknown'
+    }
+}
+
+async function getCoordsFromIP(ip: string): Promise<{ lat: string; lon: string } | null> {
+    if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1') return null
+    try {
+        const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,lat,lon`, {
+            signal: AbortSignal.timeout(3000)
+        })
+        if (!res.ok) return null
+        const data = await res.json()
+        if (data.status === 'success') {
+            return { lat: String(data.lat), lon: String(data.lon) }
+        }
+        return null
+    } catch {
+        return null
+    }
+}
+
 export type RevealResult = {
     success: boolean
     message?: string
@@ -77,32 +132,50 @@ export async function revealSenderHint(messageId: string): Promise<RevealResult>
             .eq('id', messageId)
             .single()
 
-        let hint = "Sender is using a mobile device"
+        const hints: Record<string, string> = {}
 
         if (confession?.message) {
             const metaMatch = confession.message.match(/\[META:(.*)\]$/s)
             if (metaMatch && metaMatch[1]) {
                 try {
                     const meta = JSON.parse(metaMatch[1])
-                    const device = getFriendlyUA(meta.ua)
-                    const browser = getFriendlyBrowser(meta.ua)
+                    hints['Device'] = getFriendlyUA(meta.ua)
+                    hints['Browser'] = getFriendlyBrowser(meta.ua)
+                    hints['Language'] = meta.lang?.split(',')[0] || 'Unknown'
+                    hints['Source'] = getFriendlySource(meta.ref)
 
-                    // Add some variability or depth for Pro users later if needed
-                    hint = `The sender is using ${device} on ${browser}`
+                    if (meta.t) {
+                        hints['Time Sent'] = new Date(meta.t).toLocaleString('en-US', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short'
+                        })
+                    }
+
+                    // Location from IP (async)
+                    const location = await getLocationFromIP(meta.ip)
+                    hints['Location'] = location
 
                     if (isPro) {
-                        // For Pro, we can add more info like language or approximate location if we had a geo lookup
-                        hint += `. Browser language: ${meta.lang.split(',')[0]}`
+                        const coords = await getCoordsFromIP(meta.ip)
+                        if (coords) {
+                            hints['Latitude'] = coords.lat
+                            hints['Longitude'] = coords.lon
+                        }
                     }
                 } catch (e) {
                     console.error("Failed to parse metadata", e)
+                    hints['Device'] = 'Unknown'
                 }
+            } else {
+                hints['Device'] = 'Mobile device (no metadata)'
             }
+        } else {
+            hints['Device'] = 'Unknown'
         }
 
         return {
             success: true,
-            data: { hint }
+            data: { hints }
         }
 
     } catch (error) {
@@ -117,6 +190,17 @@ export async function revealDYKMRespondent(scoreId: string): Promise<RevealResul
     try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { success: false, message: 'Not authenticated' }
+
+        // Check if already revealed
+        const { data: scoreData } = await supabase
+            .from('dykm_scores')
+            .select('responder_revealed')
+            .eq('id', scoreId)
+            .single()
+
+        if (scoreData?.responder_revealed) {
+            return { success: true, message: 'Already revealed!' }
+        }
 
         const cost = XP_COSTS.REVEAL_DYKM_ANSWERER
 
@@ -138,6 +222,12 @@ export async function revealDYKMRespondent(scoreId: string): Promise<RevealResul
         if (!xpResult || (xpResult as any).success === false) {
             return { success: false, message: (xpResult as any)?.error || 'Failed to spend XP' }
         }
+
+        // 2. Mark as revealed in dykm_scores
+        await supabase
+            .from('dykm_scores')
+            .update({ responder_revealed: true })
+            .eq('id', scoreId)
 
         return { success: true, message: 'Respondent revealed!' }
 

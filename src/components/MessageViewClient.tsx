@@ -66,7 +66,7 @@ export default function MessageViewClient({ confession, username, onClose, restr
   const [colorIndex, setColorIndex] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
-  const [hint, setHint] = useState<string | null>(null)
+  const [hint, setHint] = useState<Record<string, string> | null>(null)
 
   // Report state
   const [showReportMenu, setShowReportMenu] = useState(false)
@@ -160,8 +160,8 @@ export default function MessageViewClient({ confession, username, onClose, restr
     try {
       const result = await revealSenderHint(confession.id)
 
-      if (result.success && result.data?.hint) {
-        setHint(result.data.hint)
+      if (result.success && result.data?.hints) {
+        setHint(result.data.hints)
         toast.success("Hint unlocked!", { id: toastId })
       } else {
         toast.error(result.message || "Failed to reveal hint", { id: toastId })
@@ -325,9 +325,17 @@ export default function MessageViewClient({ confession, username, onClose, restr
                     animate={{ opacity: 1, y: 0 }}
                     className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-500/20"
                   >
-                    <p className="text-sm font-bold text-purple-700 dark:text-purple-300">
-                      🕵️ Warning: {hint}
+                    <p className="text-xs font-black text-purple-500 dark:text-purple-400 uppercase tracking-widest mb-3">
+                      🕵️ Sender Hints
                     </p>
+                    <div className="space-y-2">
+                      {Object.entries(hint).map(([key, value]) => (
+                        <div key={key} className="flex justify-between items-center gap-4">
+                          <span className="text-xs font-bold text-purple-400 dark:text-purple-300 uppercase tracking-wider whitespace-nowrap">{key}</span>
+                          <span className="text-sm font-bold text-purple-700 dark:text-purple-200 text-right">{value}</span>
+                        </div>
+                      ))}
+                    </div>
                   </motion.div>
                 )}
               </div>

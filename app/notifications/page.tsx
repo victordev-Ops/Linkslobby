@@ -77,7 +77,7 @@ export default async function NotificationsPage() {
         const lobbyIds = lobbiesRes.data.map(l => l.lobby_id)
         const { data: events } = await supabase
             .from("tod_messages")
-            .select("*, profiles(username), tod_lobbies(status)")
+            .select("*, profiles(username), tod_lobbies(status, name)")
             .in("lobby_id", lobbyIds)
             .eq("message_type", "system")
             // .eq("is_hidden", false) // tod_messages might not have is_hidden or it might be shared. We rely on hidden_notifications table.

@@ -543,7 +543,14 @@ export default function InboxClient({
               // ... (Use existing rendering logic for Confession)
               const cleanMessage = stripMetadata(c.message)
               const isSecret = !c.is_read && (c.message_type === 'confession' || c.message_type === 'anonymous')
-              const displayMessage = isSecret ? 'Locked message - Tap to reveal' : (cleanMessage.length > 80 ? cleanMessage.slice(0, 80) + '...' : cleanMessage)
+              // Mask restricted words in previews
+              const maskedMessage = restrictedWords.length > 0
+                ? cleanMessage.replace(
+                  new RegExp(`(${restrictedWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi'),
+                  '***'
+                )
+                : cleanMessage
+              const displayMessage = isSecret ? 'Locked message - Tap to reveal' : (maskedMessage.length > 80 ? maskedMessage.slice(0, 80) + '...' : maskedMessage)
 
               // Special rendering for Legacy DM to look distinct?
               // For now, render as before.

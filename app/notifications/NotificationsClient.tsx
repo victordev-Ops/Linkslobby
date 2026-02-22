@@ -28,6 +28,10 @@ interface NotificationsClientProps {
 
 type Tab = "All" | "Messages" | "Games" | "Lobbies" | "XP" | "Hot Seat"
 
+function stripMetadata(message: string): string {
+    return message.replace(/\n\n\[META:.*\]$/s, '').trim()
+}
+
 export default function NotificationsClient({
     initialConfessions,
     initialDykmScores,
@@ -48,7 +52,14 @@ export default function NotificationsClient({
     const [xpTransactions, setXpTransactions] = useState(initialXpTransactions)
     const [hotSeatQuestions, setHotSeatQuestions] = useState(initialHotSeatQuestions)
     const [activeTab, setActiveTab] = useState<Tab>("All")
-    const [revealedScores, setRevealedScores] = useState<Record<string, boolean>>({})
+    // Pre-populate revealed state from server data
+    const [revealedScores, setRevealedScores] = useState<Record<string, boolean>>(() => {
+        const initial: Record<string, boolean> = {}
+        initialDykmScores.forEach((s: any) => {
+            if (s.responder_revealed) initial[s.id] = true
+        })
+        return initial
+    })
     const [isRevealing, setIsRevealing] = useState<string | null>(null)
     const [showProCard, setShowProCard] = useState(true)
     const [hotSeatSessionIds, setHotSeatSessionIds] = useState<string[]>([])
@@ -317,7 +328,13 @@ export default function NotificationsClient({
             case 'dykm':
                 return `Quiz: ${item.responder_name} scored ${item.score}/${item.total_questions}`
             case 'lobby':
-                return item.content
+                const lobbyName = item.tod_lobbies?.name ? ` in ${item.tod_lobbies.name}` : ''
+                const content = (item.content || '').toLowerCase()
+                if (content.includes('joined')) return `🎉 Someone joined${lobbyName}`
+                if (content.includes('your turn') && content.includes('target')) return `🎯 It's your turn as target${lobbyName}!`
+                if (content.includes('your turn') && content.includes('ask')) return `🎲 It's your turn to ask${lobbyName}!`
+                if (content.includes('your turn')) return `🎯 It's your turn${lobbyName}!`
+                return item.content + (lobbyName ? ` ${lobbyName}` : '')
             case 'xp':
                 return `${item.amount > 0 ? '+' : ''}${item.amount} Stars — ${item.reason}`
             case 'hot_seat':
@@ -367,8 +384,8 @@ export default function NotificationsClient({
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     onClick={() => handleSelectMessage(item)}
                                     className={`relative p-4 rounded-2xl shadow-sm group transition-all cursor-pointer active:scale-[0.98] border ${item.type === 'dykm'
-                                            ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-500/20 hover:border-blue-400"
-                                            : "bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border-slate-200 dark:border-white/10 hover:border-purple-300 dark:hover:border-purple-500/30"
+                                        ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-500/20 hover:border-blue-400"
+                                        : "bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border-slate-200 dark:border-white/10 hover:border-purple-300 dark:hover:border-purple-500/30"
                                         }`}
                                 >
                                     <button
@@ -381,8 +398,8 @@ export default function NotificationsClient({
 
                                     <div className="flex gap-4 pr-6">
                                         <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center border ${item.type === 'dykm'
-                                                ? 'bg-blue-100 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/30'
-                                                : ['xp', 'hot_seat'].includes(item.type) ? 'bg-amber-500/10 border-slate-100 dark:border-white/5' : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/5'
+                                            ? 'bg-blue-100 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/30'
+                                            : ['xp', 'hot_seat'].includes(item.type) ? 'bg-amber-500/10 border-slate-100 dark:border-white/5' : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/5'
                                             }`}>
                                             {getIcon(item)}
                                         </div>
@@ -398,7 +415,7 @@ export default function NotificationsClient({
 
                                             {item.type === 'message' && (
                                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 italic">
-                                                    {item.is_dm ? "Click to view private message" : item.message_type === 'ama' ? `"${item.message}"` : "Click to view message"}
+                                                    {item.is_dm ? "Click to view private message" : item.message_type === 'ama' ? `"${stripMetadata(item.message)}"` : "Click to view message"}
                                                 </p>
                                             )}
 
@@ -426,8 +443,8 @@ export default function NotificationsClient({
                                                             onClick={(e) => { e.stopPropagation(); handleReveal(item.id); }}
                                                             disabled={isRevealing === item.id}
                                                             className={`text-[10px] font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${isPro
-                                                                    ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm shadow-blue-200/50"
-                                                                    : "bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                                                                ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm shadow-blue-200/50"
+                                                                : "bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10"
                                                                 }`}
                                                         >
                                                             {isRevealing === item.id ? (
