@@ -15,6 +15,7 @@ import { WaitingRoom } from "./ui/WaitingRoom";
 import { NextRoundButton } from "./ui/NextRoundButton";
 import { GameStatus } from "./ui/GameStatus";
 import { motion, AnimatePresence } from "framer-motion";
+import { compressImage } from "@/lib/image-utils";
 
 interface TODGameClientProps {
   lobbyId: string;
@@ -24,6 +25,20 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const { profile } = useAuth();
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
+  const handleUploadImage = async (file: File): Promise<string | null> => {
+    setIsUploading(true);
+    try {
+      // Compress image before passing to the upload action
+      const optimizedFile = await compressImage(file);
+      const url = await uploadImage(optimizedFile);
+      setIsUploading(false);
+      return url;
+    } catch (err) {
+      console.error("Manual compress/upload error:", err);
+      setIsUploading(false);
+      return null;
+    }
+  };
   const [showSidebar, setShowSidebar] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [replyingTo, setReplyingTo] = useState<typeof messages[0] | null>(null);
@@ -261,12 +276,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     setTimeout(() => scrollToBottom(true), 100);
   };
 
-  const handleUploadImage = async (file: File): Promise<string | null> => {
-    setIsUploading(true);
-    const url = await uploadImage(file);
-    setIsUploading(false);
-    return url;
-  };
+
 
   const handleLeaveLobby = async () => {
     if (!lobby) {

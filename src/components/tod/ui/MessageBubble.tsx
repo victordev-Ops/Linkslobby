@@ -1,6 +1,7 @@
 // src/components/tod/ui/MessageBubble.tsx
 import { User, CheckCheck, Clock, Image as ImageIcon, Reply, X } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { Lightbox } from './Lightbox';
 
 interface Message {
   id: string;
@@ -52,6 +53,7 @@ const ReplyPreview = ({ username, content, isOwn }: { username: string, content:
 
 export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, onReply, replyingTo }: MessageBubbleProps) => {
   const [imageError, setImageError] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [swipeDistance, setSwipeDistance] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const touchStartX = useRef(0);
@@ -230,7 +232,11 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
                     <img
                       src={message.image_url}
                       alt="Attached"
-                      className="w-full max-h-64 object-cover"
+                      className="w-full max-h-64 object-cover cursor-pointer hover:brightness-110 transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLightboxUrl(message.image_url!);
+                      }}
                       onError={() => setImageError(true)}
                     />
                   </div>
@@ -256,7 +262,11 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
                       <img
                         src={answerMessage.image_url}
                         alt="Answer"
-                        className="w-full max-h-48 object-cover"
+                        className="w-full max-h-48 object-cover cursor-pointer hover:brightness-110 transition-all"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxUrl(answerMessage.image_url!);
+                        }}
                       />
                     </div>
                   )}
@@ -347,7 +357,11 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
               <img
                 src={message.image_url}
                 alt="Attached"
-                className="w-full max-h-48 object-cover"
+                className="w-full max-h-48 object-cover cursor-pointer hover:brightness-110 transition-all"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxUrl(message.image_url!);
+                }}
                 onError={() => setImageError(true)}
               />
             </div>
@@ -373,6 +387,12 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
           )}
         </div>
       </div>
+
+      <Lightbox
+        src={lightboxUrl || ''}
+        isOpen={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+      />
     </div>
   );
 };

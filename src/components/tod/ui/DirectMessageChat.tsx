@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { X, Send, Loader2, MessageCircle } from 'lucide-react'
+import { X, Send, Loader2, MessageCircle, ImageIcon, Plus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { sendDirectMessage } from '@/actions/direct-messages'
 import { useAuth } from '@/context/AuthContext'
+import { compressImage } from '@/lib/image-utils'
+import { Lightbox } from './Lightbox'
 
 interface DirectMessageChatProps {
     targetUser: {
@@ -18,7 +20,8 @@ interface DirectMessageChatProps {
 
 interface Message {
     id: string
-    content: string // Map 'message' to 'content' for internal use
+    content: string
+    image_url?: string | null
     created_at: string
     isOwn: boolean
     isOptimistic?: boolean
@@ -30,7 +33,12 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
     const [inputText, setInputText] = useState('')
     const [isSending, setIsSending] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
+    const [isUploading, setIsUploading] = useState(false)
+    const [selectedImage, setSelectedImage] = useState<File | null>(null)
+    const [imagePreview, setImagePreview] = useState<string | null>(null)
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const supabase = createClient()
 
@@ -46,72 +54,59 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
         const fetchMessages = async () => {
             setIsLoading(true)
 
-            // We can only fetch messages SENT TO ME from this user
-            // If we want to see messages I SENT, we rely on optimistic updates for now 
-            // OR we check if 'confessions' has a sender_id. 
-            // Since we can't be sure, we'll focus on the 'Inbox' part (messages received)
-            // and maybe try to fetch sent ones if possible. 
-            // For now, let's fetch received messages to show history.
-
-            const { data: received, error } = await supabase
+            // Fetch history where I am either the sender or receiver with this specific user
+            // We use .or to check both directions
+            const { data, error } = await supabase
                 .from('confessions')
                 .select('*')
-                .eq('profile_id', profile.id) // Messages I received
                 .eq('message_type', 'direct_message')
-                // We need to filter by who sent it. 
-                // If there's no sender_id column, we can't filter by sender easily on server without metadata.
-                // But for DMs, we assume the new server action MIGHT put metadata or we rely on content?
-                // Let's assume for this "messenger" feature we only show what we just sent (session) + what we receive.
-                // Wait, if it's "messenger", we need history.
-                // Let's try to filter by metadata if it exists, or content structure.
+                .or(`and(profile_id.eq.${profile.id},sender_id.eq.${targetUser.id}),and(profile_id.eq.${targetUser.id},sender_id.eq.${profile.id})`)
                 .order('created_at', { ascending: true })
                 .limit(50)
 
-            if (received) {
-                // Simple heuristic: if description or metadata contains sender info? 
-                // Since we don't have that yet, this might just show ALL DMs. 
-                // That's tricky. 
-                // Implementation decision: Show all DMs for now, or filter client side if possible.
-                // Actually, without sender_id, this is hard.
-                // BUT, looking at `sendDirectMessage`, we are inserting raw text.
-                // Let's assume we can't easily filter history by specific user without schema changes.
-                // So for V1: we show session history + generic "inbox" messages that appear.
-                // OR: We only show messages that *appear* to be from them (e.g. they signed it?).
-
-                // Let's map what we can.
-                const mapped = received.map(m => ({
+            if (data) {
+                const mapped = data.map(m => ({
                     id: m.id,
                     content: m.message,
+                    image_url: m.image_url,
                     created_at: m.created_at,
-                    isOwn: false, // These are received
+                    isOwn: m.sender_id === profile.id,
                 }))
                 setMessages(mapped)
             }
             setIsLoading(false)
-            setTimeout(scrollToBottom, 100)
+            setTimeout(scrollToBottom, 500)
         }
 
         fetchMessages()
 
         // Realtime subscription for NEW messages
         const channel = supabase
-            .channel(`dm-${profile.id}`)
+            .channel(`dm-${profile.id}-${targetUser.id}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'confessions',
-                filter: `profile_id=eq.${profile.id}` // Incoming messages
+                filter: `message_type=eq.direct_message`
             }, (payload) => {
                 const newMsg = payload.new
-                if (newMsg.message_type === 'direct_message') {
-                    // Add to list
+                // Only add if it's between these two users
+                const isRelevant =
+                    (newMsg.profile_id === profile.id && newMsg.sender_id === targetUser.id) ||
+                    (newMsg.profile_id === targetUser.id && newMsg.sender_id === profile.id)
+
+                if (isRelevant && !messages.some(m => m.id === newMsg.id)) {
                     const msg: Message = {
                         id: newMsg.id,
                         content: newMsg.message,
+                        image_url: newMsg.image_url,
                         created_at: newMsg.created_at,
-                        isOwn: false
+                        isOwn: newMsg.sender_id === profile.id
                     }
-                    setMessages(prev => [...prev, msg])
+                    setMessages(prev => {
+                        if (prev.some(m => m.id === msg.id)) return prev
+                        return [...prev, msg]
+                    })
                     setTimeout(scrollToBottom, 100)
                 }
             })
@@ -120,18 +115,72 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [profile?.id, supabase])
+    }, [profile?.id, targetUser.id, supabase])
+
+    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        if (!file.type.startsWith('image/')) {
+            toast.error("Please select an image file")
+            return
+        }
+
+        setSelectedImage(file)
+        setImagePreview(URL.createObjectURL(file))
+    }
+
+    const removeImage = () => {
+        setSelectedImage(null)
+        if (imagePreview) URL.revokeObjectURL(imagePreview)
+        setImagePreview(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
 
     const handleSend = async () => {
-        if (!inputText.trim()) return
+        if (!inputText.trim() && !selectedImage) return
 
+        setIsSending(true)
         const content = inputText
         const tempId = `temp-${Date.now()}`
+        let imageUrl: string | null = null
+
+        // 1. Upload image if exists
+        if (selectedImage) {
+            setIsUploading(true)
+            try {
+                // Compress before upload
+                const optimizedFile = await compressImage(selectedImage)
+
+                const fileExt = optimizedFile.name.split('.').pop() || 'jpg'
+                const fileName = `${profile?.id}-${Date.now()}.${fileExt}`
+                const filePath = `dm-images/${fileName}`
+
+                const { error: uploadError } = await supabase.storage
+                    .from('tod-images') // Reuse existing bucket or create dm-images? tod-images is fine.
+                    .upload(filePath, optimizedFile)
+
+                if (uploadError) throw uploadError
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('tod-images')
+                    .getPublicUrl(filePath)
+
+                imageUrl = publicUrl
+            } catch (err: any) {
+                toast.error("Failed to upload image")
+                setIsSending(false)
+                setIsUploading(false)
+                return
+            }
+            setIsUploading(false)
+        }
 
         // Optimistic Update
         const optimisticMsg: Message = {
             id: tempId,
             content: content,
+            image_url: imageUrl,
             created_at: new Date().toISOString(),
             isOwn: true,
             isOptimistic: true
@@ -139,11 +188,11 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
 
         setMessages(prev => [...prev, optimisticMsg])
         setInputText('')
-        setIsSending(true)
-        setTimeout(scrollToBottom, 50)
+        removeImage()
+        scrollToBottom()
 
         // Send to server
-        const result = await sendDirectMessage(targetUser.id, content)
+        const result = await sendDirectMessage(targetUser.id, content, imageUrl)
 
         setIsSending(false)
 
@@ -151,8 +200,8 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
             toast.error("Failed to send message")
             setMessages(prev => prev.filter(m => m.id !== tempId))
         } else {
-            // Success - we stick with optimistic message or replace it
-            // Usually we'd wait for real ID but for now keep optimistic
+            // Replace with real ID
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: result.id!, isOptimistic: false } : m))
         }
     }
 
@@ -168,7 +217,7 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-0 right-4 w-80 md:w-96 h-[500px] max-h-[80vh] bg-slate-900 border border-slate-700 shadow-2xl rounded-t-xl overflow-hidden flex flex-col z-[200]"
+            className="fixed bottom-0 right-4 w-80 md:w-96 h-[550px] max-h-[90vh] bg-slate-900 border border-slate-700 shadow-2xl rounded-t-xl overflow-hidden flex flex-col z-[200]"
         >
             {/* Header */}
             <div className="bg-slate-800 p-3 flex items-center justify-between border-b border-slate-700">
@@ -193,7 +242,7 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-900/50">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-900/50 custom-scrollbar">
                 {isLoading ? (
                     <div className="flex h-full items-center justify-center">
                         <Loader2 className="animate-spin text-slate-600" />
@@ -210,15 +259,30 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
                             className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
                         >
                             <div
-                                className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${msg.isOwn
-                                        ? 'bg-blue-600 text-white rounded-br-sm'
-                                        : 'bg-slate-800 text-slate-200 rounded-bl-sm'
-                                    }`}
+                                className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${msg.isOwn
+                                    ? 'bg-blue-600 text-white rounded-br-sm shadow-md'
+                                    : 'bg-slate-800 text-slate-200 rounded-bl-sm border border-slate-700'
+                                    } ${msg.isOptimistic ? 'opacity-70' : ''}`}
                             >
-                                <p>{msg.content}</p>
-                                <p className={`text-[10px] mt-1 text-right ${msg.isOwn ? 'text-blue-200' : 'text-slate-500'}`}>
-                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </p>
+                                {msg.image_url && (
+                                    <div className="mb-2 rounded-lg overflow-hidden border border-white/10">
+                                        <img
+                                            src={msg.image_url}
+                                            alt="Shared"
+                                            className="w-full max-h-48 object-cover cursor-pointer hover:scale-105 transition-transform"
+                                            onClick={() => setLightboxUrl(msg.image_url!)}
+                                        />
+                                    </div>
+                                )}
+                                <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                                    <p className="text-[9px]">
+                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                    {msg.isOwn && (
+                                        msg.isOptimistic ? <Loader2 size={8} className="animate-spin" /> : <div className="w-1.5 h-1.5 rounded-full bg-blue-300" />
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))
@@ -226,9 +290,50 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
                 <div ref={messagesEndRef} />
             </div>
 
+            {/* Image Preview Overlay */}
+            <AnimatePresence>
+                {imagePreview && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="px-3 py-2 bg-slate-800 border-t border-slate-700 flex items-center gap-3"
+                    >
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-600 shrink-0">
+                            <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                            <button
+                                onClick={removeImage}
+                                className="absolute top-0 right-0 bg-black/60 p-0.5 text-white"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ready to send</p>
+                            <p className="text-xs text-slate-200 truncate">{selectedImage?.name}</p>
+                        </div>
+                        {isUploading && <Loader2 size={16} className="animate-spin text-blue-400" />}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Input Area */}
             <div className="p-3 bg-slate-800 border-t border-slate-700">
                 <div className="flex items-end gap-2 bg-slate-900 rounded-xl p-2 border border-slate-700 focus-within:border-blue-500/50 transition-colors">
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors flex-shrink-0"
+                        title="Add image"
+                    >
+                        <Plus size={18} />
+                    </button>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleImageSelect}
+                        accept="image/*"
+                        className="hidden"
+                    />
                     <textarea
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
@@ -240,13 +345,20 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
                     />
                     <button
                         onClick={handleSend}
-                        disabled={!inputText.trim() || isSending}
+                        disabled={(!inputText.trim() && !selectedImage) || isSending}
                         className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors flex-shrink-0"
                     >
                         {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                     </button>
                 </div>
             </div>
+
+            {/* Lightbox */}
+            <Lightbox
+                src={lightboxUrl || ''}
+                isOpen={!!lightboxUrl}
+                onClose={() => setLightboxUrl(null)}
+            />
         </motion.div>
     )
 }

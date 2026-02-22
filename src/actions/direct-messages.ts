@@ -3,7 +3,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function sendDirectMessage(targetUserId: string, content: string) {
+export async function sendDirectMessage(targetUserId: string, content: string, imageUrl?: string | null) {
     const supabase = await createSupabaseServerClient()
 
     try {
@@ -15,23 +15,16 @@ export async function sendDirectMessage(targetUserId: string, content: string) {
 
         console.log(`Send DM: User ${user.id} sending to ${targetUserId}`)
 
-        // 1. Get Sender Profile (for caching/display purposes if needed)
-        const { data: senderProfile } = await supabase
-            .from('profiles')
-            .select('username')
-            .eq('id', user.id)
-            .single()
-
-        const senderUsername = senderProfile?.username || 'Someone'
-
-        // 2. Insert Message into Confessions table
-        // structured as a direct_message
+        // Insert Message into Confessions table
+        // We use profile_id for recipient and sender_id for the sender
         const { data, error } = await supabase
             .from('confessions')
             .insert({
                 profile_id: targetUserId, // Recipient
-                message: `[DM:${user.id}:${senderUsername}] ${content}`,
-                message_type: 'confession', // Fallback to allowed type
+                sender_id: user.id,       // Sender
+                message: content,
+                image_url: imageUrl || null,
+                message_type: 'direct_message',
             })
             .select('id')
             .single()
