@@ -16,9 +16,9 @@ export async function uploadDmPhoto(formData: FormData) {
         const fileExt = file.name.split('.').pop()
         const fileName = `${user.id}/${Date.now()}-${uuidv4()}.${fileExt}`
 
-        // Upload to 'dm_photos' bucket
+        // Upload to 'chat-attachments' bucket
         const { data, error: uploadError } = await supabase.storage
-            .from('dm_photos')
+            .from('chat-attachments')
             .upload(fileName, file, {
                 contentType: file.type,
                 upsert: false
@@ -31,7 +31,7 @@ export async function uploadDmPhoto(formData: FormData) {
 
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
-            .from('dm_photos')
+            .from('chat-attachments')
             .getPublicUrl(fileName)
 
         return { success: true, url: publicUrl }

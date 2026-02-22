@@ -157,13 +157,13 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
                 const filePath = `dm-images/${fileName}`
 
                 const { error: uploadError } = await supabase.storage
-                    .from('tod-images') // Reuse existing bucket or create dm-images? tod-images is fine.
+                    .from('chat-attachments') // Consolidated bucket
                     .upload(filePath, optimizedFile)
 
                 if (uploadError) throw uploadError
 
                 const { data: { publicUrl } } = supabase.storage
-                    .from('tod-images')
+                    .from('chat-attachments')
                     .getPublicUrl(filePath)
 
                 imageUrl = publicUrl

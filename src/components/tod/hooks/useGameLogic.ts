@@ -356,13 +356,13 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     try {
       const path = `${lobbyId}/${Date.now()}-${file.name}`;
       const { error } = await supabase.storage
-        .from('tod-images')
+        .from('chat-attachments')
         .upload(path, file);
 
       if (error) throw error;
 
       const { data } = supabase.storage
-        .from('tod-images')
+        .from('chat-attachments')
         .getPublicUrl(path);
 
       return data.publicUrl;

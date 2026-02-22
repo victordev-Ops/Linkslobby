@@ -11,6 +11,7 @@ import { uploadDmPhoto } from '@/actions/dm-photos'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { db } from '@/lib/db'
+import { compressImage } from '@/lib/image-utils'
 // import { queueOfflineAction } from '@/lib/sync' // TODO: Update sync for chat_messages
 
 interface DirectMessageClientProps {
@@ -410,8 +411,11 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
         const toastId = toast.loading("Uploading photo...")
 
         try {
+            // Compress image before upload
+            const optimizedFile = await compressImage(file)
+
             const formData = new FormData()
-            formData.append('file', file)
+            formData.append('file', optimizedFile)
 
             const result = await uploadDmPhoto(formData)
             if (result.success && result.url) {
@@ -421,6 +425,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                 toast.error(result.error || "Upload failed", { id: toastId })
             }
         } catch (err) {
+            console.error('Photo upload error:', err)
             toast.error("Error uploading photo", { id: toastId })
         } finally {
             setIsUploading(false)
