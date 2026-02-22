@@ -12,7 +12,7 @@ export default async function ProfilePage() {
 
     const { data: profile } = await supabase
         .from('profiles')
-        .select('username, slug, email')
+        .select('username, slug, email, avatar_url')
         .eq('id', user.id)
         .single()
 
@@ -27,7 +27,8 @@ export default async function ProfilePage() {
             profile={{
                 username: profile.username || '',
                 slug: profile.slug || '',
-                email: profile.email || user.email // Fallback to auth email
+                email: profile.email || user.email, // Fallback to auth email
+                avatar_url: profile.avatar_url
             }}
         />
     )
