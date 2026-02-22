@@ -353,20 +353,30 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   };
 
   const uploadImage = async (file: File): Promise<string | null> => {
+    if (!userId) {
+      console.error('Cannot upload image: userId is missing');
+      toast.error('Authentication error. Please refresh.');
+      return null;
+    }
+
     try {
-      const path = `${lobbyId}/${Date.now()}-${file.name}`;
+      const path = `${userId}/${lobbyId}/${Date.now()}-${file.name}`;
       const { error } = await supabase.storage
         .from('chat-attachments')
         .upload(path, file);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Upload error:', error);
+        throw error;
+      }
 
       const { data } = supabase.storage
         .from('chat-attachments')
         .getPublicUrl(path);
 
       return data.publicUrl;
-    } catch {
+    } catch (err) {
+      console.error('uploadImage error:', err);
       toast.error('Failed to upload image');
       return null;
     }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { X, Send, Loader2, MessageCircle, ImageIcon, Plus } from 'lucide-react'
+import { X, Send, Loader2, MessageCircle, Image as ImageIcon, Plus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { sendDirectMessage } from '@/actions/direct-messages'
@@ -153,8 +153,8 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
                 const optimizedFile = await compressImage(selectedImage)
 
                 const fileExt = optimizedFile.name.split('.').pop() || 'jpg'
-                const fileName = `${profile?.id}-${Date.now()}.${fileExt}`
-                const filePath = `dm-images/${fileName}`
+                const fileName = `${Date.now()}-${selectedImage.name}`
+                const filePath = `${profile?.id}/${fileName}` // Must start with user ID for RLS
 
                 const { error: uploadError } = await supabase.storage
                     .from('chat-attachments') // Consolidated bucket
@@ -294,25 +294,30 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
             <AnimatePresence>
                 {imagePreview && (
                     <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="px-3 py-2 bg-slate-800 border-t border-slate-700 flex items-center gap-3"
+                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                        className="px-4 py-3 bg-slate-800 border-t border-slate-700"
                     >
-                        <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-600 shrink-0">
-                            <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                        <div className="relative inline-block">
+                            <img
+                                src={imagePreview}
+                                alt="Preview"
+                                className="h-20 w-20 rounded-xl object-cover border-2 border-blue-500/50 shadow-lg"
+                            />
                             <button
                                 onClick={removeImage}
-                                className="absolute top-0 right-0 bg-black/60 p-0.5 text-white"
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 shadow-lg transition-transform active:scale-90"
+                                title="Remove image"
                             >
-                                <X size={12} />
+                                <X size={14} />
                             </button>
+                            {isUploading && (
+                                <div className="absolute inset-0 bg-slate-900/40 rounded-xl flex items-center justify-center">
+                                    <Loader2 size={20} className="animate-spin text-white" />
+                                </div>
+                            )}
                         </div>
-                        <div className="flex-1">
-                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ready to send</p>
-                            <p className="text-xs text-slate-200 truncate">{selectedImage?.name}</p>
-                        </div>
-                        {isUploading && <Loader2 size={16} className="animate-spin text-blue-400" />}
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -322,10 +327,11 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
                 <div className="flex items-end gap-2 bg-slate-900 rounded-xl p-2 border border-slate-700 focus-within:border-blue-500/50 transition-colors">
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors flex-shrink-0"
+                        className="p-3 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-xl transition-all active:scale-90 flex-shrink-0"
                         title="Add image"
+                        disabled={isSending}
                     >
-                        <Plus size={18} />
+                        <ImageIcon size={20} />
                     </button>
                     <input
                         type="file"
@@ -346,9 +352,9 @@ export function DirectMessageChat({ targetUser, onClose }: DirectMessageChatProp
                     <button
                         onClick={handleSend}
                         disabled={(!inputText.trim() && !selectedImage) || isSending}
-                        className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors flex-shrink-0"
+                        className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl disabled:opacity-30 transition-all active:scale-90 flex-shrink-0 shadow-lg shadow-blue-900/20"
                     >
-                        {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                     </button>
                 </div>
             </div>
