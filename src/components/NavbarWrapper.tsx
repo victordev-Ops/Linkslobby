@@ -31,6 +31,7 @@ export default function NavbarWrapper() {
             pathname.startsWith("/anonymous/") ||
             pathname.startsWith("/dykm/") ||
             pathname.startsWith("/hot-seat/") ||
+            pathname.startsWith("/ama") ||
             pathname.startsWith("/messages/");
 
         return isExactMatch || isPrefixMatch;
