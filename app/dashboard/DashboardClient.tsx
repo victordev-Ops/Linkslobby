@@ -438,7 +438,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
                   <div className="p-3 bg-amber-50 dark:bg-amber-500/10 rounded-xl border border-amber-100 dark:border-amber-500/20">
                     <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed font-medium">
-                      How it works: Join the hot seat and answer burning questions from your friends. Fast-paced and revealing!
+                      How it works: Host a hot seat session and answer burning questions from your friends. Fast-paced and revealing!
                     </p>
                   </div>
 
