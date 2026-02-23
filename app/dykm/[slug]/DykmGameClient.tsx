@@ -44,7 +44,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
       confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } })
     } else {
       setFeedback('wrong')
-      toast.error(`Wrong! It was: ${currentQ.answer}`)
+      toast.error("Wrong answer! Try again.")
     }
 
     setAnswers(prev => [...prev, {
@@ -144,7 +144,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any, q
                   if (user) {
                     router.push(resultsPath)
                   } else {
-                    router.push(`/signup?returnTo=${resultsPath}`)
+                    router.push(`/signup?returnTo=${encodeURIComponent(resultsPath)}`)
                   }
                 }}
                 className="w-full py-3.5 bg-slate-900 text-white font-black rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98] shadow-lg shadow-slate-200/50 flex items-center justify-center gap-2 group"

@@ -21,7 +21,7 @@ function SignupContent() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const searchParams = useSearchParams()
-  const returnTo = searchParams.get('returnTo') || undefined
+  const returnTo = searchParams.get('returnTo') || searchParams.get('next') || undefined
 
   useEffect(() => {
     if (status === 'error') {
@@ -42,7 +42,8 @@ function SignupContent() {
         if ((result as any).alreadyExists) {
           setStatus('success')
           setMessage('Account already exists! Redirecting to login...')
-          setTimeout(() => window.location.href = '/login', 2000)
+          const loginUrl = `/login${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`
+          setTimeout(() => window.location.href = loginUrl, 2000)
           return
         }
         throw new Error(result.message)

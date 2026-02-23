@@ -25,7 +25,7 @@ function SetupUsernameContent() {
   const [username, setUsername] = useState('')
   const [message, setMessage] = useState('')
   const searchParams = useSearchParams()
-  const next = searchParams.get('next')
+  const next = searchParams.get('next') || searchParams.get('returnTo')
   const [loading, setLoading] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)

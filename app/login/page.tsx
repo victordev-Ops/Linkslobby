@@ -22,7 +22,7 @@ function LoginContent() {
   const [message, setMessage] = useState({ type: '', text: '' })
   const [emailSent, setEmailSent] = useState(false)
   const searchParams = useSearchParams()
-  const returnTo = searchParams.get('returnTo') || undefined
+  const returnTo = searchParams.get('returnTo') || searchParams.get('next') || undefined
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault()

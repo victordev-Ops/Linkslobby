@@ -12,7 +12,7 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-        redirect('/login')
+        redirect(`/login?returnTo=/dykm/results/${scoreId}`)
     }
 
     // Fetch score details

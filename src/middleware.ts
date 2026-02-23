@@ -55,9 +55,16 @@ export async function middleware(request: NextRequest) {
 
     // If profile incomplete, redirect to setup
     if (!profile || !profile.username || !profile.slug) {
-      return NextResponse.redirect(new URL('/auth/setup', request.url))
+      const setupUrl = new URL('/auth/setup', request.url)
+      const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
+      if (nextParam) setupUrl.searchParams.set('next', nextParam)
+      return NextResponse.redirect(setupUrl)
     }
 
+    const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
+    if (nextParam) {
+      return NextResponse.redirect(new URL(nextParam, request.url))
+    }
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
@@ -83,7 +90,11 @@ export async function middleware(request: NextRequest) {
 
     // If profile incomplete, redirect to setup
     if (!profile || !profile.username || !profile.slug) {
-      return NextResponse.redirect(new URL('/auth/setup', request.url))
+      const setupUrl = new URL('/auth/setup', request.url)
+      const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
+      if (nextParam) setupUrl.searchParams.set('next', nextParam)
+      else setupUrl.searchParams.set('next', pathname)
+      return NextResponse.redirect(setupUrl)
     }
   }
 
