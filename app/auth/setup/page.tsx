@@ -97,7 +97,12 @@ function SetupUsernameContent() {
         await new Promise(resolve => setTimeout(resolve, 1500))
 
         // Navigate to next or dashboard
-        window.location.href = next || '/dashboard'
+        const target = next || '/dashboard'
+        if (target.startsWith('/')) {
+          router.push(target)
+        } else {
+          window.location.href = target
+        }
       }
     } catch (err) {
       console.error("Profile setup error:", err)
