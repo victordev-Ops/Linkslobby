@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/AuthContext"
 import { createClient } from "@/lib/supabase/client"
+import { useScrollLock } from "@/hooks/useScrollLock"
 import XPBalance from "@/components/XPBalance"
 
 interface DashboardClientProps {
@@ -40,10 +41,13 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const [isTodOpen, setIsTodOpen] = useState(false)
   const [isHotSeatOpen, setIsHotSeatOpen] = useState(false)
   const [isNavigatingToTod, setIsNavigatingToTod] = useState(false)
+  const [isNavigatingToHotSeat, setIsNavigatingToHotSeat] = useState(false)
+
 
   // DYKM Logic
   const [hasDykm, setHasDykm] = useState(!!initialDykmQuestions)
   const [isDykmModalOpen, setIsDykmModalOpen] = useState(false)
+  useScrollLock(isDykmModalOpen)
   const [isSavingDykm, setIsSavingDykm] = useState(false)
   const [dykmQuestions, setDykmQuestions] = useState(initialDykmQuestions || [
     { question: "", hint: "", answer: "" },
@@ -98,6 +102,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
   // Hot Seat Logic - Navigate to Hot Seat
   const handleNavigateToHotSeat = () => {
+    setIsNavigatingToHotSeat(true)
     router.push('/hot-seat')
   }
 
@@ -154,26 +159,48 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
       <main className="max-w-xl mx-auto px-4 py-8 space-y-8 relative z-10">
 
         {/* Hero Section */}
-        <section className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100 dark:border-white/10 transition-colors">
-          {/* Profile Section - Top Right */}
-          <div className="flex justify-end mb-4">
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-white/5 px-3 py-2 rounded-full border border-slate-200 dark:border-white/10">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                {profile.username?.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-semibold text-slate-700 dark:text-white">
+        <section className="relative overflow-hidden bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-[2.5rem] p-8 md:p-10 shadow-xl border border-slate-100 dark:border-white/10 transition-all group">
+          {/* Decorative Gradients */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-purple-500/20 transition-colors" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -ml-16 -mb-16 group-hover:bg-indigo-500/20 transition-colors" />
+
+          {/* Profile Section - Centered for Modern Look */}
+          <div className="flex flex-col items-center gap-4 mb-8">
+            <div className="relative group/avatar">
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-400 to-indigo-600 rounded-full blur-md opacity-20 group-hover/avatar:opacity-40 transition-opacity" />
+              {profile.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.username}
+                  className="w-20 h-20 rounded-full border-4 border-white dark:border-[#1a1429] object-cover relative z-10"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 border-4 border-white dark:border-[#1a1429] flex items-center justify-center text-white font-black text-2xl relative z-10 shadow-lg">
+                  {profile.username?.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="absolute -bottom-1 -right-1 bg-green-500 w-5 h-5 rounded-full border-4 border-white dark:border-[#1a1429] z-20" />
+            </div>
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                Welcome back, {profile.display_name || profile.username}!
+              </h1>
+              <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
                 @{profile.username}
-              </span>
+              </p>
             </div>
           </div>
 
           {/* Content */}
-          <div className="text-center">
-            <p className="text-slate-500 dark:text-white/60 text-sm mb-6">
-              Share your link to start receiving messages.
-            </p>
+          <div className="text-center space-y-6">
+            <div className="space-y-2">
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white/90">Your Anonymous link</h2>
+              <p className="text-slate-500 dark:text-white/60 text-xs max-w-[280px] mx-auto leading-relaxed">
+                Send this link to friends to receive anonymous confessions, feedback, and honest thoughts!
+              </p>
+            </div>
 
-            <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl max-w-sm mx-auto transition-colors">
+            <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl max-w-sm mx-auto transition-all group-hover:border-purple-500/30">
               <div className="pl-3 text-slate-400 dark:text-white/40 shrink-0">
                 <Share2 size={16} />
               </div>
@@ -184,7 +211,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
               />
               <button
                 onClick={() => handleCopy(anonymousUrl, 'hero')}
-                className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 ${heroCopied ? "bg-green-500 text-white" : "bg-slate-600 dark:bg-purple-600 text-white hover:bg-slate-700 dark:hover:bg-purple-700"}`}
+                className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 shadow-md ${heroCopied ? "bg-green-500 text-white" : "bg-slate-900 dark:bg-purple-600 text-white hover:bg-slate-800 dark:hover:bg-purple-700"}`}
               >
                 {heroCopied ? <Check size={18} /> : <Copy size={18} />}
               </button>
@@ -417,10 +444,11 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
                   <button
                     onClick={handleNavigateToHotSeat}
-                    className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs hover:bg-amber-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-amber-200 dark:shadow-amber-900/20"
+                    disabled={isNavigatingToHotSeat}
+                    className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs hover:bg-amber-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-amber-200 dark:shadow-amber-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    <Sparkles size={16} />
-                    Host Hot Seat
+                    {isNavigatingToHotSeat ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isNavigatingToHotSeat ? 'Loading...' : 'Host Hot Seat'}
                   </button>
                 </div>
               )}
@@ -436,9 +464,9 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
       {/* DYKM Modal */}
       {isDykmModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-[#1a1429] w-full max-w-lg rounded-[2rem] shadow-xl max-h-[90vh] overflow-y-auto border dark:border-white/10">
-            <div className="p-6 border-b border-slate-100 dark:border-white/10 flex items-center justify-between sticky top-0 bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-md z-10 transition-colors">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-[#1a1429] w-full max-w-lg rounded-[2.5rem] shadow-2xl max-h-[90vh] overflow-y-auto border border-white/20 dark:border-white/10 flex flex-col">
+            <div className="p-6 border-b border-slate-100 dark:border-white/10 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#1a1429]/90 backdrop-blur-md z-10">
               <h3 className="font-bold text-lg text-slate-900 dark:text-white">Create Quiz</h3>
               <button
                 onClick={() => setIsDykmModalOpen(false)}
@@ -461,7 +489,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                   <div className="space-y-2">
                     <input
                       placeholder="e.g. What is my favorite color?"
-                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all"
+                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.question}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -471,7 +499,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     />
                     <input
                       placeholder="Hint (optional but recommended)"
-                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all"
+                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.hint}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -481,7 +509,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     />
                     <input
                       placeholder="Correct Answer"
-                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all"
+                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.answer}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -494,11 +522,11 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
               ))}
             </div>
 
-            <div className="p-6 border-t border-slate-100 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 sticky bottom-0 backdrop-blur-md">
+            <div className="p-6 border-t border-slate-100 dark:border-white/10 bg-slate-50/80 dark:bg-[#1a1429]/90 sticky bottom-0 backdrop-blur-md pb-10">
               <button
                 onClick={handleSaveDykm}
                 disabled={isSavingDykm}
-                className="w-full py-3.5 bg-slate-900 dark:bg-purple-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 dark:hover:bg-purple-700 transition active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                className="w-full py-4 bg-slate-900 dark:bg-purple-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-800 dark:hover:bg-purple-700 transition active:scale-95 disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-purple-500/20"
               >
                 {isSavingDykm ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                 Save Quiz

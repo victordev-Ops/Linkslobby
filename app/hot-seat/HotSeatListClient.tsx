@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Plus, Flame, Users, Loader2, Lock, X, Sparkles } from 'lucide-react'
+import { useScrollLock } from '@/hooks/useScrollLock'
 
 interface Profile {
     id: string
@@ -36,6 +37,8 @@ export default function HotSeatListClient({ profile, sessions }: HotSeatListClie
     const [sessionName, setSessionName] = useState('')
     const [isPrivate, setIsPrivate] = useState(false)
     const [isCreating, setIsCreating] = useState(false)
+
+    useScrollLock(showCreateModal)
 
     const createSession = async () => {
         if (!sessionName.trim()) return

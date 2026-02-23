@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { penalizeHotSeatTimeout } from "@/actions/hot-seat-xp"
 import { banParticipant } from "@/actions/hot-seat"
+import { useScrollLock } from "@/hooks/useScrollLock"
 import { DirectMessageChat } from "@/components/tod/ui/DirectMessageChat"
 
 interface HotSeatGameClientProps {
@@ -48,6 +49,8 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     const [timer, setTimer] = useState(30)
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const [isAnswering, setIsAnswering] = useState(false)
+
+    useScrollLock(showParticipants || !!messagingUser)
 
     // Initial Data Fetch
     useEffect(() => {

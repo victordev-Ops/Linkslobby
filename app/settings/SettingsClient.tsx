@@ -11,6 +11,7 @@ import { unblockUser, unblockAnonymous } from "@/actions/blocked-users"
 import { deleteAccount } from "@/actions/auth"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { useScrollLock } from "@/hooks/useScrollLock"
 import type { BlockedUser, BlockedAnonymous } from "@/actions/blocked-users"
 
 interface SettingsClientProps {
@@ -51,6 +52,9 @@ export default function SettingsClient({
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Scroll Lock for delete modal
+  useScrollLock(showDeleteModal)
 
   const addWord = () => {
     const w = wordInput.toLowerCase().trim()

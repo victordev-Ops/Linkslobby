@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check, ChevronLeft, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 export interface Lobby {
     id: string;
@@ -76,6 +77,8 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     const router = useRouter();
     const supabase = createClient();
     const effectiveUserId = currentUserId || profile?.id;
+
+    useScrollLock(showCreateModal);
 
     const fetchLobbies = useCallback(async (targetGroup?: 'public' | 'private' | 'joined', loadMore = false) => {
         // Decide which range to use
