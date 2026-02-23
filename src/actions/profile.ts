@@ -2,6 +2,7 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { cache } from 'react'
 import {
     XP_REWARDS,
     applyProRewardMultiplier,
@@ -112,6 +113,23 @@ export async function setupProfile(username: string) {
     return { success: true, xpAwarded }
 }
 
+/**
+ * Optimized profile fetcher using React.cache
+ */
+export const getProfile = cache(async () => {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+    return profile
+})
+
 export async function updateProfile(state: any, formData: FormData) {
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -123,6 +141,7 @@ export async function updateProfile(state: any, formData: FormData) {
     const username = formData.get('username') as string
     const slug = formData.get('slug') as string
     const avatar_url = formData.get('avatar_url') as string
+    const dms_disabled = formData.get('dms_disabled') === 'on'
 
     if (!username || username.trim().length < 2) {
         return { error: 'Username must be at least 2 characters long.' }
@@ -143,6 +162,7 @@ export async function updateProfile(state: any, formData: FormData) {
             .update({
                 username,
                 slug,
+                dms_disabled,
                 ...(avatar_url !== undefined && { avatar_url }),
                 updated_at: new Date().toISOString()
             })

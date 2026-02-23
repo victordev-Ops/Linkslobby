@@ -38,7 +38,7 @@ export default async function PublicAmaPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#7C3AED] flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-[#EA580C] flex flex-col items-center justify-center p-6">
       <AmaPublicClient
         profileId={profile.id}
         username={profile.username}

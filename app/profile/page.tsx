@@ -1,6 +1,9 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import ProfileClient from "./ProfileClient"
+import { getProfile } from "@/actions/profile"
+
+export const dynamic = 'force-dynamic'
 
 export default async function ProfilePage() {
     const supabase = await createSupabaseServerClient()
@@ -10,11 +13,7 @@ export default async function ProfilePage() {
         redirect("/login")
     }
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('username, slug, email, avatar_url')
-        .eq('id', user.id)
-        .single()
+    const profile = await getProfile()
 
     if (!profile) {
         // Handle edge case where auth user exists but profile doesn't
@@ -28,7 +27,8 @@ export default async function ProfilePage() {
                 username: profile.username || '',
                 slug: profile.slug || '',
                 email: profile.email || user.email, // Fallback to auth email
-                avatar_url: profile.avatar_url
+                avatar_url: profile.avatar_url,
+                dms_disabled: profile.dms_disabled || false
             }}
         />
     )

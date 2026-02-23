@@ -48,7 +48,7 @@ export default function AmaPublicClient({
             exit={{ opacity: 0, y: -20 }}
             className="p-8 flex flex-col items-center"
           >
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
               <span className="text-2xl">📝</span>
             </div>
 
@@ -63,7 +63,7 @@ export default function AmaPublicClient({
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Ask me anything..."
                 maxLength={MAX_CHARS}
-                className="w-full h-32 p-5 bg-gray-50 border-2 border-gray-100 rounded-3xl outline-none focus:border-purple-400 transition-colors resize-none text-gray-800 font-medium"
+                className="w-full h-32 p-5 bg-gray-50 border-2 border-gray-100 rounded-3xl outline-none focus:border-orange-400 transition-colors resize-none text-gray-800 font-medium"
               />
               <div className={`absolute bottom-4 right-5 text-[10px] font-bold ${message.length >= MAX_CHARS ? 'text-red-500' : 'text-gray-300'}`}>
                 {message.length} / {MAX_CHARS}
@@ -98,7 +98,7 @@ export default function AmaPublicClient({
             </p>
             <button
               onClick={() => { setSent(false); setMessage(''); }}
-              className="text-purple-600 font-bold text-sm"
+              className="text-orange-600 font-bold text-sm"
             >
               Send another?
             </button>

@@ -40,7 +40,22 @@ export async function getOrCreateSession(otherUserId: string) {
         }
     }
 
-    // 2. Create new session
+    // 2. Check if other user has DMs disabled
+    const { data: targetProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('dms_disabled, username')
+        .eq('id', otherUserId)
+        .single()
+
+    if (profileError || !targetProfile) {
+        return { success: false, message: 'User not found' }
+    }
+
+    if (targetProfile.dms_disabled) {
+        return { success: false, message: `@${targetProfile.username} has disabled direct messages.` }
+    }
+
+    // 3. Create new session
     const { data: newSession, error: sessionError } = await supabase
         .from('chat_sessions')
         .insert({})

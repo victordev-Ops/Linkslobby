@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { RealtimeChannel } from '@supabase/supabase-js';
@@ -51,6 +51,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [typingUsers, setTypingUsers] = useState<Record<string, { username: string, lastTyped: number }>>({});
   const [channel, setChannel] = useState<RealtimeChannel | null>(null);
+  const hasHandledTimeout = useRef<boolean>(false);
   const PAGE_SIZE = 10;
 
   const fetchData = useCallback(async () => {
@@ -592,14 +593,18 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
   // Timer for mode selection (target user has 60s to select truth or dare)
   useEffect(() => {
-    if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at || lobby.selected_mode) return;
+    if (!lobby || lobby.status !== 'active' || !lobby.turn_started_at || lobby.selected_mode) {
+      hasHandledTimeout.current = false;
+      return;
+    }
 
     const interval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - new Date(lobby.turn_started_at!).getTime()) / 1000);
       const remaining = Math.max(0, 60 - elapsed);
       setTimeRemaining(remaining);
 
-      if (remaining === 0 && userId === lobby.host_id) {
+      if (remaining === 0 && userId === lobby.host_id && !hasHandledTimeout.current) {
+        hasHandledTimeout.current = true;
         const randomMode = Math.random() > 0.5 ? 'truth' : 'dare';
         selectMode(randomMode);
 
@@ -611,7 +616,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [lobby, userId, selectMode]);
+  }, [lobby, userId, selectMode, lobbyId]);
 
   return {
     lobby,

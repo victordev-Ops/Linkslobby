@@ -17,6 +17,7 @@ interface ProfileClientProps {
         slug: string
         email: string
         avatar_url?: string
+        dms_disabled: boolean
     }
 }
 
@@ -30,6 +31,7 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
     const [displayUsername, setDisplayUsername] = useState(profile.username)
     const [displaySlug, setDisplaySlug] = useState(profile.slug)
     const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url || null)
+    const [dmsDisabled, setDmsDisabled] = useState(profile.dms_disabled)
 
     // Slug check states
     const [slug, setSlug] = useState(profile.slug)
@@ -140,9 +142,11 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
             const newUsername = formData.get('username') as string
             const newSlug = formData.get('slug') as string
             const newAvatar = formData.get('avatar_url') as string
+            const newDmsDisabled = formData.get('dms_disabled') === 'on'
             if (newUsername) setDisplayUsername(newUsername)
             if (newSlug) setDisplaySlug(newSlug)
             if (newAvatar !== undefined) setAvatarUrl(newAvatar)
+            setDmsDisabled(newDmsDisabled)
 
             toast.success(result.success)
             setIsEditing(false)
@@ -275,6 +279,23 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
                                         </p>
                                     )}
                                 </div>
+                            </div>
+
+                            <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                                <div className="space-y-0.5">
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Disable Direct Messages</h4>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">No one will be able to start new chats with you.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        name="dms_disabled"
+                                        className="sr-only peer"
+                                        checked={dmsDisabled}
+                                        onChange={(e) => setDmsDisabled(e.target.checked)}
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 transition-colors"></div>
+                                </label>
                             </div>
 
                             <div className="flex gap-3 pt-2">
