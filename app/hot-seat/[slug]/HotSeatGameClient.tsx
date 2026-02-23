@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { penalizeHotSeatTimeout } from "@/actions/hot-seat-xp"
 import { banParticipant } from "@/actions/hot-seat"
+import { DirectMessageChat } from "@/components/tod/ui/DirectMessageChat"
 
 interface HotSeatGameClientProps {
     session: any
@@ -40,6 +41,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     const [newQuestion, setNewQuestion] = useState("")
     const [isSending, setIsSending] = useState(false)
     const [menuOpen, setMenuOpen] = useState<string | null>(null)
+    const [messagingUser, setMessagingUser] = useState<{ id: string, username: string } | null>(null)
 
     // Host State
     const [answer, setAnswer] = useState("")
@@ -624,13 +626,17 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                                     >
                                                         <div className="p-1.5 space-y-0.5">
                                                             <button
-                                                                onClick={() => router.push(`/profile/${p.slug || p.id}`)}
+                                                                onClick={() => router.push(`/profile`)}
                                                                 className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition"
                                                             >
                                                                 <User size={16} /> View Profile
                                                             </button>
                                                             <button
-                                                                onClick={() => router.push(`/messages/${p.id}`)}
+                                                                onClick={() => {
+                                                                    setMessagingUser({ id: p.id, username: p.username || '' })
+                                                                    setMenuOpen(null)
+                                                                    setShowParticipants(false)
+                                                                }}
                                                                 className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition"
                                                             >
                                                                 <MessageSquare size={16} /> Message
@@ -653,6 +659,15 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                             </div>
                         </motion.div>
                     </>
+                )}
+            </AnimatePresence>
+            {/* DM Chat Modal */}
+            <AnimatePresence>
+                {messagingUser && (
+                    <DirectMessageChat
+                        targetUser={messagingUser}
+                        onClose={() => setMessagingUser(null)}
+                    />
                 )}
             </AnimatePresence>
         </div>
