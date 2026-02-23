@@ -489,7 +489,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                   <div className="space-y-2">
                     <input
                       placeholder="e.g. What is my favorite color?"
-                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.question}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -499,7 +499,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     />
                     <input
                       placeholder="Hint (optional but recommended)"
-                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.hint}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -509,7 +509,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     />
                     <input
                       placeholder="Correct Answer"
-                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.answer}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
