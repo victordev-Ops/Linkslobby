@@ -1,6 +1,7 @@
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 export interface BlockedUser {
@@ -83,10 +84,10 @@ export async function unblockUser(targetId: string) {
     return { success: true }
 }
 
-/** Check if senderId is blocked by recipientId */
+/** Check if senderId is blocked by recipientId - Uses admin client to bypass RLS */
 export async function isUserBlocked(recipientId: string, senderId: string): Promise<boolean> {
-    const supabase = await createSupabaseServerClient()
-    const { data } = await supabase
+    const adminSupabase = createSupabaseAdminClient()
+    const { data } = await adminSupabase
         .from('blocked_users')
         .select('id')
         .eq('blocker_id', recipientId)
@@ -129,7 +130,7 @@ export async function blockAnonymousSender(confessionId: string) {
     // Fetch the confession and extract metadata
     const { data: confession } = await supabase
         .from('confessions')
-        .select('message, profile_id')
+        .select('message, profile_id, sender_id')
         .eq('id', confessionId)
         .single()
 
@@ -163,6 +164,11 @@ export async function blockAnonymousSender(confessionId: string) {
         return { success: false, error: error.message }
     }
 
+    // NEW: If this message was sent by an authenticated user, block their account ID too
+    if (confession.sender_id) {
+        await blockUser(confession.sender_id)
+    }
+
     revalidatePath('/settings')
     return { success: true }
 }
@@ -187,12 +193,12 @@ export async function unblockAnonymous(id: string) {
     return { success: true }
 }
 
-/** Check if an anonymous sender (by IP) is blocked by a specific user */
+/** Check if an anonymous sender (by IP) is blocked by a specific user - Uses admin client to bypass RLS */
 export async function isAnonymousBlocked(blockerId: string, ip: string): Promise<boolean> {
     if (!ip || ip === 'unknown') return false
 
-    const supabase = await createSupabaseServerClient()
-    const { data } = await supabase
+    const adminSupabase = createSupabaseAdminClient()
+    const { data } = await adminSupabase
         .from('blocked_anonymous')
         .select('id')
         .eq('blocker_id', blockerId)

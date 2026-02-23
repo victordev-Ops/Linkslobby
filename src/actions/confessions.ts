@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 
 export async function sendAmaQuestion(profileId: string, message: string) {
   const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
   const headersList = await headers()
   const ua = headersList.get('user-agent') || 'unknown'
@@ -14,11 +15,21 @@ export async function sendAmaQuestion(profileId: string, message: string) {
   const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
   const referrer = headersList.get('referer') || 'direct'
 
-  // Check if this anonymous sender is blocked by the recipient
-  const { isAnonymousBlocked } = await import('@/actions/blocked-users')
-  const blocked = await isAnonymousBlocked(profileId, ip)
-  if (blocked) {
+  // Block Enforcement (System Level)
+  const { isAnonymousBlocked, isUserBlocked } = await import('@/actions/blocked-users')
+
+  // 1. IP Block check
+  const ipBlocked = await isAnonymousBlocked(profileId, ip)
+  if (ipBlocked) {
     throw new Error('Unable to deliver your message.')
+  }
+
+  // 2. User ID Block check (if authenticated)
+  if (user) {
+    const userBlocked = await isUserBlocked(profileId, user.id)
+    if (userBlocked) {
+      throw new Error('Unable to deliver your message.')
+    }
   }
 
   const metadata = JSON.stringify({ ua, lang, ip, t: Date.now(), ref: referrer })
@@ -28,6 +39,7 @@ export async function sendAmaQuestion(profileId: string, message: string) {
     .from('confessions')
     .insert({
       profile_id: profileId,
+      sender_id: user?.id || null, // Track sender if authenticated
       message: messageWithMeta,
       message_type: 'ama'
     })

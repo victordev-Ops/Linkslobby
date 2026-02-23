@@ -7,10 +7,11 @@ type ActionResponse = { error?: string; success?: boolean }
 
 interface ConfessionFormProps {
   profileId: string
+  isBlocked?: boolean
   action: (profileId: string, formData: FormData) => Promise<ActionResponse>
 }
 
-export default function ConfessionForm({ profileId, action }: ConfessionFormProps) {
+export default function ConfessionForm({ profileId, action, isBlocked = false }: ConfessionFormProps) {
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<ActionResponse | null>(null)
   const [charCount, setCharCount] = useState(0)
@@ -21,7 +22,7 @@ export default function ConfessionForm({ profileId, action }: ConfessionFormProp
 
     startTransition(async () => {
       const result = await action(profileId, formData)
-      
+
       if (result.success) {
         setFeedback({ success: true })
         formRef.current?.reset()
@@ -39,7 +40,7 @@ export default function ConfessionForm({ profileId, action }: ConfessionFormProp
         <div className="mb-4 text-5xl">✨</div>
         <h3 className="text-xl font-medium text-white mb-2">Sent Successfully!</h3>
         <p className="text-neutral-400 mb-8">Your secret is safe with us.</p>
-        
+
         <button
           onClick={() => setFeedback(null)}
           className="w-full py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-all duration-200 text-sm font-medium"
@@ -51,9 +52,9 @@ export default function ConfessionForm({ profileId, action }: ConfessionFormProp
   }
 
   return (
-    <form 
-      ref={formRef} 
-      action={handleSubmit} 
+    <form
+      ref={formRef}
+      action={handleSubmit}
       className="space-y-4"
     >
       {/* Error Message */}
@@ -76,7 +77,7 @@ export default function ConfessionForm({ profileId, action }: ConfessionFormProp
           disabled={isPending}
           onChange={(e) => setCharCount(e.target.value.length)}
         />
-        
+
         {/* Character Count */}
         <div className="absolute bottom-3 right-4 text-xs font-mono transition-colors duration-200">
           <span className={charCount > 900 ? 'text-red-400' : 'text-neutral-600'}>
@@ -89,13 +90,16 @@ export default function ConfessionForm({ profileId, action }: ConfessionFormProp
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={isPending || charCount === 0}
-        className="relative w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium shadow-lg shadow-purple-900/20 hover:shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all duration-300 overflow-hidden"
+        disabled={isPending || charCount === 0 || isBlocked}
+        className={`relative w-full py-4 rounded-xl font-medium shadow-lg transition-all duration-300 overflow-hidden ${isBlocked
+            ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/5 shadow-none'
+            : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/20 hover:shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50'
+          }`}
       >
         <span className={`flex items-center justify-center gap-2 ${isPending ? 'opacity-0' : 'opacity-100'}`}>
-          Send anonymously
+          {isBlocked ? 'You have been blocked' : 'Send anonymously'}
         </span>
-        
+
         {/* Loading Spinner overlay */}
         {isPending && (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -109,5 +113,5 @@ export default function ConfessionForm({ profileId, action }: ConfessionFormProp
       </p>
     </form>
   )
-          }
-        
+}
+

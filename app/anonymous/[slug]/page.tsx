@@ -17,6 +17,7 @@ export async function sendConfessionAction(profileId: string, formData: FormData
   'use server'
 
   const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
   const message = (formData.get('message') as string)?.trim()
 
   // Server-side validation
@@ -30,11 +31,21 @@ export async function sendConfessionAction(profileId: string, formData: FormData
   const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
   const referrer = headersList.get('referer') || 'direct'
 
-  // Check if this anonymous sender is blocked by the recipient
-  const { isAnonymousBlocked } = await import('@/actions/blocked-users')
-  const blocked = await isAnonymousBlocked(profileId, ip)
-  if (blocked) {
+  // Block Enforcement (System Level)
+  const { isAnonymousBlocked, isUserBlocked } = await import('@/actions/blocked-users')
+
+  // 1. IP Block check
+  const ipBlocked = await isAnonymousBlocked(profileId, ip)
+  if (ipBlocked) {
     return { error: 'Unable to deliver your message.' }
+  }
+
+  // 2. User ID Block check (if authenticated)
+  if (user) {
+    const userBlocked = await isUserBlocked(profileId, user.id)
+    if (userBlocked) {
+      return { error: 'Unable to deliver your message.' }
+    }
   }
 
   const metadata = JSON.stringify({ ua, lang, ip, t: Date.now(), ref: referrer })
@@ -44,6 +55,7 @@ export async function sendConfessionAction(profileId: string, formData: FormData
     .from('confessions')
     .insert({
       profile_id: profileId,
+      sender_id: user?.id || null, // Track sender if authenticated
       message: messageWithMeta,
       message_type: 'anonymous'
     })
@@ -72,6 +84,17 @@ export default async function ConfessPage({ params }: PageProps) {
     .single()
 
   if (profileError || !profile) notFound()
+
+  // Block Check for UI
+  const headersList = await headers()
+  const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
+  const { data: { user } } = await supabase.auth.getUser()
+  const { isAnonymousBlocked, isUserBlocked } = await import('@/actions/blocked-users')
+
+  let isBlocked = await isAnonymousBlocked(profile.id, ip)
+  if (!isBlocked && user) {
+    isBlocked = await isUserBlocked(profile.id, user.id)
+  }
 
   return (
     // Background: Dark minimal with a subtle purple gradient glow
@@ -102,6 +125,7 @@ export default async function ConfessPage({ params }: PageProps) {
           <div className="p-8 pt-6">
             <ConfessionForm
               profileId={profile.id}
+              isBlocked={isBlocked}
               action={sendConfessionAction}
             />
           </div>

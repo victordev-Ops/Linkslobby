@@ -9,10 +9,12 @@ const MAX_CHARS = 100 // Limit for AMA questions
 
 export default function AmaPublicClient({
   profileId,
-  username
+  username,
+  isBlocked = false
 }: {
   profileId: string,
-  username: string
+  username: string,
+  isBlocked?: boolean
 }) {
   const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -70,11 +72,14 @@ export default function AmaPublicClient({
 
             <button
               onClick={handleSubmit}
-              disabled={isSending || !message.trim()}
-              className="w-full mt-6 bg-black text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+              disabled={isSending || !message.trim() || isBlocked}
+              className={`w-full mt-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all ${isBlocked
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-black text-white disabled:opacity-50'
+                }`}
             >
-              {isSending ? <Loader2 className="animate-spin" size={20} /> : <Send size={18} />}
-              <span>Send Question</span>
+              {isSending ? <Loader2 className="animate-spin" size={20} /> : isBlocked ? null : <Send size={18} />}
+              <span>{isBlocked ? 'You have been blocked' : 'Send Question'}</span>
             </button>
           </motion.div>
         ) : (
