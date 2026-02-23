@@ -71,32 +71,58 @@ export default function NotificationsClient({
     // Cache all initial data in Dexie on mount for offline access
     useEffect(() => {
         const now = Date.now()
-        // Cache confessions
-        if (initialConfessions.length > 0) {
-            db.confessions.bulkPut(
-                initialConfessions.map((c: any) => ({ ...c, cached_at: now }))
-            ).catch(() => { })
+
+        const syncDexie = async () => {
+            // 1. Mark existing cached notifications as hidden if they aren't in the server props
+            // This handles cases where a notification was hidden elsewhere or server cache was cleared
+            const allInitialIds = new Set([
+                ...initialConfessions.map(c => c.id),
+                ...initialDykmScores.map(s => s.id),
+                ...initialLobbyEvents.map(e => e.id),
+                ...initialXpTransactions.map(x => x.id),
+                ...initialHotSeatQuestions.map(q => q.id),
+            ])
+
+            try {
+                // Get all cached notifications that are NOT currently hidden in Dexie
+                const cachedVisible = await db.notifications.where('is_hidden').equals(0).toArray()
+                const toHide = cachedVisible.filter(c => !allInitialIds.has(c.id)).map(c => c.id)
+
+                if (toHide.length > 0) {
+                    console.log('Syncing Dexie: Marking as hidden:', toHide)
+                    await db.notifications.bulkUpdate(toHide.map(id => ({ key: id, changes: { is_hidden: true } })))
+                }
+            } catch (err) {
+                console.error('Dexie sync failed:', err)
+            }
+
+            // 2. Cache/Update fresh data
+            // Cache confessions
+            if (initialConfessions.length > 0) {
+                db.confessions.bulkPut(
+                    initialConfessions.map((c: any) => ({ ...c, cached_at: now }))
+                ).catch(() => { })
+            }
+            // Cache xp transactions
+            if (initialXpTransactions.length > 0) {
+                db.xpTransactions.bulkPut(
+                    initialXpTransactions.map((x: any) => ({ ...x, cached_at: now }))
+                ).catch(() => { })
+            }
+            // Cache notifications as generic
+            const allItems = [
+                ...initialConfessions.map((c: any) => ({ id: c.id, type: 'confession' as const, data: c, created_at: c.created_at, is_hidden: false, cached_at: now })),
+                ...initialDykmScores.map((s: any) => ({ id: s.id, type: 'dykm_score' as const, data: s, created_at: s.created_at, is_hidden: false, cached_at: now })),
+                ...initialLobbyEvents.map((e: any) => ({ id: e.id, type: 'lobby_event' as const, data: e, created_at: e.created_at, is_hidden: false, cached_at: now })),
+                ...initialXpTransactions.map((x: any) => ({ id: x.id, type: 'xp_transaction' as const, data: x, created_at: x.created_at, is_hidden: false, cached_at: now })),
+                ...initialHotSeatQuestions.map((q: any) => ({ id: q.id, type: 'hot_seat_question' as const, data: q, created_at: q.created_at, is_hidden: false, cached_at: now })),
+            ]
+            if (allItems.length > 0) {
+                db.notifications.bulkPut(allItems).catch(() => { })
+            }
         }
-        // Cache xp transactions
-        if (initialXpTransactions.length > 0) {
-            db.xpTransactions.bulkPut(
-                initialXpTransactions.map((x: any) => ({ ...x, cached_at: now }))
-            ).catch(() => { })
-        }
-        // Cache notifications as generic
-        const allItems = [
-            ...initialConfessions.map((c: any) => ({ id: c.id, type: 'confession' as const, data: c, created_at: c.created_at, is_hidden: false, cached_at: now })),
-            ...initialDykmScores.map((s: any) => ({ id: s.id, type: 'dykm_score' as const, data: s, created_at: s.created_at, is_hidden: false, cached_at: now })),
-            ...initialLobbyEvents.map((e: any) => ({ id: e.id, type: 'lobby_event' as const, data: e, created_at: e.created_at, is_hidden: false, cached_at: now })),
-            ...initialXpTransactions.map((x: any) => ({ id: x.id, type: 'xp_transaction' as const, data: x, created_at: x.created_at, is_hidden: false, cached_at: now })),
-            ...initialHotSeatQuestions.map((q: any) => ({ id: q.id, type: 'hot_seat_question' as const, data: q, created_at: q.created_at, is_hidden: false, cached_at: now })),
-        ]
-        // Note: initial data passed from server-side page.tsx is ALREADY filtered by is_hidden
-        // so we can safely assume they are not hidden. 
-        // If we ever pass hidden ones, we'd need to map item.is_hidden || false
-        if (allItems.length > 0) {
-            db.notifications.bulkPut(allItems).catch(() => { })
-        }
+
+        syncDexie()
     }, []) // Only on mount
 
     // Fetch hosted sessions for realtime filtering

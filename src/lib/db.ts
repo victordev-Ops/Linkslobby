@@ -140,9 +140,9 @@ class SayAppDB extends Dexie {
     constructor() {
         super('SayAppDB')
 
-        this.version(3).stores({
+        this.version(4).stores({
             profiles: 'id, username, slug',
-            confessions: 'id, profile_id, created_at, is_read, message_type',
+            confessions: 'id, profile_id, created_at, is_read, is_hidden, message_type',
             messages: 'id, conversation_key, created_at', // Legacy
             todLobbies: 'id, host_id, status, created_at',
             hotSeatSessions: 'id, host_id, status, created_at',
@@ -154,7 +154,7 @@ class SayAppDB extends Dexie {
             chatSessions: 'id, updated_at',
             chatMessages: 'id, session_id, created_at'
         }).upgrade(tx => {
-            // Migration logic if needed, or just let new tables be created
+            // Migration logic if needed
         })
     }
 }

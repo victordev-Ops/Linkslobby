@@ -49,37 +49,33 @@ const serwist = new Serwist({
       }),
     },
     {
-      // SAFE CACHING: Navigation (Pages)
-      // Only cache fully rendered HTML pages, NOT streaming/partial responses
-      // Serve from cache immediately, then update in background
+      // NAVIGATION CACHING (Pages)
       matcher: ({ request, url }) => {
-        // Only cache navigation requests
         if (request.mode !== "navigate") return false;
-
-        // Exclude RSC requests (double-check)
-        if (url.searchParams.has('_rsc')) return false;
-        if (request.headers.get('RSC') === '1') return false;
-
+        // Exclude RSC requests
+        if (url.searchParams.has("_rsc") || request.headers.get("RSC") === "1") return false;
         return true;
       },
-      handler: new StaleWhileRevalidate({
-        cacheName: "pages-cache-v1",
-        plugins: [
-          {
-            cacheWillUpdate: async ({ response }) => {
-              // Only cache successful, complete responses
-              if (!response) return null;
-              if (response.status !== 200) return null;
-
-              // Don't cache streaming responses
-              const contentType = response.headers.get('content-type');
-              if (contentType?.includes('text/x-component')) return null;
-
-              return response;
+      handler: async (args) => {
+        // Use NetworkOnly for notifications to avoid stale cache issues
+        if (args.url.pathname.startsWith("/notifications")) {
+          return new NetworkOnly().handle(args);
+        }
+        // Use StaleWhileRevalidate for other pages
+        return new StaleWhileRevalidate({
+          cacheName: "pages-cache-v1",
+          plugins: [
+            {
+              cacheWillUpdate: async ({ response }) => {
+                if (!response || response.status !== 200) return null;
+                const contentType = response.headers.get("content-type");
+                if (contentType?.includes("text/x-component")) return null;
+                return response;
+              },
             },
-          },
-        ],
-      }),
+          ],
+        }).handle(args);
+      },
     },
     ...defaultCache,
   ],
