@@ -246,7 +246,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                       <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Live</span>
                     </div>
                   </div>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Play with friends in real-time</p>
+                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Play Truth/Dare Challenge with friends </p>
                 </div>
                 <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isTodOpen ? "rotate-180" : ""}`} />
               </div>
@@ -255,7 +255,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
                   <div className="p-3 bg-rose-50 dark:bg-rose-500/10 rounded-xl border border-rose-100 dark:border-rose-500/20">
                     <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed font-medium">
-                      How it works: Create a lobby and share the link. Everyone takes turns asking or being the target. Real-time multiplayer fun!
+                      How it works: Create a lobby and share the link with friends. Everyone takes turns asking or being the target. Real-time multiplayer fun!
                     </p>
                   </div>
 
@@ -339,8 +339,8 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                   <MessageCircleQuestion size={24} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">AMA Sticker</h3>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Get a question sticker for your Instagram story</p>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Ask Me Anything Anonymously</h3>
+                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Get AMA sticker for your story</p>
                 </div>
                 <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isAmaOpen ? "rotate-180" : ""}`} />
               </div>
@@ -349,7 +349,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
                   <div className="p-3 bg-orange-50 dark:bg-orange-500/10 rounded-xl border border-orange-100 dark:border-orange-500/20">
                     <p className="text-[11px] text-orange-700 dark:text-orange-300 leading-relaxed font-medium">
-                      How it works: Share this link on your Instagram story. Friends can tap it to ask you anything anonymously.
+                      How it works: Share this link on your Story and Bio. Friends can tap it to ask you anything anonymously.
                     </p>
                   </div>
 
@@ -381,7 +381,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-slate-900 dark:text-white text-base">Confessions</h3>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Receive anonymous secrets and messages</p>
+                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Receive anonymous confession and messages</p>
                 </div>
                 <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isConfessOpen ? "rotate-180" : ""}`} />
               </div>
@@ -390,7 +390,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
                   <div className="p-3 bg-purple-50 dark:bg-purple-500/10 rounded-xl border border-purple-100 dark:border-purple-500/20">
                     <p className="text-[11px] text-purple-700 dark:text-purple-300 leading-relaxed font-medium">
-                      How it works: Share this special link. Anyone can send you a secret message without you knowing who they are.
+                      How it works: Share this special link. Anyone can send you a secret confession without you knowing who they are.
                     </p>
                   </div>
 
