@@ -248,6 +248,7 @@ export default function NotificationsClient({
 
     const handleHide = async (e: React.MouseEvent, item: any) => {
         e.stopPropagation() // Prevent triggering card click if we add one later
+        console.log('handleHide triggered for:', { id: item.id, type: item.type })
 
         // Optimistic update
         const originalConfessions = [...confessions]
@@ -271,12 +272,18 @@ export default function NotificationsClient({
         toast.success("Notification hidden")
 
         // Update Dexie locally
-        db.notifications.update(item.id, { is_hidden: true }).catch(() => { })
+        db.notifications.update(item.id, { is_hidden: true }).catch((err) => {
+            console.error('Dexie update failed:', err)
+        })
 
         // Strategy: Only call server hide if supported.
         if (['message', 'dykm', 'lobby', 'xp', 'hot_seat'].includes(item.type)) {
             const result = await hideNotification(item.id, item.type as any)
-            if (!result.success) {
+            if (result.success) {
+                // Refresh unread counts to update badge
+                refreshUnreadCount().catch(console.error)
+            } else {
+                console.error('Server hide failed:', result)
                 // Revert local state
                 if (item.type === 'message') setConfessions(originalConfessions)
                 else if (item.type === 'dykm') setDykmScores(originalDykmScores)

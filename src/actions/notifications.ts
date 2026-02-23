@@ -36,11 +36,11 @@ export async function hideNotification(id: string, type: 'message' | 'dykm' | 'l
         // Hidden notifications are stored per user, so this is generally safe.
         const { error } = await supabase
             .from('hidden_notifications')
-            .insert({
+            .upsert({
                 user_id: user.id,
                 notification_id: id,
                 notification_type: notificationType
-            })
+            }, { onConflict: 'user_id, notification_id, notification_type' })
 
         if (error) throw error
 
