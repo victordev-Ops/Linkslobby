@@ -91,6 +91,9 @@ export default function NotificationsClient({
             ...initialXpTransactions.map((x: any) => ({ id: x.id, type: 'xp_transaction' as const, data: x, created_at: x.created_at, is_hidden: false, cached_at: now })),
             ...initialHotSeatQuestions.map((q: any) => ({ id: q.id, type: 'hot_seat_question' as const, data: q, created_at: q.created_at, is_hidden: false, cached_at: now })),
         ]
+        // Note: initial data passed from server-side page.tsx is ALREADY filtered by is_hidden
+        // so we can safely assume they are not hidden. 
+        // If we ever pass hidden ones, we'd need to map item.is_hidden || false
         if (allItems.length > 0) {
             db.notifications.bulkPut(allItems).catch(() => { })
         }
@@ -267,31 +270,24 @@ export default function NotificationsClient({
 
         toast.success("Notification hidden")
 
-        // Map types correctly to server action types
-        // 'message' | 'dykm' | 'lobby'... we might need to update server action if we add 'xp' and 'hot_seat' hiding
-        // For now, let's assume we update the server action or reuse types if possible.
-        // Actually, 'xp' and 'hot_seat' hiding isn't in the server action yet. 
-        // We defined hideNotification to accept specific strings.
-        // Let's just try-catch and not fail UI if strict TS.
-        // Or update hideNotification action to support 'xp' and 'hot_seat' (mapped to generic hiding?)
+        // Update Dexie locally
+        db.notifications.update(item.id, { is_hidden: true }).catch(() => { })
 
         // Strategy: Only call server hide if supported.
-        if (['message', 'dykm', 'lobby'].includes(item.type)) {
+        if (['message', 'dykm', 'lobby', 'xp', 'hot_seat'].includes(item.type)) {
             const result = await hideNotification(item.id, item.type as any)
             if (!result.success) {
-                // Revert
+                // Revert local state
                 if (item.type === 'message') setConfessions(originalConfessions)
-                if (item.type === 'dykm') setDykmScores(originalDykmScores)
-                if (item.type === 'lobby') setLobbyEvents(originalLobbyEvents)
+                else if (item.type === 'dykm') setDykmScores(originalDykmScores)
+                else if (item.type === 'lobby') setLobbyEvents(originalLobbyEvents)
+                else if (item.type === 'xp') setXpTransactions(originalXp)
+                else if (item.type === 'hot_seat') setHotSeatQuestions(originalHotSeat)
+
+                // Revert Dexie
+                db.notifications.update(item.id, { is_hidden: false }).catch(() => { })
                 toast.error("Failed to hide notification")
             }
-        } else {
-            // For unsupported types, we just hide locally (optimistic) and maybe it reappears on refresh?
-            // Or we add support to server action.
-            // We configured server action to throw error on invalid type.
-            // Let's update server action later or accept local-only hide for now.
-            // Actually, `hidden_notifications` supports `notification_id`. 
-            // We can just add 'xp' and 'hot_seat' logic to server action.
         }
     }
 

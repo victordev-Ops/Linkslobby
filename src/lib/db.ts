@@ -140,14 +140,14 @@ class SayAppDB extends Dexie {
     constructor() {
         super('SayAppDB')
 
-        this.version(2).stores({
+        this.version(3).stores({
             profiles: 'id, username, slug',
             confessions: 'id, profile_id, created_at, is_read, message_type',
             messages: 'id, conversation_key, created_at', // Legacy
             todLobbies: 'id, host_id, status, created_at',
             hotSeatSessions: 'id, host_id, status, created_at',
             xpTransactions: 'id, user_id, created_at',
-            notifications: 'id, type, created_at',
+            notifications: 'id, type, created_at, is_hidden',
             syncQueue: '++id, table, action, created_at',
             meta: 'key',
 

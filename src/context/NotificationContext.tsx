@@ -51,48 +51,58 @@ export function NotificationProvider({
       return
     }
 
-    const [sessionsRes, confRes, dykmRes, xpRes, hotSeatRes, lobbyRes] = await Promise.all([
+    const [sessionsRes, confRes, dykmRes, xpRes, hotSeatRes, lobbyRes, hiddenRes] = await Promise.all([
       getSessions(),
       supabase
         .from('confessions')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('profile_id', profileId)
         .eq('is_read', false),
       supabase
         .from('dykm_scores')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('quiz_owner_id', profileId)
         .eq('is_read', false),
       supabase
         .from('xp_transactions')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('user_id', profileId)
         .eq('is_read', false),
       supabase
         .from('hot_seat_questions')
-        .select('*, session:hot_seat_sessions!inner(host_id)')
+        .select('id, session:hot_seat_sessions!inner(host_id)')
         .eq('session.host_id', profileId)
         .eq('is_read', false),
       supabase
         .from('tod_messages')
         .select('id, notification_reads!left(*)')
         .eq('message_type', 'system')
-        .is('notification_reads.id', null)
+        .is('notification_reads.id', null),
+      supabase
+        .from('hidden_notifications')
+        .select('notification_id')
+        .eq('user_id', profileId)
     ])
 
-    if (confRes.error || dykmRes.error || xpRes.error || hotSeatRes.error || lobbyRes.error) {
+    if (confRes.error || dykmRes.error || xpRes.error || hotSeatRes.error || lobbyRes.error || hiddenRes.error) {
       console.error('Error fetching unread counts:', {
         confessions: confRes.error?.message,
         dykm: dykmRes.error?.message,
         xp: xpRes.error?.message,
         hotSeat: hotSeatRes.error?.message,
-        lobby: lobbyRes.error?.message
+        lobby: lobbyRes.error?.message,
+        hidden: hiddenRes.error?.message
       })
       return
     }
 
-    const hotSeatCount = hotSeatRes.data?.length || 0
-    const lobbyCount = lobbyRes.data?.length || 0
+    const hiddenIds = new Set((hiddenRes.data || []).map(h => h.notification_id))
+
+    const confessionsCount = (confRes.data || []).filter(c => !hiddenIds.has(c.id)).length
+    const dykmCount = (dykmRes.data || []).filter(s => !hiddenIds.has(s.id)).length
+    const xpCount = (xpRes.data || []).filter(x => !hiddenIds.has(x.id)).length
+    const hotSeatCount = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id)).length
+    const lobbyCount = (lobbyRes.data || []).filter(l => !hiddenIds.has(l.id)).length
 
     const chatUnread = sessionsRes.success && sessionsRes.data
       ? (sessionsRes.data as any[]).reduce((acc, s) => acc + (s.unread_count || 0), 0)
@@ -102,7 +112,7 @@ export function NotificationProvider({
     // Actually, traditionally Notifications includes everything.
     // But if we have a separate Messages badge, we should probably separate them to avoid double badges.
     // Let's keep them separate as per BottomNavbar usage.
-    setUnreadCount((confRes.count || 0) + (dykmRes.count || 0) + (xpRes.count || 0) + hotSeatCount + lobbyCount)
+    setUnreadCount(confessionsCount + dykmCount + xpCount + hotSeatCount + lobbyCount)
     setUnreadMessagesCount(chatUnread)
   }, [profileId, supabase])
 

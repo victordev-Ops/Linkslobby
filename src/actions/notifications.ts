@@ -3,7 +3,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function hideNotification(id: string, type: 'message' | 'dykm' | 'lobby') {
+export async function hideNotification(id: string, type: 'message' | 'dykm' | 'lobby' | 'xp' | 'hot_seat') {
     const supabase = await createSupabaseServerClient()
 
     try {
@@ -21,6 +21,12 @@ export async function hideNotification(id: string, type: 'message' | 'dykm' | 'l
                 break
             case 'lobby':
                 notificationType = 'lobby_event'
+                break
+            case 'xp':
+                notificationType = 'xp_transaction'
+                break
+            case 'hot_seat':
+                notificationType = 'hot_seat_question'
                 break
         }
 
