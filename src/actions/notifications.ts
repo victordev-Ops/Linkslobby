@@ -47,9 +47,10 @@ export async function hideNotification(id: string, type: 'message' | 'dykm' | 'l
         revalidatePath('/notifications')
 
         return { success: true }
-    } catch (error) {
-        console.error('Server Action Error:', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    } catch (error: any) {
+        console.error('Server Action Error (hideNotification):', error)
+        const message = error?.message || error?.details || (typeof error === 'string' ? error : 'Unknown error')
+        return { success: false, error: message }
     }
 }
 
