@@ -28,30 +28,22 @@ export async function checkDailyLogin(): Promise<DailyLoginResult> {
 
         const today = new Date().toISOString().split('T')[0]
 
-        // Check if already claimed today by looking at XP transactions
-        const { data: existingClaim } = await supabase
-            .from('xp_transactions')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('metadata->>type', 'daily_login')
-            .eq('metadata->>date', today)
-            .maybeSingle()
-
-        if (existingClaim) {
-            return { success: true, awarded: false, message: 'Already claimed today' }
-        }
-
         const amount = applyProRewardMultiplier(XP_REWARDS.DAILY_LOGIN, isPro)
         const reason = formatRewardReason('Daily Login', isPro)
 
-        const { error: xpError } = await supabase.rpc('add_xp', {
+        // Atomic claim using RPC
+        const { data: claimResult, error: claimError } = await supabase.rpc('claim_daily_login_xp', {
             p_user_id: user.id,
+            p_today: today,
             p_amount: amount,
-            p_reason: reason,
-            p_metadata: { type: 'daily_login', date: today }
+            p_reason: reason
         })
 
-        if (xpError) throw xpError
+        if (claimError) throw claimError
+
+        if (!claimResult.success) {
+            return { success: true, awarded: false, message: claimResult.message }
+        }
 
         return {
             success: true,
