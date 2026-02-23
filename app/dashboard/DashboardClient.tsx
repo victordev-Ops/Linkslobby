@@ -339,8 +339,8 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                   <MessageCircleQuestion size={24} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Ask Me Anything Anonymously</h3>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Get AMA sticker for your story</p>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Ask Me Anything </h3>
+                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Get AMA link for your story and bio</p>
                 </div>
                 <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isAmaOpen ? "rotate-180" : ""}`} />
               </div>
