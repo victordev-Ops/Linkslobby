@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Flame, Send, Loader2, Clock, Play, AlertCircle, MessageCircle, X, Users, Sparkles } from "lucide-react"
+import { ArrowLeft, Flame, Send, Loader2, Clock, Play, AlertCircle, MessageCircle, X, Users, Sparkles, MoreVertical, Share2, User, MessageSquare, Ban } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { penalizeHotSeatTimeout } from "@/actions/hot-seat-xp"
+import { banParticipant } from "@/actions/hot-seat"
 
 interface HotSeatGameClientProps {
     session: any
@@ -38,6 +39,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     const [showParticipants, setShowParticipants] = useState(false)
     const [newQuestion, setNewQuestion] = useState("")
     const [isSending, setIsSending] = useState(false)
+    const [menuOpen, setMenuOpen] = useState<string | null>(null)
 
     // Host State
     const [answer, setAnswer] = useState("")
@@ -48,12 +50,14 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     // Initial Data Fetch
     useEffect(() => {
         const fetchState = async () => {
-            // Join session via server action to avoid RLS issues with upsert
-            // strict RLS might block client-side upsert if it counts as 'update' on existing rows
-            // but we only have insert policy.
-            // Using server action bypasses this nicely.
+            // Join session
             const { joinHotSeatSession } = await import('@/actions/hot-seat')
-            await joinHotSeatSession(session.id)
+            const result = await joinHotSeatSession(session.id)
+            if (result && !result.success) {
+                toast.error(result.error)
+                router.push('/hot-seat')
+                return
+            }
 
             // Fetch questions
             const { data: qData, error: qError } = await supabase
@@ -133,6 +137,12 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
             .on('postgres_changes', { event: '*', schema: 'public', table: 'hot_seat_participants', filter: `session_id=eq.${session.id}` }, async () => {
                 await fetchParticipants()
             })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'hot_seat_bans', filter: `session_id=eq.${session.id}` }, (payload) => {
+                if (payload.new.user_id === userProfile.id) {
+                    toast.error("You have been banned from this session")
+                    router.push('/hot-seat')
+                }
+            })
             .subscribe()
 
         return () => {
@@ -206,6 +216,34 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
         await penalizeHotSeatTimeout(session.id, currentQuestion.id) // Reuse penalty logic for manual skip without answer
     }
 
+    const handleBan = async (userId: string) => {
+        if (!window.confirm("Are you sure you want to ban this participant?")) return
+        const result = await banParticipant(session.id, userId)
+        if (result.success) {
+            toast.success("Participant banned")
+            setMenuOpen(null)
+        } else {
+            toast.error(result.error)
+        }
+    }
+
+    const shareLink = async () => {
+        const url = window.location.href
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Join ${session.name} on Hot Seat!`,
+                    url: url
+                })
+            } catch (e) {
+                console.error("Error sharing:", e)
+            }
+        } else {
+            navigator.clipboard.writeText(url)
+            toast.success("Link copied to clipboard!")
+        }
+    }
+
     // Participant Actions
     const sendQuestion = async () => {
         if (!newQuestion.trim()) return
@@ -231,6 +269,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     }
 
     // Derived Lists
+    const pendingQuestions = questions.filter(q => q.status === 'pending')
     const answeredQuestions = questions.filter(q => ['answered', 'timed_out', 'skipped'].includes(q.status)).reverse()
 
     return (
@@ -255,13 +294,24 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                         {status === 'waiting' ? 'Waiting for host...' : status === 'active' ? 'LIVE' : 'Ended'}
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowParticipants(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-full border border-white/5 transition"
-                >
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-white/60">{participantCount}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                    {isHost && (
+                        <button
+                            onClick={shareLink}
+                            className="p-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/5 transition text-amber-500"
+                            title="Share Session"
+                        >
+                            <Share2 size={16} />
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setShowParticipants(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-full border border-white/5 transition"
+                    >
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-[10px] font-bold text-white/60">{participantCount}</span>
+                    </button>
+                </div>
             </div>
 
             <main className="max-w-md mx-auto p-4 space-y-6 relative z-10">
@@ -385,6 +435,36 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                     </div>
                 )}
 
+                {/* Upcoming Questions List */}
+                {status === 'active' && pendingQuestions.length > 0 && (
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between px-2">
+                            <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Upcoming Questions</h3>
+                            <span className="bg-white/5 text-white/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                {pendingQuestions.length} pending
+                            </span>
+                        </div>
+                        <div className="space-y-2">
+                            {pendingQuestions.map((q, idx) => (
+                                <div key={q.id} className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center gap-3">
+                                    <span className="text-[10px] font-mono text-white/20 w-4">{idx + 1}.</span>
+                                    <p className="text-xs text-white/60 truncate flex-1">{q.question}</p>
+                                    {isHost && (
+                                        <button
+                                            onClick={async () => {
+                                                await supabase.from('hot_seat_questions').update({ status: 'active' }).eq('id', q.id)
+                                            }}
+                                            className="text-[10px] font-bold text-amber-500 hover:text-amber-400 uppercase tracking-wider px-2 py-1 rounded-lg hover:bg-amber-500/10 transition"
+                                        >
+                                            Bring Forward
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Participant Question Input */}
                 {!isHost && status === 'active' && (
                     <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#0a0a0f]/80 backdrop-blur-xl border-t border-white/10 z-20">
@@ -469,7 +549,10 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => setShowParticipants(false)}
+                            onClick={() => {
+                                setShowParticipants(false)
+                                setMenuOpen(null)
+                            }}
                             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40"
                         />
                         <motion.div
@@ -477,14 +560,17 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                             animate={{ x: 0 }}
                             exit={{ x: '100%' }}
                             transition={{ type: 'spring', damping: 20 }}
-                            className="fixed right-0 top-0 bottom-0 w-full max-w-xs bg-[#13131f] border-l border-white/10 z-50 p-4 flex flex-col"
+                            className="fixed right-0 top-0 bottom-0 w-64 bg-[#13131f] border-l border-white/10 z-50 p-4 flex flex-col"
                         >
                             <div className="flex items-center justify-between mb-6">
                                 <h3 className="font-bold text-lg text-white flex items-center gap-2">
                                     <Users size={18} /> Participants
                                 </h3>
                                 <button
-                                    onClick={() => setShowParticipants(false)}
+                                    onClick={() => {
+                                        setShowParticipants(false)
+                                        setMenuOpen(null)
+                                    }}
                                     className="p-2 rounded-full hover:bg-white/5 transition"
                                 >
                                     <X size={20} className="text-white/60" />
@@ -496,20 +582,71 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                     <p className="text-center text-white/30 text-sm py-10">No one here yet...</p>
                                 ) : (
                                     participants.map(p => (
-                                        <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center font-bold text-white text-sm">
-                                                {p.username?.[0]?.toUpperCase() || '?'}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-1.5">
-                                                    <p className="font-bold text-white text-sm truncate">{p.username}</p>
-                                                    {p.is_pro && <Sparkles size={12} className="text-amber-500" />}
+                                        <div key={p.id} className="relative group">
+                                            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 transition group-hover:bg-white/10">
+                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center font-bold text-white text-sm">
+                                                    {p.username?.[0]?.toUpperCase() || '?'}
                                                 </div>
-                                                <p className="text-[10px] text-white/40">Joined</p>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <p className="font-bold text-white text-sm truncate">{p.username}</p>
+                                                        {p.is_pro && <Sparkles size={12} className="text-amber-500" />}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {session.host_id === p.id ? (
+                                                            <span className="text-[9px] font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded uppercase tracking-wider">Host</span>
+                                                        ) : (
+                                                            <p className="text-[10px] text-white/40">Joined</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* 3-dot menu button */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setMenuOpen(menuOpen === p.id ? null : p.id)
+                                                    }}
+                                                    className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition"
+                                                >
+                                                    <MoreVertical size={16} />
+                                                </button>
                                             </div>
-                                            {session.host_id === p.id && (
-                                                <span className="text-[10px] font-bold bg-amber-500 text-black px-1.5 py-0.5 rounded uppercase">Host</span>
-                                            )}
+
+                                            {/* Dropdown Menu */}
+                                            <AnimatePresence>
+                                                {menuOpen === p.id && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                                        className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl z-[60] overflow-hidden backdrop-blur-xl"
+                                                    >
+                                                        <div className="p-1.5 space-y-0.5">
+                                                            <button
+                                                                onClick={() => router.push(`/profile/${p.slug || p.id}`)}
+                                                                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition"
+                                                            >
+                                                                <User size={16} /> View Profile
+                                                            </button>
+                                                            <button
+                                                                onClick={() => router.push(`/messages/${p.id}`)}
+                                                                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition"
+                                                            >
+                                                                <MessageSquare size={16} /> Message
+                                                            </button>
+                                                            {isHost && session.host_id !== p.id && (
+                                                                <button
+                                                                    onClick={() => handleBan(p.id)}
+                                                                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition border-t border-white/5 mt-1 pt-2"
+                                                                >
+                                                                    <Ban size={16} /> Ban Participant
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
                                     ))
                                 )}
