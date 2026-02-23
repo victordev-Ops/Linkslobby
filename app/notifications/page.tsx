@@ -104,16 +104,17 @@ export default async function NotificationsPage() {
     const xpTransactions = (xpRes.data || []).filter(x => !hiddenIds.has(x.id))
     const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id))
 
-    console.log('--- Debug Notifications ---')
+    console.log('--- Debug Notifications Server ---')
     console.log('User ID:', user.id)
     console.log('Hidden IDs found:', hiddenIds.size, Array.from(hiddenIds))
-    console.log('Lobby Events Total:', lobbyEvents.length)
-    if (lobbyEvents.length > 0) {
-        console.log('Sample Lobby Event ID:', lobbyEvents[0].id)
+    console.log('Confessions (raw/filtered):', (confessionsRes.data || []).length, confessions.length)
+    if (hiddenIds.size > 0 && (confessionsRes.data || []).length > 0) {
+        console.log('First Raw Confession ID:', confessionsRes.data?.[0].id)
+        console.log('Is it in hiddenIds?:', hiddenIds.has(confessionsRes.data?.[0].id))
     }
-    console.log('Filtered Lobby Events:', filteredLobbyEvents.length)
-    console.log('XP Transactions:', xpTransactions.length)
-    console.log('Hot Seat Questions:', hotSeatQuestions.length)
+    console.log('Lobby Events (raw/filtered):', lobbyEvents.length, filteredLobbyEvents.length)
+    console.log('XP Transactions (raw/filtered):', (xpRes.data || []).length, xpTransactions.length)
+    console.log('Hot Seat Questions (raw/filtered):', (hotSeatRes.data || []).length, hotSeatQuestions.length)
     console.log('---------------------------')
 
     return (
