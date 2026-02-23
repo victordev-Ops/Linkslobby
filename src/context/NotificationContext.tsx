@@ -51,7 +51,7 @@ export function NotificationProvider({
       return
     }
 
-    const [sessionsRes, confRes, dykmRes, xpRes, hotSeatRes, lobbyRes, hiddenRes] = await Promise.all([
+    const [sessionsRes, confRes, dykmRes, xpRes, hotSeatRes, lobbyRes, hiddenRes, readRes] = await Promise.all([
       getSessions(),
       supabase
         .from('confessions')
@@ -73,36 +73,53 @@ export function NotificationProvider({
         .select('id, session:hot_seat_sessions!inner(host_id)')
         .eq('session.host_id', profileId)
         .eq('is_read', false),
+      // Fetch system messages from joined lobbies
       supabase
-        .from('tod_messages')
-        .select('id, notification_reads!left(*)')
-        .eq('message_type', 'system')
-        .is('notification_reads.id', null),
+        .from('tod_participants')
+        .select('lobby_id')
+        .eq('user_id', profileId)
+        .eq('status', 'joined')
+        .then(async ({ data: parts }) => {
+          if (!parts || parts.length === 0) return { data: [], error: null }
+          const lIds = parts.map(p => p.lobby_id)
+          return supabase
+            .from('tod_messages')
+            .select('id')
+            .in('lobby_id', lIds)
+            .eq('message_type', 'system')
+        }),
       supabase
         .from('hidden_notifications')
         .select('notification_id')
+        .eq('user_id', profileId),
+      supabase
+        .from('notification_reads')
+        .select('notification_id')
         .eq('user_id', profileId)
+        .eq('notification_type', 'lobby_event')
     ])
 
-    if (confRes.error || dykmRes.error || xpRes.error || hotSeatRes.error || lobbyRes.error || hiddenRes.error) {
+    if (confRes.error || dykmRes.error || xpRes.error || hotSeatRes.error || (lobbyRes as any).error || hiddenRes.error || readRes.error) {
       console.error('Error fetching unread counts:', {
         confessions: confRes.error?.message,
         dykm: dykmRes.error?.message,
         xp: xpRes.error?.message,
         hotSeat: hotSeatRes.error?.message,
-        lobby: lobbyRes.error?.message,
-        hidden: hiddenRes.error?.message
+        lobby: (lobbyRes as any).error?.message,
+        hidden: hiddenRes.error?.message,
+        read: readRes.error?.message
       })
       return
     }
 
     const hiddenIds = new Set((hiddenRes.data || []).map(h => h.notification_id))
+    const readIds = new Set((readRes.data || []).map(r => r.notification_id))
 
     const confessionsCount = (confRes.data || []).filter(c => !hiddenIds.has(c.id)).length
     const dykmCount = (dykmRes.data || []).filter(s => !hiddenIds.has(s.id)).length
     const xpCount = (xpRes.data || []).filter(x => !hiddenIds.has(x.id)).length
     const hotSeatCount = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id)).length
-    const lobbyCount = (lobbyRes.data || []).filter(l => !hiddenIds.has(l.id)).length
+    const lobbyCount = ((lobbyRes as any).data || []).filter((l: any) => !hiddenIds.has(l.id) && !readIds.has(l.id)).length
 
     const chatUnread = sessionsRes.success && sessionsRes.data
       ? (sessionsRes.data as any[]).reduce((acc, s) => acc + (s.unread_count || 0), 0)
