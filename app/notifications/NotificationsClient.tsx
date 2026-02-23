@@ -17,6 +17,7 @@ import { revealDYKMRespondent } from "@/actions/reveal"
 import { useRouter } from "next/navigation"
 import { db } from '@/lib/db'
 import { queueOfflineAction } from '@/lib/sync'
+import { useNotifications } from "@/context/NotificationContext"
 
 interface NotificationsClientProps {
     initialConfessions: any[]
@@ -46,6 +47,7 @@ export default function NotificationsClient({
     initialHotSeatQuestions: any[],
     profileId: string
 }) {
+    const { refreshUnreadCount, setUnreadCount } = useNotifications()
     const [confessions, setConfessions] = useState(initialConfessions)
     const [dykmScores, setDykmScores] = useState(initialDykmScores)
     const [lobbyEvents, setLobbyEvents] = useState(initialLobbyEvents)
@@ -139,28 +141,31 @@ export default function NotificationsClient({
                 } else if (payload.eventType === 'DELETE') {
                     setDykmScores(prev => prev.filter(s => s.id !== payload.old.id))
                 }
+                refreshUnreadCount()
             })
             // XP Transactions
             .on('postgres_changes', {
-                event: 'INSERT',
+                event: '*',
                 schema: 'public',
                 table: 'xp_transactions',
                 filter: `user_id=eq.${profileId}`
             }, (payload) => {
-                setXpTransactions(prev => [payload.new, ...prev])
+                if (payload.eventType === 'INSERT') {
+                    setXpTransactions(prev => [payload.new, ...prev])
+                } else if (payload.eventType === 'UPDATE') {
+                    setXpTransactions(prev => prev.map(x => x.id === payload.new.id ? payload.new : x))
+                }
+                refreshUnreadCount()
             })
-            // Hot Seat Questions (Global listen, filter by session ID if we know it)
-            // Note: This is imperfect as we need 'session' join info which realtime doesn't give easily
-            // We'll rely on server action revalidation for full data, or optimistic update
-            // Ideally we need to fetch the question + session info when we get an ID
+            // Hot Seat Questions
             .on('postgres_changes', {
-                event: 'INSERT',
+                event: '*',
                 schema: 'public',
                 table: 'hot_seat_questions'
             }, async (payload) => {
                 const q = payload.new
-                if (hotSeatSessionIds.includes(q.session_id)) {
-                    // Fetch full data with session join
+                // If it's a new question we host, fetch and add it
+                if (payload.eventType === 'INSERT' && hotSeatSessionIds.includes(q.session_id)) {
                     const { data } = await supabase
                         .from('hot_seat_questions')
                         .select('*, session:hot_seat_sessions(name, slug)')
@@ -171,13 +176,14 @@ export default function NotificationsClient({
                         setHotSeatQuestions(prev => [data, ...prev])
                     }
                 }
+                refreshUnreadCount()
             })
             .subscribe()
 
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [profileId, supabase, hotSeatSessionIds])
+    }, [profileId, supabase, hotSeatSessionIds, refreshUnreadCount])
 
     const handleSelectMessage = async (item: any) => {
         // Mark as read if unread
@@ -190,6 +196,7 @@ export default function NotificationsClient({
             else if (item.type === 'lobby') setLobbyEvents(prev => prev.map(l => l.id === item.id ? { ...l, is_read: true } : l))
 
             await markNotificationAsRead(item.id, item.type as any)
+            await refreshUnreadCount()
         }
 
         if (item.type === 'message') {
@@ -225,10 +232,12 @@ export default function NotificationsClient({
         setXpTransactions(prev => prev.map(x => ({ ...x, is_read: true })))
         setHotSeatQuestions(prev => prev.map(q => ({ ...q, is_read: true })))
         setLobbyEvents(prev => prev.map(l => ({ ...l, is_read: true })))
+        setUnreadCount(0)
 
         const result = await markAllNotificationsAsRead()
         if (result.success) {
             toast.success("All notifications marked as read")
+            await refreshUnreadCount()
         } else {
             toast.error("Failed to mark all as read")
         }

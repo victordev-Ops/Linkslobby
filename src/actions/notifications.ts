@@ -133,8 +133,50 @@ export async function markAllNotificationsAsRead() {
             .eq('is_read', false)
 
         // 4. Mark hot seat questions as read (where I am host)
-        // This requires an RPC or a complex query since we can't easily join in update
-        // For now, let's just do the ones we can easily.
+        const { data: sessions } = await supabase
+            .from('hot_seat_sessions')
+            .select('id')
+            .eq('host_id', user.id)
+            .eq('status', 'active')
+
+        if (sessions && sessions.length > 0) {
+            const sessionIds = sessions.map(s => s.id)
+            await supabase
+                .from('hot_seat_questions')
+                .update({ is_read: true })
+                .in('session_id', sessionIds)
+                .eq('is_read', false)
+        }
+
+        // 5. Mark lobby events as read 
+        // We need to find unread lobby events and insert them into notification_reads
+        const { data: lobbies } = await supabase
+            .from('tod_participants')
+            .select('lobby_id')
+            .eq('user_id', user.id)
+            .eq('status', 'joined')
+
+        if (lobbies && lobbies.length > 0) {
+            const lobbyIds = lobbies.map(l => l.lobby_id)
+            const { data: events } = await supabase
+                .from('tod_messages')
+                .select('id')
+                .in('lobby_id', lobbyIds)
+                .eq('message_type', 'system')
+                .limit(100) // Don't overdo it
+
+            if (events && events.length > 0) {
+                const readInserts = events.map(e => ({
+                    user_id: user.id,
+                    notification_id: e.id,
+                    notification_type: 'lobby_event'
+                }))
+
+                await supabase
+                    .from('notification_reads')
+                    .upsert(readInserts, { onConflict: 'user_id, notification_id, notification_type' })
+            }
+        }
 
         revalidatePath('/notifications')
         return { success: true }

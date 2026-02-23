@@ -51,7 +51,7 @@ export function NotificationProvider({
       return
     }
 
-    const [sessionsRes, confRes, dykmRes, xpRes, hotSeatRes] = await Promise.all([
+    const [sessionsRes, confRes, dykmRes, xpRes, hotSeatRes, lobbyRes] = await Promise.all([
       getSessions(),
       supabase
         .from('confessions')
@@ -72,22 +72,38 @@ export function NotificationProvider({
         .from('hot_seat_questions')
         .select('*, session:hot_seat_sessions!inner(host_id)')
         .eq('session.host_id', profileId)
-        .eq('is_read', false)
+        .eq('is_read', false),
+      supabase
+        .from('tod_messages')
+        .select('id, notification_reads!left(*)')
+        .eq('message_type', 'system')
+        .is('notification_reads.id', null)
     ])
 
-    if (confRes.error || dykmRes.error || xpRes.error) {
-      console.error('Error fetching unread counts:', confRes.error || dykmRes.error || xpRes.error)
+    if (confRes.error || dykmRes.error || xpRes.error || hotSeatRes.error || lobbyRes.error) {
+      console.error('Error fetching unread counts:', {
+        confessions: confRes.error?.message,
+        dykm: dykmRes.error?.message,
+        xp: xpRes.error?.message,
+        hotSeat: hotSeatRes.error?.message,
+        lobby: lobbyRes.error?.message
+      })
       return
     }
 
     const hotSeatCount = hotSeatRes.data?.length || 0
+    const lobbyCount = lobbyRes.data?.length || 0
 
     const chatUnread = sessionsRes.success && sessionsRes.data
       ? (sessionsRes.data as any[]).reduce((acc, s) => acc + (s.unread_count || 0), 0)
       : 0
 
-    setUnreadCount((confRes.count || 0) + (dykmRes.count || 0) + (xpRes.count || 0) + hotSeatCount + chatUnread)
-    setUnreadMessagesCount((confRes.count || 0) + chatUnread)
+    // unreadCount is for the Bell icon (all except possibly chat if handled in Messages tab)
+    // Actually, traditionally Notifications includes everything.
+    // But if we have a separate Messages badge, we should probably separate them to avoid double badges.
+    // Let's keep them separate as per BottomNavbar usage.
+    setUnreadCount((confRes.count || 0) + (dykmRes.count || 0) + (xpRes.count || 0) + hotSeatCount + lobbyCount)
+    setUnreadMessagesCount(chatUnread)
   }, [profileId, supabase])
 
   useEffect(() => {
@@ -229,7 +245,7 @@ export function NotificationProvider({
         }
       })
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
