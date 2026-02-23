@@ -9,7 +9,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import { penalizeHotSeatTimeout } from "@/actions/hot-seat-xp"
 import { banParticipant } from "@/actions/hot-seat"
 import { useScrollLock } from "@/hooks/useScrollLock"
-import { DirectMessageChat } from "@/components/tod/ui/DirectMessageChat"
 
 interface HotSeatGameClientProps {
     session: any
@@ -42,7 +41,6 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     const [newQuestion, setNewQuestion] = useState("")
     const [isSending, setIsSending] = useState(false)
     const [menuOpen, setMenuOpen] = useState<string | null>(null)
-    const [messagingUser, setMessagingUser] = useState<{ id: string, username: string } | null>(null)
 
     // Host State
     const [answer, setAnswer] = useState("")
@@ -50,7 +48,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const [isAnswering, setIsAnswering] = useState(false)
 
-    useScrollLock(showParticipants || !!messagingUser)
+    useScrollLock(showParticipants)
 
     // Initial Data Fetch
     useEffect(() => {
@@ -636,9 +634,10 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                                             </button>
                                                             <button
                                                                 onClick={() => {
-                                                                    setMessagingUser({ id: p.id, username: p.username || '' })
-                                                                    setMenuOpen(null)
-                                                                    setShowParticipants(false)
+                                                                    const identifier = p.username || p.id;
+                                                                    router.push(`/messages/${identifier}`);
+                                                                    setMenuOpen(null);
+                                                                    setShowParticipants(false);
                                                                 }}
                                                                 className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition"
                                                             >
@@ -662,15 +661,6 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                             </div>
                         </motion.div>
                     </>
-                )}
-            </AnimatePresence>
-            {/* DM Chat Modal */}
-            <AnimatePresence>
-                {messagingUser && (
-                    <DirectMessageChat
-                        targetUser={messagingUser}
-                        onClose={() => setMessagingUser(null)}
-                    />
                 )}
             </AnimatePresence>
         </div>
