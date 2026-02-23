@@ -23,8 +23,6 @@ export default async function NotificationsPage() {
     const hiddenIds = new Set((hiddenData || []).map(h => h.notification_id))
 
     // Fetch confessions (confessions, ama, anonymous)
-    // Note: We used to filter by .eq("is_hidden", false) but now we use the separate table
-    // However, we still respect the local is_hidden if it was used for admin/soft-delete purposes
     const confessionsPromise = supabase
         .from("confessions")
         .select("*")
@@ -46,9 +44,9 @@ export default async function NotificationsPage() {
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(20)
+        .limit(50)
 
-    // Fetch lobbies hosted by the user (for lobby events)
+    // Fetch lobbies where user is a participant
     const lobbiesPromise = supabase
         .from("tod_participants")
         .select("lobby_id")
@@ -59,18 +57,28 @@ export default async function NotificationsPage() {
     const hotSeatPromise = supabase
         .from("hot_seat_questions")
         .select("*, session:hot_seat_sessions!inner(host_id, name, slug)")
-        .eq("session.host_id", user.id) // This works with !inner join filtering
+        .eq("session.host_id", user.id)
         .order("created_at", { ascending: false })
         .limit(20)
 
-    const [confessionsRes, dykmRes, lobbiesRes, profileRes, xpRes, hotSeatRes] = await Promise.all([
+    // Fetch my read statuses for shared notifications
+    const readStatusPromise = supabase
+        .from("notification_reads")
+        .select("notification_id")
+        .eq("user_id", user.id)
+        .eq("notification_type", "lobby_event")
+
+    const [confessionsRes, dykmRes, lobbiesRes, profileRes, xpRes, hotSeatRes, readStatusRes] = await Promise.all([
         confessionsPromise,
         dykmScoresPromise,
         lobbiesPromise,
         supabase.from("profiles").select("is_pro, username").eq("id", user.id).single(),
         xpPromise,
-        hotSeatPromise
+        hotSeatPromise,
+        readStatusPromise
     ])
+
+    const readLobbyIds = new Set((readStatusRes.data || []).map(r => r.notification_id))
 
     let lobbyEvents: any[] = []
     if (lobbiesRes.data && lobbiesRes.data.length > 0) {
@@ -80,11 +88,13 @@ export default async function NotificationsPage() {
             .select("*, profiles(username), tod_lobbies(status, name)")
             .in("lobby_id", lobbyIds)
             .eq("message_type", "system")
-            // .eq("is_hidden", false) // tod_messages might not have is_hidden or it might be shared. We rely on hidden_notifications table.
             .order("created_at", { ascending: false })
-            .limit(50) // Increased limit to account for filtered items
+            .limit(50)
 
-        lobbyEvents = events || []
+        lobbyEvents = (events || []).map(e => ({
+            ...e,
+            is_read: readLobbyIds.has(e.id)
+        }))
     }
 
     // Filter out hidden notifications

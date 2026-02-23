@@ -159,13 +159,13 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
       <main className="max-w-xl mx-auto px-4 py-8 space-y-8 relative z-10">
 
         {/* Hero Section */}
-        <section className="relative overflow-hidden bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-[2.5rem] p-8 md:p-10 shadow-xl border border-slate-100 dark:border-white/10 transition-all group">
+        <section className="relative overflow-hidden bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-[2.5rem] p-6 md:p-8 shadow-xl border border-slate-100 dark:border-white/10 transition-all group">
           {/* Decorative Gradients */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-purple-500/20 transition-colors" />
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -ml-16 -mb-16 group-hover:bg-indigo-500/20 transition-colors" />
 
           {/* Profile Section - Centered for Modern Look */}
-          <div className="flex flex-col items-center gap-4 mb-8">
+          <div className="flex flex-col items-center gap-3 mb-6">
             <div className="relative group/avatar">
               <div className="absolute inset-0 bg-gradient-to-br from-purple-400 to-indigo-600 rounded-full blur-md opacity-20 group-hover/avatar:opacity-40 transition-opacity" />
               {profile.avatar_url ? (
@@ -183,7 +183,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
             </div>
             <div className="text-center">
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-                Welcome back, {profile.display_name || profile.username}!
+                Welcome back
               </h1>
               <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
                 @{profile.username}
@@ -192,11 +192,11 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
           </div>
 
           {/* Content */}
-          <div className="text-center space-y-6">
+          <div className="text-center space-y-4">
             <div className="space-y-2">
               <h2 className="text-lg font-bold text-slate-800 dark:text-white/90">Your Anonymous link</h2>
               <p className="text-slate-500 dark:text-white/60 text-xs max-w-[280px] mx-auto leading-relaxed">
-                Send this link to friends to receive anonymous confessions, feedback, and honest thoughts!
+                Send this link to friends to receive anonymous messages
               </p>
             </div>
 
@@ -489,7 +489,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                   <div className="space-y-2">
                     <input
                       placeholder="e.g. What is my favorite color?"
-                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.question}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -499,7 +499,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     />
                     <input
                       placeholder="Hint (optional but recommended)"
-                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.hint}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -509,7 +509,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     />
                     <input
                       placeholder="Correct Answer"
-                      className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.answer}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -526,7 +526,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
               <button
                 onClick={handleSaveDykm}
                 disabled={isSavingDykm}
-                className="w-full py-4 bg-slate-900 dark:bg-purple-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-800 dark:hover:bg-purple-700 transition active:scale-95 disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-purple-500/20"
+                className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-blue-500/20"
               >
                 {isSavingDykm ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                 Save Quiz

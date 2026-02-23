@@ -12,6 +12,7 @@ type Profile = {
   id: string;
   username: string | null;
   slug: string | null;
+  avatar_url?: string | null;
   is_pro?: boolean;
 };
 
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Fire-and-forget background sync
         supabase
           .from("profiles")
-          .select("id, username, slug, is_pro")
+          .select("id, username, slug, is_pro, avatar_url")
           .eq("id", userId)
           .maybeSingle()
           .then(({ data }) => {
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 2. No cache — fetch from Supabase
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, slug, is_pro")
+        .select("id, username, slug, is_pro, avatar_url")
         .eq("id", userId)
         .maybeSingle();
 

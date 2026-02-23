@@ -12,7 +12,7 @@ import { formatDistanceToNow } from "@/lib/utils"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { markConfessionAsRead } from "@/actions/confessions"
-import { hideNotification } from "@/actions/notifications"
+import { hideNotification, markNotificationAsRead, markAllNotificationsAsRead } from "@/actions/notifications"
 import { revealDYKMRespondent } from "@/actions/reveal"
 import { useRouter } from "next/navigation"
 import { db } from '@/lib/db'
@@ -180,8 +180,16 @@ export default function NotificationsClient({
     }, [profileId, supabase, hotSeatSessionIds])
 
     const handleSelectMessage = async (item: any) => {
-        if (item.type === 'message' && !item.is_read) {
-            await markConfessionAsRead(item.id)
+        // Mark as read if unread
+        if (!item.is_read) {
+            // Optimistic UI update
+            if (item.type === 'message') setConfessions(prev => prev.map(c => c.id === item.id ? { ...c, is_read: true } : c))
+            else if (item.type === 'dykm') setDykmScores(prev => prev.map(s => s.id === item.id ? { ...s, is_read: true } : s))
+            else if (item.type === 'xp') setXpTransactions(prev => prev.map(x => x.id === item.id ? { ...x, is_read: true } : x))
+            else if (item.type === 'hot_seat') setHotSeatQuestions(prev => prev.map(q => q.id === item.id ? { ...q, is_read: true } : q))
+            else if (item.type === 'lobby') setLobbyEvents(prev => prev.map(l => l.id === item.id ? { ...l, is_read: true } : l))
+
+            await markNotificationAsRead(item.id, item.type as any)
         }
 
         if (item.type === 'message') {
@@ -207,6 +215,22 @@ export default function NotificationsClient({
             router.push('/tod')
         } else if (item.type === 'dykm') {
             router.push(`/dykm/results/${item.id}`)
+        }
+    }
+
+    const handleMarkAllRead = async () => {
+        // Optimistic UI update
+        setConfessions(prev => prev.map(c => ({ ...c, is_read: true })))
+        setDykmScores(prev => prev.map(s => ({ ...s, is_read: true })))
+        setXpTransactions(prev => prev.map(x => ({ ...x, is_read: true })))
+        setHotSeatQuestions(prev => prev.map(q => ({ ...q, is_read: true })))
+        setLobbyEvents(prev => prev.map(l => ({ ...l, is_read: true })))
+
+        const result = await markAllNotificationsAsRead()
+        if (result.success) {
+            toast.success("All notifications marked as read")
+        } else {
+            toast.error("Failed to mark all as read")
         }
     }
 
@@ -351,7 +375,13 @@ export default function NotificationsClient({
                 <Link href="/dashboard" className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
                     <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
                 </Link>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white">Notifications</h1>
+                <h1 className="text-xl font-bold text-slate-900 dark:text-white flex-1">Notifications</h1>
+                <button
+                    onClick={handleMarkAllRead}
+                    className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 px-3 py-2 rounded-xl transition-colors"
+                >
+                    Mark all as read
+                </button>
             </div>
 
             <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
@@ -383,11 +413,14 @@ export default function NotificationsClient({
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     onClick={() => handleSelectMessage(item)}
-                                    className={`relative p-4 rounded-2xl shadow-sm group transition-all cursor-pointer active:scale-[0.98] border ${item.type === 'dykm'
-                                        ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-500/20 hover:border-blue-400"
-                                        : "bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border-slate-200 dark:border-white/10 hover:border-purple-300 dark:hover:border-purple-500/30"
-                                        }`}
+                                    className={`relative p-4 rounded-2xl shadow-sm group transition-all cursor-pointer active:scale-[0.98] border ${item.is_read
+                                        ? "bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md border-slate-200 dark:border-white/10 hover:border-purple-300 dark:hover:border-purple-500/30"
+                                        : "bg-purple-50/50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-500/30 hover:border-purple-400"
+                                        } ${item.type === 'dykm' && item.is_read ? "bg-blue-50/30 dark:bg-blue-900/5 border-blue-100 dark:border-blue-500/10" : ""}`}
                                 >
+                                    {!item.is_read && (
+                                        <div className="absolute top-4 left-2 w-1.5 h-1.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
+                                    )}
                                     <button
                                         onClick={(e) => handleHide(e, item)}
                                         className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 z-10"

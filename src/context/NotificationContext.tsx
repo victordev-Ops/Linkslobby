@@ -51,7 +51,7 @@ export function NotificationProvider({
       return
     }
 
-    const [sessionsRes, confRes, dykmRes] = await Promise.all([
+    const [sessionsRes, confRes, dykmRes, xpRes, hotSeatRes] = await Promise.all([
       getSessions(),
       supabase
         .from('confessions')
@@ -62,19 +62,31 @@ export function NotificationProvider({
         .from('dykm_scores')
         .select('*', { count: 'exact', head: true })
         .eq('quiz_owner_id', profileId)
+        .eq('is_read', false),
+      supabase
+        .from('xp_transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', profileId)
+        .eq('is_read', false),
+      supabase
+        .from('hot_seat_questions')
+        .select('*, session:hot_seat_sessions!inner(host_id)')
+        .eq('session.host_id', profileId)
         .eq('is_read', false)
     ])
 
-    if (confRes.error || dykmRes.error) {
-      console.error('Error fetching unread counts:', confRes.error || dykmRes.error)
+    if (confRes.error || dykmRes.error || xpRes.error) {
+      console.error('Error fetching unread counts:', confRes.error || dykmRes.error || xpRes.error)
       return
     }
+
+    const hotSeatCount = hotSeatRes.data?.length || 0
 
     const chatUnread = sessionsRes.success && sessionsRes.data
       ? (sessionsRes.data as any[]).reduce((acc, s) => acc + (s.unread_count || 0), 0)
       : 0
 
-    setUnreadCount((confRes.count || 0) + (dykmRes.count || 0) + chatUnread)
+    setUnreadCount((confRes.count || 0) + (dykmRes.count || 0) + (xpRes.count || 0) + hotSeatCount + chatUnread)
     setUnreadMessagesCount((confRes.count || 0) + chatUnread)
   }, [profileId, supabase])
 
@@ -225,23 +237,24 @@ export function NotificationProvider({
         refreshUnreadCount()
       })
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
-        table: 'dykm_scores',
-        filter: `quiz_owner_id=eq.${profileId}`
+        table: 'xp_transactions',
+        filter: `user_id=eq.${profileId}`
       }, () => {
         refreshUnreadCount()
       })
       .on('postgres_changes', {
-        event: 'DELETE',
+        event: '*',
         schema: 'public',
-        table: 'confessions',
-        filter: `profile_id=eq.${profileId}`
+        table: 'hot_seat_questions'
       }, () => {
+        // Since we can't easily filter by host_id in realtime without a view or join
+        // we just refresh unread count on any question insert/update, it's efficient enough.
         refreshUnreadCount()
       })
       .on('postgres_changes', {
-        event: 'DELETE',
+        event: '*',
         schema: 'public',
         table: 'dykm_scores',
         filter: `quiz_owner_id=eq.${profileId}`

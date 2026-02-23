@@ -7,17 +7,18 @@ export default async function SettingsPage() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  let avatarUrl: string | null = null
   let username = 'Anonymous'
   let initialPushEnabled = false
   let restrictedWords: string[] = []
-  let blockedUsers: Awaited<ReturnType<typeof getBlockedUsers>> = []
-  let blockedAnonymous: Awaited<ReturnType<typeof getBlockedAnonymous>> = []
+  let blockedUsers: any[] = []
+  let blockedAnonymous: any[] = []
 
   if (user) {
     const [profileResult, blockedResult, blockedAnonResult] = await Promise.all([
       supabase
         .from('profiles')
-        .select('username, push_subscription, restricted_words')
+        .select('username, push_subscription, restricted_words, avatar_url')
         .eq('id', user.id)
         .single(),
       getBlockedUsers(),
@@ -30,12 +31,14 @@ export default async function SettingsPage() {
     restrictedWords = data?.restricted_words || []
     blockedUsers = blockedResult
     blockedAnonymous = blockedAnonResult
+    avatarUrl = data?.avatar_url
   }
 
   return (
     <SettingsClient
       initialUser={user}
       initialUsername={username}
+      initialAvatarUrl={avatarUrl}
       initialPushEnabled={initialPushEnabled}
       initialRestrictedWords={restrictedWords}
       initialBlockedUsers={blockedUsers}

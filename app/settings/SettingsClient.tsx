@@ -17,6 +17,7 @@ import type { BlockedUser, BlockedAnonymous } from "@/actions/blocked-users"
 interface SettingsClientProps {
   initialUser: any
   initialUsername: string
+  initialAvatarUrl?: string | null
   initialPushEnabled: boolean
   initialRestrictedWords: string[]
   initialBlockedUsers: BlockedUser[]
@@ -26,6 +27,7 @@ interface SettingsClientProps {
 export default function SettingsClient({
   initialUser,
   initialUsername,
+  initialAvatarUrl,
   initialPushEnabled,
   initialRestrictedWords,
   initialBlockedUsers,
@@ -33,6 +35,7 @@ export default function SettingsClient({
 }: SettingsClientProps) {
   const user = initialUser
   const username = initialUsername
+  const avatarUrl = initialAvatarUrl
   const router = useRouter()
 
   // Restricted words state
@@ -154,13 +157,21 @@ export default function SettingsClient({
             <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl sm:rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all hover:shadow-md">
               <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
                 <div className="relative">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg ring-4 ring-white dark:ring-[#1a1429]">
-                    <span className="text-2xl sm:text-3xl font-black italic">
-                      {user && username ? username.charAt(0).toUpperCase() : "?"}
-                    </span>
-                  </div>
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={username}
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white dark:border-[#1a1429] object-cover relative z-10 shadow-lg"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg ring-4 ring-white dark:ring-[#1a1429]">
+                      <span className="text-2xl sm:text-3xl font-black italic">
+                        {user && username ? username.charAt(0).toUpperCase() : "?"}
+                      </span>
+                    </div>
+                  )}
                   {user && (
-                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 rounded-full border-4 border-white dark:border-[#1a1429] flex items-center justify-center">
+                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 rounded-full border-4 border-white dark:border-[#1a1429] flex items-center justify-center z-20">
                       <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                     </div>
                   )}
