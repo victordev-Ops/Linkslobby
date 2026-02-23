@@ -111,7 +111,7 @@ export default function HotSeatListClient({ profile, sessions }: HotSeatListClie
             </div>
 
             {/* Session List */}
-            <div className="max-w-xl mx-auto px-4 py-6 space-y-3">
+            <div className="max-w-xl mx-auto px-4 py-6 pb-24 space-y-3">
                 {sessions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
                         <div className="w-20 h-20 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
@@ -155,8 +155,13 @@ export default function HotSeatListClient({ profile, sessions }: HotSeatListClie
 
             {/* Create Session Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-xl">
-                    <div className="bg-[#0f0a1e] border border-amber-500/10 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl max-h-[85dvh] flex flex-col animate-in slide-in-from-bottom-4 duration-300">
+                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-xl">
+                    <div className="bg-[#0f0a1e] border border-amber-500/10 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl max-h-[85dvh] flex flex-col animate-in slide-in-from-bottom-4 duration-300 pb-[env(safe-area-inset-bottom)] sm:pb-0">
+                        {/* Drag Handle for Mobile */}
+                        <div className="flex justify-center pt-3 sm:hidden shrink-0">
+                            <div className="w-12 h-1.5 bg-white/10 rounded-full" />
+                        </div>
+
                         <div className="p-5 sm:p-6 border-b border-amber-500/10 flex items-center justify-between shrink-0">
                             <div>
                                 <h3 className="text-xl font-black text-white tracking-tight flex items-center gap-2">

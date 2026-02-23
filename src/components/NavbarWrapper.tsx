@@ -17,6 +17,7 @@ export default function NavbarWrapper() {
             "/auth",
             "/fullscreen",
             "/tod",
+            "/ama",
             "/", // Hide on root page
         ];
 
@@ -28,6 +29,8 @@ export default function NavbarWrapper() {
             pathname.startsWith("/auth/") ||
             pathname.startsWith("/tod/") ||
             pathname.startsWith("/anonymous/") ||
+            pathname.startsWith("/dykm/") ||
+            pathname.startsWith("/hot-seat/") ||
             pathname.startsWith("/messages/");
 
         return isExactMatch || isPrefixMatch;
