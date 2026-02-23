@@ -75,6 +75,23 @@ export async function sendMessage(sessionId: string, content: string, replyToId?
 
     if (!user) return { success: false, message: 'Unauthorized' }
 
+    // Check if sender is blocked by any other participant in this session
+    const { data: participants } = await supabase
+        .from('chat_participants')
+        .select('user_id')
+        .eq('session_id', sessionId)
+        .neq('user_id', user.id)
+
+    if (participants && participants.length > 0) {
+        const { isUserBlocked } = await import('@/actions/blocked-users')
+        for (const p of participants) {
+            const blocked = await isUserBlocked(p.user_id, user.id)
+            if (blocked) {
+                return { success: false, message: 'Unable to send message.' }
+            }
+        }
+    }
+
     // 1. Insert Message
     const { data: message, error: msgError } = await supabase
         .from('chat_messages')

@@ -97,6 +97,21 @@ export async function joinLobbyAction(lobbyId: string, isPrivate: boolean) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error("User not authenticated")
 
+        // 0. Check if user is blocked by the lobby host
+        const { data: lobbyCheck } = await supabase
+            .from('tod_lobbies')
+            .select('host_id')
+            .eq('id', lobbyId)
+            .single()
+
+        if (lobbyCheck) {
+            const { isUserBlocked } = await import('@/actions/blocked-users')
+            const blocked = await isUserBlocked(lobbyCheck.host_id, user.id)
+            if (blocked) {
+                return { success: false, error: 'You cannot join this lobby.' }
+            }
+        }
+
         // 1. Check if already joined
         const { data: existing } = await supabase
             .from('tod_participants')

@@ -10,6 +10,16 @@ export interface BlockedUser {
     created_at: string
 }
 
+export interface BlockedAnonymous {
+    id: string
+    ip_address: string
+    user_agent: string | null
+    label: string
+    created_at: string
+}
+
+// ─── Authenticated User Blocking ───
+
 export async function getBlockedUsers(): Promise<BlockedUser[]> {
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -71,4 +81,123 @@ export async function unblockUser(targetId: string) {
 
     revalidatePath('/settings')
     return { success: true }
+}
+
+/** Check if senderId is blocked by recipientId */
+export async function isUserBlocked(recipientId: string, senderId: string): Promise<boolean> {
+    const supabase = await createSupabaseServerClient()
+    const { data } = await supabase
+        .from('blocked_users')
+        .select('id')
+        .eq('blocker_id', recipientId)
+        .eq('blocked_id', senderId)
+        .maybeSingle()
+
+    return !!data
+}
+
+// ─── Anonymous Sender Blocking (IP + UA) ───
+
+export async function getBlockedAnonymous(): Promise<BlockedAnonymous[]> {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const { data, error } = await supabase
+        .from('blocked_anonymous')
+        .select('id, ip_address, user_agent, label, created_at')
+        .eq('blocker_id', user.id)
+        .order('created_at', { ascending: false })
+
+    if (error) {
+        console.error('getBlockedAnonymous error:', error)
+        return []
+    }
+
+    return data || []
+}
+
+/**
+ * Block an anonymous sender by extracting their IP + UA from a confession's metadata.
+ * Called from the MessageViewClient report modal.
+ */
+export async function blockAnonymousSender(confessionId: string) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    // Fetch the confession and extract metadata
+    const { data: confession } = await supabase
+        .from('confessions')
+        .select('message, profile_id')
+        .eq('id', confessionId)
+        .single()
+
+    if (!confession) return { success: false, error: 'Message not found' }
+    if (confession.profile_id !== user.id) return { success: false, error: 'Not your message' }
+
+    // Parse [META:...] from message
+    const metaMatch = confession.message.match(/\[META:(.*)\]$/s)
+    if (!metaMatch?.[1]) return { success: false, error: 'No sender data available' }
+
+    let meta: { ip?: string; ua?: string }
+    try {
+        meta = JSON.parse(metaMatch[1])
+    } catch {
+        return { success: false, error: 'Could not parse sender data' }
+    }
+
+    if (!meta.ip || meta.ip === 'unknown') return { success: false, error: 'No IP data for this sender' }
+
+    const { error } = await supabase
+        .from('blocked_anonymous')
+        .upsert({
+            blocker_id: user.id,
+            ip_address: meta.ip,
+            user_agent: meta.ua || null,
+            label: `Anonymous (${meta.ip.slice(-4)})`,
+        }, { onConflict: 'blocker_id,ip_address', ignoreDuplicates: true })
+
+    if (error) {
+        console.error('blockAnonymousSender error:', error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath('/settings')
+    return { success: true }
+}
+
+export async function unblockAnonymous(id: string) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    const { error } = await supabase
+        .from('blocked_anonymous')
+        .delete()
+        .eq('id', id)
+        .eq('blocker_id', user.id)
+
+    if (error) {
+        console.error('unblockAnonymous error:', error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath('/settings')
+    return { success: true }
+}
+
+/** Check if an anonymous sender (by IP) is blocked by a specific user */
+export async function isAnonymousBlocked(blockerId: string, ip: string): Promise<boolean> {
+    if (!ip || ip === 'unknown') return false
+
+    const supabase = await createSupabaseServerClient()
+    const { data } = await supabase
+        .from('blocked_anonymous')
+        .select('id')
+        .eq('blocker_id', blockerId)
+        .eq('ip_address', ip)
+        .maybeSingle()
+
+    return !!data
 }

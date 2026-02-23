@@ -7,11 +7,11 @@ import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home, Shield, Trash2, X, Plus
 import PushToggle from "@/components/PushToggle"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { updateRestrictedWords } from "@/actions/profile"
-import { unblockUser } from "@/actions/blocked-users"
+import { unblockUser, unblockAnonymous } from "@/actions/blocked-users"
 import { deleteAccount } from "@/actions/auth"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import type { BlockedUser } from "@/actions/blocked-users"
+import type { BlockedUser, BlockedAnonymous } from "@/actions/blocked-users"
 
 interface SettingsClientProps {
   initialUser: any
@@ -19,6 +19,7 @@ interface SettingsClientProps {
   initialPushEnabled: boolean
   initialRestrictedWords: string[]
   initialBlockedUsers: BlockedUser[]
+  initialBlockedAnonymous: BlockedAnonymous[]
 }
 
 export default function SettingsClient({
@@ -27,6 +28,7 @@ export default function SettingsClient({
   initialPushEnabled,
   initialRestrictedWords,
   initialBlockedUsers,
+  initialBlockedAnonymous,
 }: SettingsClientProps) {
   const user = initialUser
   const username = initialUsername
@@ -40,6 +42,10 @@ export default function SettingsClient({
   // Blocked users state
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>(initialBlockedUsers)
   const [unblockingId, setUnblockingId] = useState<string | null>(null)
+
+  // Blocked anonymous state
+  const [blockedAnon, setBlockedAnon] = useState<BlockedAnonymous[]>(initialBlockedAnonymous)
+  const [unblockingAnonId, setUnblockingAnonId] = useState<string | null>(null)
 
   // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -77,6 +83,18 @@ export default function SettingsClient({
       toast.error("Failed to unblock user")
     }
     setUnblockingId(null)
+  }
+
+  const handleUnblockAnonymous = async (id: string) => {
+    setUnblockingAnonId(id)
+    const result = await unblockAnonymous(id)
+    if (result.success) {
+      setBlockedAnon(prev => prev.filter(a => a.id !== id))
+      toast.success("Anonymous sender unblocked")
+    } else {
+      toast.error("Failed to unblock")
+    }
+    setUnblockingAnonId(null)
   }
 
   const handleDeleteAccount = async () => {
@@ -295,6 +313,53 @@ export default function SettingsClient({
                           className="text-xs font-bold text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors px-3 py-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-500/10 active:scale-95 disabled:opacity-50"
                         >
                           {unblockingId === bu.blocked_id ? <Loader2 size={14} className="animate-spin" /> : 'Unblock'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Blocked Anonymous Senders Card */}
+            {user && (
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                    <Shield size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white">Blocked Senders</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">{blockedAnon.length} anonymous blocked</p>
+                  </div>
+                </div>
+
+                {blockedAnon.length === 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-gray-600 italic">No anonymous senders blocked.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {blockedAnon.map(ba => (
+                      <div
+                        key={ba.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-black text-sm">
+                            ?
+                          </div>
+                          <div>
+                            <span className="font-bold text-sm text-gray-900 dark:text-white">{ba.label}</span>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-600">
+                              {new Date(ba.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleUnblockAnonymous(ba.id)}
+                          disabled={unblockingAnonId === ba.id}
+                          className="text-xs font-bold text-orange-500 hover:text-orange-700 dark:hover:text-orange-300 transition-colors px-3 py-1.5 rounded-xl hover:bg-orange-50 dark:hover:bg-orange-500/10 active:scale-95 disabled:opacity-50"
+                        >
+                          {unblockingAnonId === ba.id ? <Loader2 size={14} className="animate-spin" /> : 'Unblock'}
                         </button>
                       </div>
                     ))}

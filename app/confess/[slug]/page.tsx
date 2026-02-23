@@ -30,6 +30,13 @@ export async function sendConfessionAction(profileId: string, formData: FormData
   const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
   const referrer = headersList.get('referer') || 'direct'
 
+  // Check if this anonymous sender is blocked by the recipient
+  const { isAnonymousBlocked } = await import('@/actions/blocked-users')
+  const blocked = await isAnonymousBlocked(profileId, ip)
+  if (blocked) {
+    return { error: 'Unable to deliver your message.' }
+  }
+
   const metadata = JSON.stringify({ ua, lang, ip, t: Date.now(), ref: referrer })
   const messageWithMeta = `${message}\n\n[META:${metadata}]`
 

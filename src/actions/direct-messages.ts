@@ -15,6 +15,13 @@ export async function sendDirectMessage(targetUserId: string, content: string, i
 
         console.log(`Send DM: User ${user.id} sending to ${targetUserId}`)
 
+        // Check if sender is blocked by recipient
+        const { isUserBlocked } = await import('@/actions/blocked-users')
+        const blocked = await isUserBlocked(targetUserId, user.id)
+        if (blocked) {
+            return { success: false, error: 'Unable to send message to this user.' }
+        }
+
         // Insert Message into Confessions table
         // We use profile_id for recipient and sender_id for the sender
         const { data, error } = await supabase

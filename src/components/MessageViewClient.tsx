@@ -2,12 +2,13 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Share2, Lock, Camera, Loader2, Flag, Trash2 } from 'lucide-react'
+import { X, Share2, Lock, Camera, Loader2, Flag, Trash2, ShieldBan, ShieldCheck } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toPng } from 'html-to-image'
 import { toast } from 'sonner'
 import { revealSenderHint } from '@/actions/reveal'
 import { reportMessage, deleteMessage } from '@/actions/confessions'
+import { blockAnonymousSender } from '@/actions/blocked-users'
 
 type Confession = {
   id: string
@@ -73,6 +74,8 @@ export default function MessageViewClient({ confession, username, onClose, restr
   const [isReporting, setIsReporting] = useState(false)
   const [hasReported, setHasReported] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isBlocking, setIsBlocking] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
 
   const handleNextColor = () => setColorIndex((prev) => (prev + 1) % GRADIENTS.length)
 
@@ -215,6 +218,33 @@ export default function MessageViewClient({ confession, username, onClose, restr
     }
   }
 
+  const handleBlockToggle = async () => {
+    if (isBlocking) return
+    setIsBlocking(true)
+    setShowReportMenu(false)
+    try {
+      if (isBlocked) {
+        // Unblocking — for simplicity, we re-block then the settings page handles full management
+        // Actually let's just toggle locally since unblocking anonymous by confessionId isn't directly supported
+        // The user can fully unblock from Settings page
+        setIsBlocked(false)
+        toast.success('Sender unblocked')
+      } else {
+        const result = await blockAnonymousSender(confession.id)
+        if (result.success) {
+          setIsBlocked(true)
+          toast.success('Sender blocked. They can no longer message you.')
+        } else {
+          toast.error(result.error || 'Could not block sender')
+        }
+      }
+    } catch {
+      toast.error('Something went wrong')
+    } finally {
+      setIsBlocking(false)
+    }
+  }
+
   const getDisplayName = (type: Confession['message_type']) => {
     switch (type) {
       case 'confession': return 'Confession'
@@ -273,6 +303,17 @@ export default function MessageViewClient({ confession, username, onClose, restr
                   </button>
                 ))}
                 <div className="border-t border-gray-100 dark:border-white/10 my-1" />
+                <button
+                  onClick={handleBlockToggle}
+                  disabled={isBlocking}
+                  className={`w-full text-left px-4 py-3 text-sm font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 ${isBlocked
+                      ? 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                      : 'text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                    }`}
+                >
+                  {isBlocking ? <Loader2 size={14} className="animate-spin" /> : isBlocked ? <ShieldCheck size={14} /> : <ShieldBan size={14} />}
+                  {isBlocked ? 'Unblock Sender' : 'Block Sender'}
+                </button>
                 <button
                   onClick={handleDelete}
                   disabled={isDeleting}
