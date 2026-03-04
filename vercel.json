@@ -27,6 +27,14 @@
     {
       "source": "/api/webhooks/confession",
       "destination": "/api/webhooks/confession"
+    },
+    {
+      "source": "/api/webhooks/stripe",
+      "destination": "/api/webhooks/stripe"
+    },
+    {
+      "source": "/api/webhooks/paystack",
+      "destination": "/api/webhooks/paystack"
     }
   ]
 }

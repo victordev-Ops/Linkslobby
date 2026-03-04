@@ -91,6 +91,7 @@ export default function InboxClient({
   userId: string
   username: string
   restrictedWords?: string[]
+  showWatermark?: boolean
 }) {
   const [confessions, setConfessions] = useState<Confession[]>(initialConfessions)
   const [sessions, setSessions] = useState<ChatSession[]>([])
@@ -644,6 +645,7 @@ export default function InboxClient({
               username={username}
               onClose={closeMessage}
               restrictedWords={restrictedWords}
+              showWatermark={showWatermark}
               onDeleted={() => handleDeleted(selectedConfession.id)}
             />
           </motion.div>

@@ -25,6 +25,7 @@ type Props = {
   onClose?: () => void
   restrictedWords?: string[]
   onDeleted?: () => void
+  showWatermark?: boolean
 }
 
 function stripMetadata(message: string): string {
@@ -60,7 +61,7 @@ const GRADIENTS = [
 
 const REPORT_REASONS = ['Spam', 'Harassment', 'Inappropriate', 'Other']
 
-export default function MessageViewClient({ confession, username, onClose, restrictedWords = [], onDeleted }: Props) {
+export default function MessageViewClient({ confession, username, onClose, restrictedWords = [], onDeleted, showWatermark = true }: Props) {
   const router = useRouter()
   const shareWrapperRef = useRef<HTMLDivElement>(null)
 
@@ -307,8 +308,8 @@ export default function MessageViewClient({ confession, username, onClose, restr
                   onClick={handleBlockToggle}
                   disabled={isBlocking}
                   className={`w-full text-left px-4 py-3 text-sm font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 ${isBlocked
-                      ? 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                      : 'text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                    ? 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    : 'text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
                     }`}
                 >
                   {isBlocking ? <Loader2 size={14} className="animate-spin" /> : isBlocked ? <ShieldCheck size={14} /> : <ShieldBan size={14} />}
@@ -354,11 +355,13 @@ export default function MessageViewClient({ confession, username, onClose, restr
                 <p className={`text-center text-gray-800 font-bold break-words whitespace-pre-wrap w-full ${textSizeClass}`}>
                   {renderWithBlur(cleanedMessage, restrictedWords)}
                 </p>
-                <div className="mt-12 flex items-center gap-1.5 opacity-30">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                    say-app.com/confess/{username}
-                  </span>
-                </div>
+                {showWatermark && (
+                  <div className="mt-12 flex items-center gap-1.5 opacity-30">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                      say-app.com/confess/{username}
+                    </span>
+                  </div>
+                )}
 
                 {hint && (
                   <motion.div

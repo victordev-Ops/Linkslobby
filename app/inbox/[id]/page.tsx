@@ -39,7 +39,7 @@ export default async function MessageViewPage({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('username, slug, restricted_words')
+    .select('username, slug, restricted_words, show_watermark')
     .eq('id', user.id)
     .single()
 
@@ -51,6 +51,7 @@ export default async function MessageViewPage({
       confession={confession}
       username={username}
       restrictedWords={restrictedWords}
+      showWatermark={profile?.show_watermark ?? true}
     />
   )
 }

@@ -42,7 +42,7 @@ async function ConfessionsLoader({
       .limit(50),
     supabase
       .from('profiles')
-      .select('username, slug, restricted_words')
+      .select('username, slug, restricted_words, show_watermark')
       .eq('id', userId)
       .single()
   ])
@@ -62,6 +62,7 @@ async function ConfessionsLoader({
   // Determine the display name for the share cards
   const username = profileRes.data?.username || profileRes.data?.slug || 'user'
   const restrictedWords: string[] = profileRes.data?.restricted_words || []
+  const showWatermark = profileRes.data?.show_watermark ?? true
 
   return (
     <InboxClient
@@ -69,6 +70,7 @@ async function ConfessionsLoader({
       userId={userId}
       username={username}
       restrictedWords={restrictedWords}
+      showWatermark={showWatermark}
     />
   )
 }

@@ -230,3 +230,21 @@ export async function updateRestrictedWords(words: string[]) {
     return { success: true, words: cleaned }
 }
 
+export async function updateWatermarkSetting(enabled: boolean) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({ show_watermark: enabled })
+        .eq('id', user.id)
+
+    if (error) {
+        console.error('updateWatermarkSetting error:', error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath('/settings')
+    return { success: true, enabled }
+}

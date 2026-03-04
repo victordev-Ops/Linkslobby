@@ -4,7 +4,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Users, UserPlus, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2, LayoutGrid, ChevronLeft, LogOut, MoreVertical } from "lucide-react";
+import { Loader2, AlertCircle, Users, Share2, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2, LayoutGrid, ChevronLeft, LogOut, MoreVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
@@ -175,10 +175,28 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     }
   }, [isBanned, isLoading, router]);
 
-  const copyInviteLink = () => {
+  const copyInviteLink = async () => {
     const url = window.location.href;
-    navigator.clipboard.writeText(url);
-    toast.success("Link copied! Share with friends 🎉");
+    const shareData = {
+      title: `Join my Truth or Dare game! 🔥`,
+      text: `Come play Truth or Dare with me on Say! 🎉`,
+      url,
+    };
+
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied! Share with friends 🎉");
+      }
+    } catch (err: any) {
+      // User cancelled share dialog — not an error
+      if (err?.name !== 'AbortError') {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied! Share with friends 🎉");
+      }
+    }
   };
 
   const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
@@ -575,7 +593,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                         onClick={copyInviteLink}
                         className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 rounded-xl transition-colors text-left w-full"
                       >
-                        <UserPlus size={16} className="text-orange-400" />
+                        <Share2 size={16} className="text-orange-400" />
                         Invite Friends
                       </button>
 

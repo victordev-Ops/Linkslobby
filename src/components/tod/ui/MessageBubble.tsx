@@ -1,5 +1,5 @@
 // src/components/tod/ui/MessageBubble.tsx
-import { User, CheckCheck, Clock, Image as ImageIcon, Reply, X } from 'lucide-react';
+import { User, CheckCheck, Clock, Image as ImageIcon, Reply, X, Skull, Flame, Sparkles, Mic } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Lightbox } from './Lightbox';
 
@@ -134,6 +134,10 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
     const modeGradient = message.message_type === 'truth'
       ? 'from-blue-500 to-cyan-500'
       : 'from-orange-500 to-red-500';
+    const modeEmoji = message.message_type === 'truth' ? '😬' : '🔥';
+    const modeSubtitle = message.message_type === 'truth'
+      ? 'no cap, answer honestly 👀'
+      : 'you better not skip 💀';
 
     return (
       <div
@@ -170,15 +174,16 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
               {/* Header */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${modeGradient} flex items-center justify-center`}>
-                    <User size={16} className="text-white" />
+                  <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${modeGradient} flex items-center justify-center text-lg`}>
+                    {modeEmoji}
                   </div>
                   <div>
                     <p className="text-white font-bold text-sm">
                       {isOwn ? 'You' : (message.profiles?.username || 'Anonymous')}
                     </p>
-                    <p className={`text-xs font-bold uppercase ${message.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
+                    <p className={`text-xs font-black uppercase tracking-wider flex items-center gap-1 ${message.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
                       }`}>
+                      {message.message_type === 'truth' ? <Skull size={10} /> : <Flame size={10} />}
                       {message.message_type}
                     </p>
                   </div>
@@ -204,7 +209,10 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
               </div>
 
               {/* Question Content */}
-              <div className="bg-slate-800/50 rounded-xl p-4 mb-3">
+              <div className="bg-slate-800/50 rounded-xl p-4 mb-1">
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${message.message_type === 'truth' ? 'text-blue-400/60' : 'text-orange-400/60'}`}>
+                  {modeSubtitle}
+                </p>
                 {(() => {
                   const replyData = parseReply(message.content);
                   if (replyData) {
@@ -245,13 +253,17 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
 
               {/* Answer Section */}
               {answerMessage && (
-                <div className="bg-slate-800/80 border border-slate-700/50 rounded-xl p-4">
+                <div className={`bg-gradient-to-br ${message.message_type === 'truth' ? 'from-emerald-500/5 to-teal-500/5 border-emerald-500/20' : 'from-amber-500/5 to-orange-500/5 border-amber-500/20'} border rounded-xl p-4 mt-2`}>
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
-                      <CheckCheck size={12} className="text-white" />
+                      <Mic size={12} className="text-white" />
                     </div>
-                    <p className="text-xs font-bold text-green-400 uppercase">
-                      Answer from {answerMessage.profiles?.username || 'Anonymous'}
+                    <p className="text-xs font-black text-green-400 uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles size={10} />
+                      {message.message_type === 'truth'
+                        ? `${answerMessage.profiles?.username || 'Anonymous'} spilled the tea ☕`
+                        : `${answerMessage.profiles?.username || 'Anonymous'} did it 💪`
+                      }
                     </p>
                   </div>
                   <p className="text-slate-200 text-sm leading-relaxed whitespace-pre-wrap break-words">

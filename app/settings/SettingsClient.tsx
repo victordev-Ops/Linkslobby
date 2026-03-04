@@ -3,15 +3,17 @@
 import { useState, useRef, useTransition } from "react"
 import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
-import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home, Shield, Trash2, X, Plus, UserX, AlertTriangle, Loader2 } from "lucide-react"
+import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home, Shield, Trash2, X, Plus, UserX, AlertTriangle, Loader2, Smartphone, Check, Crown, Sparkles } from "lucide-react"
 import PushToggle from "@/components/PushToggle"
 import { ThemeToggle } from "@/components/ThemeToggle"
-import { updateRestrictedWords } from "@/actions/profile"
+import { updateRestrictedWords, updateWatermarkSetting } from "@/actions/profile"
 import { unblockUser, unblockAnonymous } from "@/actions/blocked-users"
+import { cancelSubscription, type SubscriptionInfo } from "@/actions/subscription"
 import { deleteAccount } from "@/actions/auth"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useScrollLock } from "@/hooks/useScrollLock"
+import { motion, AnimatePresence } from "framer-motion"
 import type { BlockedUser, BlockedAnonymous } from "@/actions/blocked-users"
 
 interface SettingsClientProps {
@@ -19,9 +21,11 @@ interface SettingsClientProps {
   initialUsername: string
   initialAvatarUrl?: string | null
   initialPushEnabled: boolean
+  initialShowWatermark: boolean
   initialRestrictedWords: string[]
   initialBlockedUsers: BlockedUser[]
   initialBlockedAnonymous: BlockedAnonymous[]
+  initialSubscription?: SubscriptionInfo | null
 }
 
 export default function SettingsClient({
@@ -29,14 +33,20 @@ export default function SettingsClient({
   initialUsername,
   initialAvatarUrl,
   initialPushEnabled,
+  initialShowWatermark,
   initialRestrictedWords,
   initialBlockedUsers,
   initialBlockedAnonymous,
+  initialSubscription,
 }: SettingsClientProps) {
   const user = initialUser
   const username = initialUsername
   const avatarUrl = initialAvatarUrl
   const router = useRouter()
+
+  // Watermark state
+  const [showWatermark, setShowWatermark] = useState(initialShowWatermark)
+  const [isUpdatingWatermark, setIsUpdatingWatermark] = useState(false)
 
   // Restricted words state
   const [words, setWords] = useState<string[]>(initialRestrictedWords)
@@ -51,6 +61,10 @@ export default function SettingsClient({
   const [blockedAnon, setBlockedAnon] = useState<BlockedAnonymous[]>(initialBlockedAnonymous)
   const [unblockingAnonId, setUnblockingAnonId] = useState<string | null>(null)
 
+  // Subscription state
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(initialSubscription || null)
+  const [isCancelling, setIsCancelling] = useState(false)
+
   // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState("")
@@ -58,6 +72,23 @@ export default function SettingsClient({
 
   // Scroll Lock for delete modal
   useScrollLock(showDeleteModal)
+
+  const handleCancelSubscription = async () => {
+    setIsCancelling(true)
+    try {
+      const result = await cancelSubscription()
+      if (result.success) {
+        setSubscription(prev => prev ? { ...prev, cancel_at_period_end: true } : null)
+        toast.success("Subscription will cancel at end of billing period")
+      } else {
+        toast.error(result.error || "Failed to cancel subscription")
+      }
+    } catch {
+      toast.error("Something went wrong")
+    } finally {
+      setIsCancelling(false)
+    }
+  }
 
   const addWord = () => {
     const w = wordInput.toLowerCase().trim()
@@ -144,7 +175,7 @@ export default function SettingsClient({
             </div>
             <span className="hidden sm:inline font-bold text-sm">Dashboard</span>
           </Link>
-          <h1 className="text-xl font-bold dark:text-white tracking-tight">Settings</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Settings</h1>
         </div>
       </div>
 
@@ -193,6 +224,82 @@ export default function SettingsClient({
               </div>
             </div>
 
+            {/* Subscription Card */}
+            {user && (
+              <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <Crown size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white">Subscription</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">
+                      {subscription?.status === 'active' ? 'Pro Plan' : 'Free Plan'}
+                    </p>
+                  </div>
+                </div>
+
+                {subscription && ['active', 'trialing'].includes(subscription.status) ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-500/10 dark:to-yellow-500/5 rounded-2xl border border-amber-200 dark:border-amber-500/20">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Sparkles size={16} className="text-amber-500" />
+                        <span className="text-sm font-black text-amber-700 dark:text-amber-300">Pro Active</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 font-black uppercase tracking-wider mb-0.5">Plan</p>
+                          <p className="font-bold text-gray-900 dark:text-white capitalize">{subscription.plan}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 font-black uppercase tracking-wider mb-0.5">Provider</p>
+                          <p className="font-bold text-gray-900 dark:text-white capitalize">{subscription.provider}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 font-black uppercase tracking-wider mb-0.5">
+                            {subscription.cancel_at_period_end ? 'Expires on' : 'Renews on'}
+                          </p>
+                          <p className="font-bold text-gray-900 dark:text-white">
+                            {subscription.current_period_end
+                              ? new Date(subscription.current_period_end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                              : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {subscription.cancel_at_period_end ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 font-medium text-center">
+                        Your subscription will not renew after the current period.
+                      </p>
+                    ) : (
+                      <button
+                        onClick={handleCancelSubscription}
+                        disabled={isCancelling}
+                        className="w-full py-3 rounded-2xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 font-bold text-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isCancelling ? <Loader2 size={16} className="animate-spin" /> : null}
+                        {isCancelling ? 'Cancelling...' : 'Cancel Subscription'}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                      Unlock premium features with Say Pro
+                    </p>
+                    <Link
+                      href="/upgrade"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-bold text-sm rounded-2xl shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all active:scale-95"
+                    >
+                      <Sparkles size={16} />
+                      Upgrade to Pro
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Appearance Card */}
             <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
               <div className="flex items-center gap-4 mb-6">
@@ -226,6 +333,34 @@ export default function SettingsClient({
                   </div>
                 </div>
                 <PushToggle userId={user.id} initialPushEnabled={initialPushEnabled} />
+
+                <div className="mt-8 pt-8 border-t dark:border-white/10 space-y-4">
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 font-black uppercase tracking-[0.2em]">More Updates</p>
+
+                  <Link href="/subscribe" className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                        <Mail size={16} />
+                      </div>
+                      <span className="font-bold text-sm dark:text-white">Subscribe to email</span>
+                    </div>
+                    <div className="px-3 py-1 bg-white dark:bg-white/10 rounded-lg text-[10px] font-bold text-gray-500 dark:text-gray-400 group-hover:scale-105 transition-all">
+                      Coming Soon
+                    </div>
+                  </Link>
+
+                  <Link href="/download" className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                        <Smartphone size={16} />
+                      </div>
+                      <span className="font-bold text-sm dark:text-white">Download App</span>
+                    </div>
+                    <div className="px-3 py-1 bg-white dark:bg-white/10 rounded-lg text-[10px] font-bold text-gray-500 dark:text-gray-400 group-hover:scale-105 transition-all">
+                      PWA Ready
+                    </div>
+                  </Link>
+                </div>
               </div>
             )}
 
@@ -237,9 +372,34 @@ export default function SettingsClient({
                     <Shield size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900 dark:text-white">Content Filter</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">Restricted Words</p>
+                    <h3 className="font-bold text-gray-900 dark:text-white">Content Privacy</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 font-medium uppercase tracking-wider">Watermark & Filters</p>
                   </div>
+                </div>
+
+                {/* Watermark Toggle */}
+                <div className="mb-8 p-4 bg-orange-50/50 dark:bg-orange-500/5 rounded-2xl border border-orange-100 dark:border-orange-500/10 flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-sm text-gray-900 dark:text-white">Show Watermark</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Display "say-app.com" on shared stories</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const next = !showWatermark
+                      setShowWatermark(next)
+                      setIsUpdatingWatermark(true)
+                      const res = await updateWatermarkSetting(next)
+                      if (!res.success) {
+                        toast.error("Failed to update setting")
+                        setShowWatermark(!next)
+                      }
+                      setIsUpdatingWatermark(false)
+                    }}
+                    disabled={isUpdatingWatermark}
+                    className={`w-12 h-6 rounded-full transition-all relative ${showWatermark ? 'bg-orange-500' : 'bg-gray-200 dark:bg-white/10'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${showWatermark ? 'left-7' : 'left-1'}`} />
+                  </button>
                 </div>
 
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
@@ -459,23 +619,30 @@ export default function SettingsClient({
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className="md:col-span-1">
-            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2rem] shadow-sm border border-gray-100 dark:border-white/10 p-6 sticky top-28 transition-all">
-              <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4">Quick Navigation</h3>
-              <div className="space-y-2">
+          {/* Sidebar / Quick Nav */}
+          <div className="md:col-span-1 order-first md:order-last">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2rem] shadow-sm border border-gray-100 dark:border-white/10 p-4 sm:p-6 sticky md:top-28 transition-all">
+              <h3 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 ml-2">Quick Navigation</h3>
+
+              {/* Desktop: Vertical list, Mobile: Horizontal scrollable */}
+              <div className="flex md:flex-col overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 gap-2 no-scrollbar">
                 {[
-                  { name: 'Dashboard', href: '/dashboard', label: 'Home' },
-                  { name: 'Inbox', href: '/inbox', label: 'Confessions' },
-                  { name: 'Profile', href: '/profile', label: 'View Public' },
+                  { name: 'Dashboard', href: '/dashboard', label: 'Home', icon: Home },
+                  { name: 'Inbox', href: '/inbox', label: 'Inbox', icon: Mail },
+                  { name: 'Profile', href: '/profile', label: 'Public', icon: User },
                 ].map((link) => (
                   <Link
                     key={link.name}
                     href={link.href}
-                    className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-all group"
+                    className="flex-shrink-0 flex items-center gap-3 p-3 px-4 md:px-3 rounded-2xl md:rounded-xl bg-gray-50 md:bg-transparent dark:bg-white/5 md:dark:bg-transparent hover:bg-white dark:hover:bg-white/10 md:hover:bg-gray-50 md:dark:hover:bg-white/5 transition-all group border border-gray-100 dark:border-white/5 md:border-transparent min-w-[120px] md:min-w-0"
                   >
-                    <span className="font-bold text-gray-700 dark:text-gray-300 group-hover:text-purple-600 dark:group-hover:text-purple-400">{link.name}</span>
-                    <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">{link.label}</span>
+                    <div className="w-8 h-8 rounded-lg bg-white dark:bg-white/10 shadow-sm flex items-center justify-center text-gray-400 dark:text-gray-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                      <link.icon size={16} />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-sm text-gray-700 dark:text-gray-300 group-hover:text-purple-600 dark:group-hover:text-purple-400">{link.name}</span>
+                      <span className="text-[9px] font-medium text-gray-400 dark:text-gray-500 hidden md:inline">{link.label}</span>
+                    </div>
                   </Link>
                 ))}
               </div>

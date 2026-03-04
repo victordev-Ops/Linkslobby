@@ -1,4 +1,4 @@
-import { ArrowRight, Skull, Flame, Clock, MessageSquare, Target } from 'lucide-react';
+import { ArrowRight, Skull, Flame, Clock, Megaphone, Crosshair } from 'lucide-react';
 
 interface GameStatusProps {
   status: 'waiting' | 'active' | 'finished';
@@ -38,7 +38,7 @@ export const GameStatus = ({
   return (
     <div className="flex items-center gap-1.5 sm:gap-2">
       <div className="px-2 sm:px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-300/80 text-[10px] sm:text-xs font-bold flex items-center gap-1.5 truncate max-w-[90px] sm:max-w-none shadow-sm">
-        <MessageSquare size={10} className="text-orange-400 shrink-0" />
+        <Megaphone size={10} className="text-orange-400 shrink-0" />
         <span className="truncate">{askerUsername}</span>
       </div>
 
@@ -60,7 +60,7 @@ export const GameStatus = ({
       </div>
 
       <div className="px-2 sm:px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-300/80 text-[10px] sm:text-xs font-bold flex items-center gap-1.5 truncate max-w-[90px] sm:max-w-none shadow-sm">
-        <Target size={10} className="text-red-400 shrink-0" />
+        <Crosshair size={10} className="text-red-400 shrink-0" />
         <span className="truncate">{targetUsername}</span>
       </div>
     </div>

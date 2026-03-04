@@ -344,6 +344,24 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
         setIsCreating(true);
         try {
+            // Check lobby creation limit
+            const maxLobbies = isPro ? 5 : 3;
+            const { count, error: countError } = await supabase
+                .from('tod_lobbies')
+                .select('id', { count: 'exact', head: true })
+                .eq('host_id', profile.id);
+
+            if (countError) throw countError;
+
+            if ((count ?? 0) >= maxLobbies) {
+                toast.error(isPro
+                    ? `You've reached the max of ${maxLobbies} lobbies! 🎯`
+                    : `Free users can create up to ${maxLobbies} lobbies. Go Pro for 5! 💎`
+                );
+                setIsCreating(false);
+                return;
+            }
+
             const { data: lobby, error: lobbyError } = await supabase
                 .from('tod_lobbies')
                 .insert({
