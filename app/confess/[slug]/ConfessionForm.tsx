@@ -2,6 +2,8 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
+import Link from 'next/link'
+import { Lock } from 'lucide-react'
 
 type ActionResponse = { error?: string; success?: boolean }
 
@@ -33,7 +35,7 @@ export default function ConfessionForm({ profileId, action, isBlocked = false }:
     })
   }
 
-  // If success, show success view with a "Send Another" button
+  // If success, show success view with a "Send Another" button and CTA
   if (feedback?.success) {
     return (
       <div className="text-center animate-fade-in-up">
@@ -41,12 +43,23 @@ export default function ConfessionForm({ profileId, action, isBlocked = false }:
         <h3 className="text-xl font-medium text-white mb-2">Sent Successfully!</h3>
         <p className="text-neutral-400 mb-8">Your secret is safe with us.</p>
 
-        <button
-          onClick={() => setFeedback(null)}
-          className="w-full py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-all duration-200 text-sm font-medium"
-        >
-          Send Another
-        </button>
+        <div className="space-y-3">
+          <button
+            onClick={() => setFeedback(null)}
+            className="w-full py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-all duration-200 text-sm font-medium"
+          >
+            Send Another
+          </button>
+
+          <Link
+            href="/signup"
+            className="flex items-center justify-center gap-2 w-full py-3 px-6 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-all duration-200 group relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+            <Lock size={16} className="text-purple-400 group-hover:scale-110 group-hover:text-purple-300 transition-all duration-300" />
+            <span className="text-sm font-bold text-purple-300 group-hover:text-purple-200 transition-colors">Get your own Confession link</span>
+          </Link>
+        </div>
       </div>
     )
   }
@@ -92,8 +105,8 @@ export default function ConfessionForm({ profileId, action, isBlocked = false }:
         type="submit"
         disabled={isPending || charCount === 0 || isBlocked}
         className={`relative w-full py-4 rounded-xl font-medium shadow-lg transition-all duration-300 overflow-hidden ${isBlocked
-            ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/5 shadow-none'
-            : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/20 hover:shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50'
+          ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/5 shadow-none'
+          : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/20 hover:shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50'
           }`}
       >
         <span className={`flex items-center justify-center gap-2 ${isPending ? 'opacity-0' : 'opacity-100'}`}>
@@ -108,9 +121,29 @@ export default function ConfessionForm({ profileId, action, isBlocked = false }:
         )}
       </button>
 
-      <p className="text-center text-xs text-neutral-600 pt-2">
+      <p className="text-center text-xs text-neutral-600 pt-2 pb-2">
         IP addresses are never stored.
       </p>
+
+      {/* Onboarding CTA within the form */}
+      <div className="pt-4 mt-2 border-t border-white/5">
+        <Link
+          href="/signup"
+          className="flex items-center gap-4 p-4 rounded-2xl bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/30 transition-all group overflow-hidden relative"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 opacity-0 group-hover:opacity-100 group-hover:translate-x-[100%] transition-all duration-1000 origin-left -translate-x-full" />
+          <div className="w-12 h-12 shrink-0 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+            <Lock size={22} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-white text-sm group-hover:text-purple-300 transition-colors">Create your own board</h3>
+            <p className="text-purple-400/80 text-xs line-clamp-1 mt-0.5">Receive anonymous confessions</p>
+          </div>
+          <div className="text-purple-500/50 group-hover:text-purple-400 group-hover:translate-x-1 transition-all">
+            ✨
+          </div>
+        </Link>
+      </div>
     </form>
   )
 }
