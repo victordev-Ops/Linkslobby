@@ -2,7 +2,8 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-
+import Link from 'next/link'
+import { Ghost } from 'lucide-react'
 type ActionResponse = { error?: string; success?: boolean }
 
 interface ConfessionFormProps {
@@ -41,12 +42,33 @@ export default function ConfessionForm({ profileId, action, isBlocked = false }:
         <h3 className="text-xl font-medium text-white mb-2">Sent Successfully!</h3>
         <p className="text-neutral-400 mb-8">Your secret is safe with us.</p>
 
-        <button
-          onClick={() => setFeedback(null)}
-          className="w-full py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-all duration-200 text-sm font-medium"
-        >
-          Send Another
-        </button>
+        <div className="space-y-3">
+          <button
+            onClick={() => setFeedback(null)}
+            className="w-full py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-all duration-200 text-sm font-medium"
+          >
+            Send Another
+          </button>
+
+          <div className="pt-2">
+            <Link
+              href="/signup"
+              className="flex items-center gap-4 p-4 rounded-2xl bg-slate-500/5 hover:bg-slate-500/10 border border-slate-500/10 hover:border-slate-500/30 transition-all group overflow-hidden relative text-left"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-500/0 via-slate-500/10 to-slate-500/0 opacity-0 group-hover:opacity-100 group-hover:translate-x-[100%] transition-all duration-1000 origin-left -translate-x-full" />
+              <div className="w-12 h-12 shrink-0 rounded-xl bg-slate-500/20 text-slate-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                <Ghost size={22} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-white text-sm group-hover:text-slate-300 transition-colors">Create your own Link</h3>
+                <p className="text-slate-400/80 text-xs line-clamp-1 mt-0.5">Receive anonymous messages</p>
+              </div>
+              <div className="text-slate-500/50 group-hover:text-slate-400 group-hover:translate-x-1 transition-all">
+                ✨
+              </div>
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }
@@ -92,8 +114,8 @@ export default function ConfessionForm({ profileId, action, isBlocked = false }:
         type="submit"
         disabled={isPending || charCount === 0 || isBlocked}
         className={`relative w-full py-4 rounded-xl font-medium shadow-lg transition-all duration-300 overflow-hidden ${isBlocked
-            ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/5 shadow-none'
-            : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/20 hover:shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50'
+          ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/5 shadow-none'
+          : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/20 hover:shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50'
           }`}
       >
         <span className={`flex items-center justify-center gap-2 ${isPending ? 'opacity-0' : 'opacity-100'}`}>
