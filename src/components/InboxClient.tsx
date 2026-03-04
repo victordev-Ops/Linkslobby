@@ -85,7 +85,8 @@ export default function InboxClient({
   initialConfessions,
   userId,
   username,
-  restrictedWords = []
+  restrictedWords = [],
+  showWatermark = false
 }: {
   initialConfessions: Confession[]
   userId: string

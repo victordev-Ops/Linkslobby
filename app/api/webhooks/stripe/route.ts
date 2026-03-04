@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
+import Stripe from 'stripe'
 
 export const runtime = 'nodejs'
 
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
                 if (!subscriptionId) break
 
                 const stripe = getStripe()
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as Stripe.Subscription
 
                 // Upsert subscription record
                 const { error } = await supabase
@@ -59,8 +60,8 @@ export async function POST(req: NextRequest) {
                         provider_customer_id: session.customer as string,
                         plan,
                         status: 'active',
-                        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-                        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+                        current_period_start: new Date(subscription.items.data[0].current_period_start * 1000).toISOString(),
+                        current_period_end: new Date(subscription.items.data[0].current_period_end * 1000).toISOString(),
                         cancel_at_period_end: subscription.cancel_at_period_end,
                         updated_at: new Date().toISOString(),
                     }, { onConflict: 'provider,provider_subscription_id' })
@@ -106,8 +107,8 @@ export async function POST(req: NextRequest) {
                     .from('subscriptions')
                     .update({
                         status: statusMap[subscription.status] || 'active',
-                        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-                        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+                        current_period_start: new Date(subscription.items.data[0].current_period_start * 1000).toISOString(),
+                        current_period_end: new Date(subscription.items.data[0].current_period_end * 1000).toISOString(),
                         cancel_at_period_end: subscription.cancel_at_period_end,
                         updated_at: new Date().toISOString(),
                     })

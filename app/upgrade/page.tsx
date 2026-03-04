@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Crown, Sparkles, Check, Zap, Shield, Palette, Users, Star, ArrowLeft, CreditCard, Loader2 } from "lucide-react"
 import Link from "next/link"
@@ -48,7 +48,7 @@ const benefits = [
     { icon: Sparkles, text: "Exclusive themes & customization", color: "text-emerald-400" },
 ]
 
-export default function UpgradePage() {
+function UpgradeContent() {
     const [selectedPlan, setSelectedPlan] = useState<Plan>("monthly")
     const [selectedProvider, setSelectedProvider] = useState<Provider>("stripe")
     const [isPending, startTransition] = useTransition()
@@ -190,13 +190,13 @@ export default function UpgradePage() {
                                 key={plan.id}
                                 onClick={() => setSelectedPlan(plan.id)}
                                 className={`w-full p-4 rounded-2xl border-2 transition-all duration-200 text-left flex items-center gap-4 ${selectedPlan === plan.id
-                                        ? "border-amber-400/60 bg-amber-400/10 shadow-lg shadow-amber-500/10"
-                                        : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                                    ? "border-amber-400/60 bg-amber-400/10 shadow-lg shadow-amber-500/10"
+                                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
                                     }`}
                             >
                                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${selectedPlan === plan.id
-                                        ? "border-amber-400 bg-amber-400"
-                                        : "border-white/30"
+                                    ? "border-amber-400 bg-amber-400"
+                                    : "border-white/30"
                                     }`}>
                                     {selectedPlan === plan.id && (
                                         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-2 h-2 bg-black rounded-full" />
@@ -208,8 +208,8 @@ export default function UpgradePage() {
                                         <span className="font-bold text-white">{plan.name}</span>
                                         {plan.badge && (
                                             <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${plan.badge === "Best Value"
-                                                    ? "bg-emerald-400/20 text-emerald-400"
-                                                    : "bg-amber-400/20 text-amber-400"
+                                                ? "bg-emerald-400/20 text-emerald-400"
+                                                : "bg-amber-400/20 text-amber-400"
                                                 }`}>
                                                 {plan.badge}
                                             </span>
@@ -241,8 +241,8 @@ export default function UpgradePage() {
                         <button
                             onClick={() => setSelectedProvider("stripe")}
                             className={`p-4 rounded-2xl border-2 transition-all duration-200 flex flex-col items-center gap-2 ${selectedProvider === "stripe"
-                                    ? "border-indigo-400/60 bg-indigo-400/10"
-                                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                                ? "border-indigo-400/60 bg-indigo-400/10"
+                                : "border-white/10 bg-white/[0.02] hover:border-white/20"
                                 }`}
                         >
                             <CreditCard size={24} className={selectedProvider === "stripe" ? "text-indigo-400" : "text-white/50"} />
@@ -252,8 +252,8 @@ export default function UpgradePage() {
                         <button
                             onClick={() => setSelectedProvider("paystack")}
                             className={`p-4 rounded-2xl border-2 transition-all duration-200 flex flex-col items-center gap-2 ${selectedProvider === "paystack"
-                                    ? "border-emerald-400/60 bg-emerald-400/10"
-                                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                                ? "border-emerald-400/60 bg-emerald-400/10"
+                                : "border-white/10 bg-white/[0.02] hover:border-white/20"
                                 }`}
                         >
                             <Shield size={24} className={selectedProvider === "paystack" ? "text-emerald-400" : "text-white/50"} />
@@ -291,5 +291,17 @@ export default function UpgradePage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+export default function UpgradePage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-[#0f0a1e] flex items-center justify-center">
+                <Loader2 size={40} className="animate-spin text-amber-500" />
+            </div>
+        }>
+            <UpgradeContent />
+        </Suspense>
     )
 }
