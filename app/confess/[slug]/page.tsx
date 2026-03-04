@@ -113,7 +113,7 @@ export default async function ConfessPage({ params }: PageProps) {
               <span className="text-2xl">🔒</span>
             </div>
             <h1 className="text-2xl font-light tracking-tight text-white">
-              Send a secret to <span className="font-bold text-purple-400 italic">@{profile.username}</span>
+              Send a secret to <span className="font-bold text-purple-350 ">@{profile.username}</span>
             </h1>
             <p className="mt-3 text-sm text-neutral-400 font-light leading-relaxed">
               Your identity is hidden. <br className="hidden sm:block" /> Be honest, be kind.
@@ -130,16 +130,7 @@ export default async function ConfessPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Footer Link */}
-        <div className="mt-8 text-center">
-          <Link
-            href="/signup"
-            className="group inline-flex items-center gap-2 text-xs font-medium tracking-widest uppercase text-neutral-500 hover:text-purple-400 transition-all duration-300"
-          >
-            <span>Create your own page</span>
-            <span className="group-hover:translate-x-1 transition-transform">→</span>
-          </Link>
-        </div>
+
       </div>
     </div>
   )
