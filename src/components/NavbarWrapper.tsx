@@ -18,6 +18,7 @@ export default function NavbarWrapper() {
             "/fullscreen",
             "/tod",
             "/ama",
+            "/rps",
             "/", // Hide on root page
         ];
 
@@ -32,6 +33,7 @@ export default function NavbarWrapper() {
             pathname.startsWith("/dykm/") ||
             pathname.startsWith("/hot-seat/") ||
             pathname.startsWith("/ama") ||
+            pathname.startsWith("/rps/") ||
             pathname.startsWith("/messages/");
 
         return isExactMatch || isPrefixMatch;

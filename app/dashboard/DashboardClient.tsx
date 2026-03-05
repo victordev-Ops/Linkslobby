@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import {
   Copy, Check, MessageCircleQuestion, Loader2, Share2,
   LayoutGrid, Lock, ChevronDown, Brain, X, Save,
-  Dices, Sparkles, Flame
+  Dices, Sparkles, Flame, Swords
 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -40,8 +40,10 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const [isDykmOpen, setIsDykmOpen] = useState(false)
   const [isTodOpen, setIsTodOpen] = useState(false)
   const [isHotSeatOpen, setIsHotSeatOpen] = useState(false)
+  const [isRpsOpen, setIsRpsOpen] = useState(false)
   const [isNavigatingToTod, setIsNavigatingToTod] = useState(false)
   const [isNavigatingToHotSeat, setIsNavigatingToHotSeat] = useState(false)
+  const [isNavigatingToRps, setIsNavigatingToRps] = useState(false)
 
 
   // DYKM Logic
@@ -104,6 +106,12 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const handleNavigateToHotSeat = () => {
     setIsNavigatingToHotSeat(true)
     router.push('/hot-seat')
+  }
+
+  // RPS Logic - Navigate to Rock Paper Scissors
+  const handleNavigateToRps = () => {
+    setIsNavigatingToRps(true)
+    router.push('/rps')
   }
 
   if (loading || !profile) {
@@ -492,6 +500,47 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
               )}
             </div>
 
+            {/* Rock Paper Scissors Card */}
+            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+              <div
+                onClick={() => setIsRpsOpen(!isRpsOpen)}
+                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+              >
+                <div className="w-12 h-12 shrink-0 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <Swords size={24} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base">Rock Paper Scissors</h3>
+                    <div className="relative">
+                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                      <span className="bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">New</span>
+                    </div>
+                  </div>
+                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Best of 5 — play solo or challenge a friend</p>
+                </div>
+                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isRpsOpen ? "rotate-180" : ""}`} />
+              </div>
+
+              {isRpsOpen && (
+                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-100 dark:border-emerald-500/20">
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed font-medium">
+                      How it works: Choose Rock ✊, Paper ✋, or Scissors ✌️ each round. First to 3 wins takes the match! Play against the computer or invite a friend.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleNavigateToRps}
+                    disabled={isNavigatingToRps}
+                    className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl text-xs hover:bg-emerald-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {isNavigatingToRps ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isNavigatingToRps ? 'Loading...' : 'Play Now'}
+                  </button>
+                </div>
+              )}
+            </div>
 
           </div>
         </section>
