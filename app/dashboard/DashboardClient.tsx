@@ -236,8 +236,6 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 <Share2 size={18} />
               </button>
             </div>
-            {/* Added Hero Iframe Preview */}
-            <IframePreview url={anonymousUrl} />
           </div>
         </section>
 
@@ -345,7 +343,6 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                           <Share2 size={14} />
                         </button>
                       </div>
-                      <IframePreview url={dykmUrl} />
                       <button
                         onClick={() => setIsDykmModalOpen(true)}
                         className="w-full py-2 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/60 font-bold rounded-xl text-[10px] hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95 hover:scale-[1.02]"
@@ -401,7 +398,6 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                       <Share2 size={14} />
                     </button>
                   </div>
-                  <IframePreview url={amaUrl} />
                 </div>
               )}
             </div>
@@ -449,7 +445,6 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                       <Share2 size={14} />
                     </button>
                   </div>
-                  <IframePreview url={confessUrl} />
                 </div>
               )}
             </div>
@@ -578,15 +573,6 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function IframePreview({ url }: { url: string }) {
-  return (
-    <div className="mt-4 rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 h-64 pointer-events-none relative bg-slate-50 dark:bg-[#1a1429]/40 z-0">
-      <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent dark:from-[#1a1429]/90 dark:via-[#1a1429]/20 z-10" />
-      <iframe src={url} className="w-[125%] h-[125%] transform scale-[0.8] origin-top-left border-none" tabIndex={-1} aria-hidden="true" sandbox="allow-same-origin allow-scripts" />
     </div>
   )
 }

@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { RefreshCw, MessageSquare, ChevronRight, AlertCircle, Loader2 } from 'lucide-react'
+import {
+  RefreshCw, MessageSquare, LayoutGrid, Lock, ChevronDown, Brain, X, Save,
+  Dices, Sparkles, Flame, User, HelpCircle, ShieldAlert, ChevronRight, AlertCircle, Loader2
+} from "lucide-react"
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { markConfessionAsRead } from '@/actions/confessions'
@@ -580,7 +583,13 @@ export default function InboxClient({
                       ? 'bg-gray-100 dark:bg-white/10 grayscale dark:grayscale-0 dark:opacity-50'
                       : 'bg-gradient-to-tr from-purple-500 to-pink-500 shadow-purple-200 dark:shadow-purple-900/20'
                       }`}>
-                      {c.message_type === 'ama' ? '❓' : '💌'}
+                      {c.message_type === 'ama' ? (
+                        <HelpCircle size={24} className="text-white" />
+                      ) : c.message_type === 'confession' ? (
+                        <Lock size={22} className="text-white" />
+                      ) : (
+                        <User size={24} className="text-white" />
+                      )}
                     </div>
                     {!c.is_read && (
                       <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-[#0f0a1e]" />
