@@ -33,6 +33,7 @@ type ChatSession = {
     username: string | null
     id: string
     slug?: string | null
+    avatar_url?: string | null
   }
 }
 
@@ -257,7 +258,7 @@ export default function InboxClient({
             updated_at: c.updated_at,
             last_message_preview: c.last_message_preview,
             unread_count: c.unread_count || 0,
-            other_user: c.other_user || { username: 'Unknown', id: '', slug: '' }
+            other_user: c.other_user || { username: 'Unknown', id: '', slug: '', avatar_url: null }
           }))
           setSessions(prev => {
             // merge? just replace for now or merge by ID
@@ -508,9 +509,15 @@ export default function InboxClient({
                     className="w-full text-left px-6 py-5 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors active:bg-gray-100 dark:active:bg-white/10 group relative"
                   >
                     <div className="relative flex-shrink-0">
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-lg font-bold shadow-md">
-                        {s.other_user.username?.substring(0, 2).toUpperCase() || "?"}
-                      </div>
+                      {s.other_user.avatar_url ? (
+                        <div className="w-14 h-14 rounded-full shadow-md overflow-hidden">
+                          <img src={s.other_user.avatar_url} alt={s.other_user.username || "User"} className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-lg font-bold shadow-md">
+                          {s.other_user.username?.substring(0, 2).toUpperCase() || "?"}
+                        </div>
+                      )}
                       {isUnread && (
                         <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-blue-500 rounded-full border-2 border-white dark:border-[#0f0a1e]" />
                       )}

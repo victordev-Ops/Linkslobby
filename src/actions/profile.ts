@@ -245,6 +245,6 @@ export async function updateWatermarkSetting(enabled: boolean) {
         return { success: false, error: error.message }
     }
 
-    revalidatePath('/settings')
+    revalidatePath('/', 'layout')
     return { success: true, enabled }
 }

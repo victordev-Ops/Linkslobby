@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Send, Loader2, CheckCircle2 } from 'lucide-react'
+import { Send, Loader2, CheckCircle2, MessageCircleQuestion } from 'lucide-react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { sendAmaQuestion } from '@/actions/confessions'
 
@@ -96,12 +97,33 @@ export default function AmaPublicClient({
             <p className="text-gray-500 font-medium mb-8">
               Your anonymous question is waiting for @{username}
             </p>
-            <button
-              onClick={() => { setSent(false); setMessage(''); }}
-              className="text-orange-600 font-bold text-sm"
-            >
-              Send another?
-            </button>
+            <div className="w-full space-y-3">
+              <button
+                onClick={() => { setSent(false); setMessage(''); }}
+                className="w-full py-3 px-6 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-xl transition-all duration-200 text-sm font-bold"
+              >
+                Send Another
+              </button>
+
+              <div className="pt-2">
+                <Link
+                  href="/signup"
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-orange-50 hover:bg-orange-100 border border-orange-100 hover:border-orange-200 transition-all group overflow-hidden relative text-left"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/0 via-orange-500/5 to-orange-500/0 opacity-0 group-hover:opacity-100 group-hover:translate-x-[100%] transition-all duration-1000 origin-left -translate-x-full" />
+                  <div className="w-12 h-12 shrink-0 rounded-xl bg-orange-100 text-orange-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                    <MessageCircleQuestion size={22} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-gray-800 text-sm group-hover:text-orange-600 transition-colors">Create your own Link</h3>
+                    <p className="text-gray-500 text-xs line-clamp-1 mt-0.5">Receive anonymous questions</p>
+                  </div>
+                  <div className="text-orange-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all">
+                    ✨
+                  </div>
+                </Link>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

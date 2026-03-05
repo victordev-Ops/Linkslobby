@@ -358,7 +358,7 @@ export default function MessageViewClient({ confession, username, onClose, restr
                 {showWatermark && (
                   <div className="mt-12 flex items-center gap-1.5 opacity-30">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                      say-app.com/confess/{username}
+                      say-app.com
                     </span>
                   </div>
                 )}

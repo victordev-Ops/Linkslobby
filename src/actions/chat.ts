@@ -182,7 +182,7 @@ export async function getSessions() {
     // 2. Batch fetch other participants
     const { data: otherParticipants } = await supabase
         .from('chat_participants')
-        .select('session_id, profiles(username, id)')
+        .select('session_id, profiles(username, id, avatar_url)')
         .in('session_id', sessionIds)
         .neq('user_id', user.id)
 
