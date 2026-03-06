@@ -58,9 +58,11 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const [playerScore, setPlayerScore] = useState(0)
     const [opponentScore, setOpponentScore] = useState(0)
     const [roundHistory, setRoundHistory] = useState<RoundHistory[]>([])
-    const [phase, setPhase] = useState<"choosing" | "countdown" | "reveal" | "matchEnd">("choosing")
+    const [phase, setPhase] = useState<"choosing" | "waiting" | "countdown" | "reveal" | "matchEnd">("choosing")
     const [countdown, setCountdown] = useState(3)
     const [matchResult, setMatchResult] = useState<"won" | "lost" | null>(null)
+    const phaseRef = useRef<string>("choosing")
+    const playerHasChosenRef = useRef(false)
 
     // Multiplayer state
     const [multiplayerRole, setMultiplayerRole] = useState<MultiplayerRole>(null)
@@ -93,6 +95,11 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             }
         }
     }, [supabase])
+
+    // Keep phaseRef in sync with phase state
+    useEffect(() => {
+        phaseRef.current = phase
+    }, [phase])
 
     // --- Multiplayer: Create Room ---
     const createRoom = useCallback(() => {
@@ -132,6 +139,11 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 opponentChoiceRef.current = payload.choice
                 setOpponentHasChosen(true)
                 toast("Opponent has made their move! 🎯", { icon: "✅" })
+                // If we already picked, both are ready — start countdown
+                if (playerHasChosenRef.current && phaseRef.current === "waiting") {
+                    setPhase("countdown")
+                    setCountdown(3)
+                }
             })
             .on("broadcast", { event: "play-again" }, () => {
                 resetGame(true)
@@ -139,7 +151,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             })
             .on("broadcast", { event: "leave" }, () => {
                 // After match concluded — graceful exit, no forfeit
-                if (phase === "matchEnd") {
+                if (phaseRef.current === "matchEnd") {
                     toast("Opponent left the game", { icon: "👋" })
                     return
                 }
@@ -195,6 +207,11 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 opponentChoiceRef.current = payload.choice
                 setOpponentHasChosen(true)
                 toast("Opponent has made their move! 🎯", { icon: "✅" })
+                // If we already picked, both are ready — start countdown
+                if (playerHasChosenRef.current && phaseRef.current === "waiting") {
+                    setPhase("countdown")
+                    setCountdown(3)
+                }
             })
             .on("broadcast", { event: "play-again" }, () => {
                 resetGame(true)
@@ -202,7 +219,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             })
             .on("broadcast", { event: "leave" }, () => {
                 // After match concluded — graceful exit, no forfeit
-                if (phase === "matchEnd") {
+                if (phaseRef.current === "matchEnd") {
                     toast("Opponent left the game", { icon: "👋" })
                     return
                 }
@@ -245,7 +262,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         if (phase !== "choosing" || !choice) return
         setPlayerChoice(choice)
         hasProcessedRound.current = false
-        setOpponentHasChosen(false)
+        playerHasChosenRef.current = true
 
         if (mode === "friend" && channelRef.current) {
             channelRef.current.send({
@@ -253,11 +270,20 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 event: "choice",
                 payload: { choice }
             })
-        }
 
-        // Start countdown
-        setPhase("countdown")
-        setCountdown(3)
+            // If opponent already picked, start countdown immediately
+            if (opponentChoiceRef.current) {
+                setPhase("countdown")
+                setCountdown(3)
+            } else {
+                // Wait for opponent
+                setPhase("waiting")
+            }
+        } else {
+            // Solo: start countdown right away
+            setPhase("countdown")
+            setCountdown(3)
+        }
     }
 
     // Countdown timer
@@ -271,36 +297,12 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 setOpponentChoice(cpuChoice)
                 resolveRound(playerChoice, cpuChoice)
             } else {
-                // Multiplayer — check if opponent has chosen
+                // Both have already chosen (guaranteed by waiting phase)
                 const oppChoice = opponentChoiceRef.current
                 if (oppChoice) {
                     setOpponentChoice(oppChoice)
                     resolveRound(playerChoice, oppChoice)
                     opponentChoiceRef.current = null
-                } else {
-                    // Wait a bit more for opponent
-                    const waitInterval = setInterval(() => {
-                        const opp = opponentChoiceRef.current
-                        if (opp) {
-                            setOpponentChoice(opp)
-                            resolveRound(playerChoice, opp)
-                            opponentChoiceRef.current = null
-                            clearInterval(waitInterval)
-                        }
-                    }, 300)
-                    // Timeout after 15 seconds
-                    const timeout = setTimeout(() => {
-                        clearInterval(waitInterval)
-                        if (!opponentChoiceRef.current) {
-                            toast.error("Opponent didn't choose in time")
-                            setPhase("choosing")
-                            setPlayerChoice(null)
-                        }
-                    }, 15000)
-                    return () => {
-                        clearInterval(waitInterval)
-                        clearTimeout(timeout)
-                    }
                 }
             }
             return
@@ -383,6 +385,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setOpponentHasChosen(false)
         setCollateralPaid(false)
         gameStartedRef.current = false
+        playerHasChosenRef.current = false
         if (!keepMode) {
             setMode(null)
             setMultiplayerState("idle")
@@ -741,6 +744,22 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                 {resultText[lastResult]}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Waiting */}
+                {phase === "waiting" && (
+                    <div className="flex flex-col items-center justify-center py-16 space-y-6 animate-in fade-in duration-300">
+                        <div className="relative">
+                            <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                                <div className="text-5xl animate-bounce">{choiceEmoji(playerChoice)}</div>
+                            </div>
+                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full animate-ping" />
+                        </div>
+                        <div className="text-center space-y-2">
+                            <h3 className="text-xl font-black text-emerald-400">Choice Locked!</h3>
+                            <p className="text-white/40 text-sm font-bold uppercase tracking-widest">Waiting for {opponentLabel}...</p>
+                        </div>
                     </div>
                 )}
 
