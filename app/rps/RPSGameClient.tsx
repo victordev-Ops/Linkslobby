@@ -61,6 +61,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const [phase, setPhase] = useState<"choosing" | "waiting" | "countdown" | "reveal" | "matchEnd">("choosing")
     const [countdown, setCountdown] = useState(3)
     const [matchResult, setMatchResult] = useState<"won" | "lost" | null>(null)
+    const [showExitConfirm, setShowExitConfirm] = useState(false)
     const phaseRef = useRef<string>("choosing")
     const playerHasChosenRef = useRef(false)
 
@@ -414,12 +415,37 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     }
 
     const handleBack = () => {
+        // If an active game is ongoing, warn them
+        if (mode === "solo" && playerChoice && phase !== "matchEnd") {
+            setShowExitConfirm(true)
+            return
+        }
+        if (mode === "friend" && gameStartedRef.current && phase !== "matchEnd") {
+            setShowExitConfirm(true)
+            return
+        }
+
+        // Otherwise safe to leave
         if (mode) {
             cleanupChannel()
             resetGame()
         } else {
             router.push("/dashboard")
         }
+    }
+
+    const confirmExit = () => {
+        setShowExitConfirm(false)
+        if (mode === "solo") {
+            // Solo forfeiture
+            spendXP(100, "Forfeited Rock Paper Scissors match", { game: "rps" }).catch(console.error)
+            toast.error("You forfeited! -100 Stars")
+        } else if (mode === "friend") {
+            // Friend forfeiture (already paid collateral, opponent will get the bonus)
+            toast.error("You forfeited your collateral!")
+        }
+        cleanupChannel()
+        resetGame()
     }
 
     const handleShareRoom = async () => {
@@ -623,6 +649,37 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
     return (
         <div className="min-h-screen bg-[#0a0a0f] text-white relative overflow-hidden pb-8">
+            {/* Exit Confirmation Modal */}
+            {showExitConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-[#12121a] border border-red-500/30 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl shadow-red-500/10">
+                        <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto">
+                            <ArrowLeft size={32} />
+                        </div>
+                        <div className="text-center space-y-2">
+                            <h3 className="text-2xl font-black text-white">Leave match?</h3>
+                            <p className="text-white/60 text-sm">
+                                If you leave now, you will <span className="text-red-400 font-bold">forfeit 100 Stars</span>. Are you sure?
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowExitConfirm(false)}
+                                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmExit}
+                                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors"
+                            >
+                                Leave Game
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Background */}
             <div className="fixed inset-0 pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-600/8 blur-[100px] rounded-full" />
