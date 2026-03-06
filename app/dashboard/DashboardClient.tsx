@@ -233,7 +233,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
               />
               <button
                 onClick={() => handleCopy(anonymousUrl, 'hero')}
-                className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 shadow-md ${heroCopied ? "bg-green-500 text-white" : "bg-slate-900 dark:bg-purple-600 text-white hover:bg-slate-800 dark:hover:bg-purple-700"}`}
+                className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 ${heroCopied ? "bg-green-500 text-white shadow-md" : "text-slate-600 dark:text-white/80 hover:bg-slate-200/50 dark:hover:bg-white/10"}`}
               >
                 {heroCopied ? <Check size={18} /> : <Copy size={18} />}
               </button>
@@ -292,7 +292,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     disabled={isNavigatingToTod}
                     className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-rose-200 dark:shadow-rose-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {isNavigatingToTod ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isNavigatingToTod ? <Loader2 size={16} className="animate-spin" /> : <Dices size={16} />}
                     {isNavigatingToTod ? 'Loading...' : 'View Game Lobbies'}
                   </button>
                 </div>
@@ -493,7 +493,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     disabled={isNavigatingToHotSeat}
                     className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs hover:bg-amber-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-amber-200 dark:shadow-amber-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {isNavigatingToHotSeat ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isNavigatingToHotSeat ? <Loader2 size={16} className="animate-spin" /> : <Flame size={16} />}
                     {isNavigatingToHotSeat ? 'Loading...' : 'Host Hot Seat'}
                   </button>
                 </div>
@@ -535,7 +535,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     disabled={isNavigatingToRps}
                     className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl text-xs hover:bg-emerald-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {isNavigatingToRps ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isNavigatingToRps ? <Loader2 size={16} className="animate-spin" /> : <Swords size={16} />}
                     {isNavigatingToRps ? 'Loading...' : 'Play Now'}
                   </button>
                 </div>

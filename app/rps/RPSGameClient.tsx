@@ -416,7 +416,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
     const handleBack = () => {
         // If an active game is ongoing, warn them
-        if (mode === "solo" && playerChoice && phaseRef.current !== "matchEnd") {
+        if (mode === "solo" && (playerChoice || roundHistory.length > 0) && phaseRef.current !== "matchEnd") {
             setShowExitConfirm(true)
             return
         }
