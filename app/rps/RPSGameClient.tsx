@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Share2, Loader2, Users, RotateCcw, Swords, Wifi, WifiOff, Monitor, UserPlus } from "lucide-react"
+import { ArrowLeft, Share2, Loader2, Users, RotateCcw, Swords, Wifi, WifiOff, Monitor, UserPlus, Star } from "lucide-react"
 import { toast } from "sonner"
+import { earnXP, spendXP } from "@/hooks/xp"
 
 type Choice = "rock" | "paper" | "scissors" | null
 type RoundResult = "win" | "lose" | "tie"
@@ -71,6 +72,9 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
     const opponentChoiceRef = useRef<Choice>(null)
     const hasProcessedRound = useRef(false)
+    const [opponentHasChosen, setOpponentHasChosen] = useState(false)
+    const [collateralPaid, setCollateralPaid] = useState(false)
+    const gameStartedRef = useRef(false)
 
     // Generate a short room code
     const generateRoomId = () => {
@@ -113,18 +117,37 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     payload: { username: profile.username }
                 })
                 toast.success(`${payload.username || "Friend"} joined!`)
+                // Deduct collateral
+                if (!gameStartedRef.current) {
+                    gameStartedRef.current = true
+                    spendXP(100, "RPS match collateral", { game: "rps" }).then(res => {
+                        if (res.success) {
+                            setCollateralPaid(true)
+                            toast("100 Stars locked as collateral ⭐", { icon: "🔒" })
+                        }
+                    }).catch(console.error)
+                }
             })
             .on("broadcast", { event: "choice" }, ({ payload }) => {
                 opponentChoiceRef.current = payload.choice
+                setOpponentHasChosen(true)
+                toast("Opponent has made their move! 🎯", { icon: "✅" })
             })
             .on("broadcast", { event: "play-again" }, () => {
                 resetGame(true)
                 toast("Opponent wants to play again!", { icon: "🔄" })
             })
             .on("broadcast", { event: "leave" }, () => {
-                toast.error("Opponent left the game")
+                // Opponent forfeited — award collateral refund + forfeit bonus
+                if (gameStartedRef.current && phase !== "matchEnd") {
+                    earnXP(200, "Opponent forfeited RPS match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                    toast.success("Opponent forfeited! +200 Stars ⭐")
+                } else {
+                    toast.error("Opponent left the game")
+                }
                 setMultiplayerState("idle")
                 setMode(null)
+                gameStartedRef.current = false
                 cleanupChannel()
             })
             .subscribe()
@@ -152,18 +175,37 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             .on("broadcast", { event: "host-ready" }, ({ payload }) => {
                 setOpponentName(payload.username || "Friend")
                 setMultiplayerState("connected")
+                // Deduct collateral
+                if (!gameStartedRef.current) {
+                    gameStartedRef.current = true
+                    spendXP(100, "RPS match collateral", { game: "rps" }).then(res => {
+                        if (res.success) {
+                            setCollateralPaid(true)
+                            toast("100 Stars locked as collateral ⭐", { icon: "🔒" })
+                        }
+                    }).catch(console.error)
+                }
             })
             .on("broadcast", { event: "choice" }, ({ payload }) => {
                 opponentChoiceRef.current = payload.choice
+                setOpponentHasChosen(true)
+                toast("Opponent has made their move! 🎯", { icon: "✅" })
             })
             .on("broadcast", { event: "play-again" }, () => {
                 resetGame(true)
                 toast("Opponent wants to play again!", { icon: "🔄" })
             })
             .on("broadcast", { event: "leave" }, () => {
-                toast.error("Opponent left the game")
+                // Opponent forfeited — award collateral refund + forfeit bonus
+                if (gameStartedRef.current && phase !== "matchEnd") {
+                    earnXP(200, "Opponent forfeited RPS match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                    toast.success("Opponent forfeited! +200 Stars ⭐")
+                } else {
+                    toast.error("Opponent left the game")
+                }
                 setMultiplayerState("idle")
                 setMode(null)
+                gameStartedRef.current = false
                 cleanupChannel()
             })
             .subscribe((status) => {
@@ -193,6 +235,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         if (phase !== "choosing" || !choice) return
         setPlayerChoice(choice)
         hasProcessedRound.current = false
+        setOpponentHasChosen(false)
 
         if (mode === "friend" && channelRef.current) {
             channelRef.current.send({
@@ -284,15 +327,28 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         }
 
         setPhase("reveal")
+        setOpponentHasChosen(false)
 
         // Check for match end
         setTimeout(() => {
             if (newPlayerScore >= 3) {
                 setMatchResult("won")
                 setPhase("matchEnd")
+                if (mode === "friend") {
+                    // Won: get collateral back + opponent's collateral
+                    earnXP(200, "Won Rock Paper Scissors match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                } else {
+                    // Solo: +100 stars
+                    earnXP(100, "Won Rock Paper Scissors match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                }
             } else if (newOpponentScore >= 3) {
                 setMatchResult("lost")
                 setPhase("matchEnd")
+                if (mode === "solo") {
+                    // Solo: -100 stars
+                    spendXP(100, "Lost Rock Paper Scissors match", { game: "rps" }).catch(console.error)
+                }
+                // Friend mode: no extra deduction (already lost collateral)
             } else {
                 // Next round
                 setPhase("choosing")
@@ -314,6 +370,9 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setMatchResult(null)
         opponentChoiceRef.current = null
         hasProcessedRound.current = false
+        setOpponentHasChosen(false)
+        setCollateralPaid(false)
+        gameStartedRef.current = false
         if (!keepMode) {
             setMode(null)
             setMultiplayerState("idle")
@@ -329,6 +388,16 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             channelRef.current.send({ type: "broadcast", event: "play-again", payload: {} })
         }
         resetGame(mode === "friend")
+        // Re-deduct collateral for the new match
+        if (mode === "friend") {
+            gameStartedRef.current = true
+            spendXP(100, "RPS match collateral", { game: "rps" }).then(res => {
+                if (res.success) {
+                    setCollateralPaid(true)
+                    toast("100 Stars locked as collateral ⭐", { icon: "🔒" })
+                }
+            }).catch(console.error)
+        }
     }
 
     const handleBack = () => {
@@ -598,6 +667,15 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                 {matchResult === "won" ? "You Won the Match!" : "You Lost the Match"}
                             </h2>
                             <p className="text-white/50 font-bold text-lg">{playerScore} – {opponentScore}</p>
+                            <div className={`flex items-center gap-2 justify-center mt-2 px-4 py-2 rounded-full ${matchResult === "won" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
+                                <Star size={16} />
+                                <span className="text-sm font-bold">
+                                    {matchResult === "won"
+                                        ? (mode === "friend" ? "+200 Stars (collateral + winnings)" : "+100 Stars")
+                                        : (mode === "friend" ? "-100 Stars (collateral lost)" : "-100 Stars")
+                                    }
+                                </span>
+                            </div>
                         </div>
 
                         {/* Round History */}
@@ -666,6 +744,12 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                     <Wifi className="inline w-3 h-3 mr-1" />
                                     Playing vs {opponentLabel}
                                 </p>
+                            )}
+                            {mode === "friend" && opponentHasChosen && (
+                                <div className="flex items-center gap-1.5 justify-center mt-1 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 animate-in fade-in duration-300">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span className="text-[10px] font-bold text-emerald-400">Opponent is ready!</span>
+                                </div>
                             )}
                         </div>
 
