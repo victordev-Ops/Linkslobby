@@ -138,8 +138,13 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 toast("Opponent wants to play again!", { icon: "🔄" })
             })
             .on("broadcast", { event: "leave" }, () => {
-                // Opponent forfeited — award collateral refund + forfeit bonus
-                if (gameStartedRef.current && phase !== "matchEnd") {
+                // After match concluded — graceful exit, no forfeit
+                if (phase === "matchEnd") {
+                    toast("Opponent left the game", { icon: "👋" })
+                    return
+                }
+                // Mid-game leave — opponent forfeited
+                if (gameStartedRef.current) {
                     earnXP(200, "Opponent forfeited RPS match", { game: "rps" }, true, profile.is_pro).catch(console.error)
                     toast.success("Opponent forfeited! +200 Stars ⭐")
                 } else {
@@ -196,8 +201,13 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 toast("Opponent wants to play again!", { icon: "🔄" })
             })
             .on("broadcast", { event: "leave" }, () => {
-                // Opponent forfeited — award collateral refund + forfeit bonus
-                if (gameStartedRef.current && phase !== "matchEnd") {
+                // After match concluded — graceful exit, no forfeit
+                if (phase === "matchEnd") {
+                    toast("Opponent left the game", { icon: "👋" })
+                    return
+                }
+                // Mid-game leave — opponent forfeited
+                if (gameStartedRef.current) {
                     earnXP(200, "Opponent forfeited RPS match", { game: "rps" }, true, profile.is_pro).catch(console.error)
                     toast.success("Opponent forfeited! +200 Stars ⭐")
                 } else {
