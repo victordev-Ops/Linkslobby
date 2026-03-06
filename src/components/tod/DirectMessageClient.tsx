@@ -53,8 +53,8 @@ function groupMessages(msgs: Message[]): Message[] {
         // This ensures replies stand out visually
         const isFirstInGroup = !prev ||
             prev.isOwn !== msg.isOwn ||
-            !!msg.reply ||
-            !!prev?.reply ||
+            (msg.reply && msg.reply.content !== undefined) ||
+            (prev?.reply && prev.reply.content !== undefined) ||
             (new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() > 2 * 60 * 1000) // 2 min gap breaks group
 
         const isLastInGroup = !next ||
@@ -123,16 +123,23 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                 const recentCached = cached.slice(-PAGE_SIZE)
 
                 if (recentCached.length > 0) {
-                    const cachedMsgs = recentCached.map(m => ({
-                        id: m.id,
-                        content: m.content,
-                        created_at: m.created_at,
-                        sender_id: m.sender_id,
-                        isOwn: m.sender_id === currentUser.id,
-                        isOptimistic: false,
-                        reply_to_id: m.metadata?.reply_to_id,
-                        reply: m.metadata?.reply
-                    }))
+                    const cachedMsgs = recentCached.map(m => {
+                        const replyData = m.metadata?.reply
+                        if (replyData && Array.isArray(replyData.profiles)) {
+                            replyData.profiles = replyData.profiles[0]
+                        }
+
+                        return {
+                            id: m.id,
+                            content: m.content || '',
+                            created_at: m.created_at,
+                            sender_id: m.sender_id,
+                            isOwn: m.sender_id === currentUser.id,
+                            isOptimistic: false,
+                            reply_to_id: m.metadata?.reply_to_id,
+                            reply: replyData
+                        }
+                    })
                     setMessages(cachedMsgs)
                     setIsLoading(false) // Hide skeleton immediately if we have cached messages
                     setTimeout(() => scrollToBottom('instant'), 50)
@@ -143,16 +150,23 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             const result = await getSessionMessages(sessionId, undefined, PAGE_SIZE)
 
             if (result.success && result.data) {
-                const serverMsgs = result.data.map((m: any) => ({
-                    id: m.id,
-                    content: m.content,
-                    created_at: m.created_at,
-                    sender_id: m.sender_id,
-                    isOwn: m.sender_id === currentUser.id,
-                    isOptimistic: false,
-                    reply_to_id: m.reply_to_id,
-                    reply: m.reply
-                }))
+                const serverMsgs = result.data.map((m: any) => {
+                    const replyData = m.reply
+                    if (replyData && Array.isArray(replyData.profiles)) {
+                        replyData.profiles = replyData.profiles[0]
+                    }
+
+                    return {
+                        id: m.id,
+                        content: m.content || '',
+                        created_at: m.created_at,
+                        sender_id: m.sender_id,
+                        isOwn: m.sender_id === currentUser.id,
+                        isOptimistic: false,
+                        reply_to_id: m.reply_to_id,
+                        reply: replyData
+                    }
+                })
 
                 setMessages(serverMsgs)
                 setHasMore(serverMsgs.length >= PAGE_SIZE)
@@ -238,16 +252,16 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         if (parent) {
                             replyData = {
                                 id: parent.id,
-                                content: parent.content,
+                                content: parent.content || '',
                                 sender_id: parent.sender_id,
-                                profiles: { username: parent.isOwn ? 'You' : targetProfile.username }
+                                profiles: { username: (parent.isOwn ? 'You' : targetProfile.username) || 'User' }
                             }
                         }
                     }
 
                     const newMessageObj: Message = {
                         id: newMsg.id,
-                        content: newMsg.content,
+                        content: newMsg.content || '',
                         created_at: newMsg.created_at,
                         sender_id: newMsg.sender_id,
                         isOwn: isOwn,
@@ -483,16 +497,23 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             const result = await getSessionMessages(sessionId, oldestMsg.created_at, PAGE_SIZE)
 
             if (result.success && result.data && result.data.length > 0) {
-                const newMsgs = result.data.map((m: any) => ({
-                    id: m.id,
-                    content: m.content,
-                    created_at: m.created_at,
-                    sender_id: m.sender_id,
-                    isOwn: m.sender_id === currentUser.id,
-                    isOptimistic: false,
-                    reply_to_id: m.reply_to_id,
-                    reply: m.reply
-                }))
+                const newMsgs = result.data.map((m: any) => {
+                    const replyData = m.reply
+                    if (replyData && Array.isArray(replyData.profiles)) {
+                        replyData.profiles = replyData.profiles[0]
+                    }
+
+                    return {
+                        id: m.id,
+                        content: m.content || '',
+                        created_at: m.created_at,
+                        sender_id: m.sender_id,
+                        isOwn: m.sender_id === currentUser.id,
+                        isOptimistic: false,
+                        reply_to_id: m.reply_to_id,
+                        reply: replyData
+                    }
+                })
 
                 setMessages(prev => [...newMsgs, ...prev])
                 setHasMore(newMsgs.length >= PAGE_SIZE)
@@ -643,13 +664,13 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                                             } ${isImg ? 'p-1.5' : 'px-5 py-3'}`}>
 
                                             {/* Reply Context */}
-                                            {msg.reply && (
+                                            {msg.reply && msg.reply.content !== undefined && (
                                                 <div className={`text-xs mb-2 pl-2 border-l-2 ${msg.isOwn ? 'border-white/30 text-white/70' : 'border-purple-500 text-neutral-400'}`}>
                                                     <div className="font-bold opacity-80 mb-0.5">
-                                                        {msg.reply.sender_id === currentUser.id ? 'You' : msg.reply.profiles?.username || 'User'}
+                                                        {msg.reply.sender_id === currentUser.id ? 'You' : (msg.reply.profiles as any)?.username || 'User'}
                                                     </div>
                                                     <div className="truncate opacity-70 italic">
-                                                        {msg.reply.content.startsWith('[IMG:') ? '📷 Photo' : msg.reply.content}
+                                                        {msg.reply.content?.startsWith('[IMG:') ? '📷 Photo' : msg.reply.content}
                                                     </div>
                                                 </div>
                                             )}
@@ -744,7 +765,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                                         </span>
                                     </div>
                                     <span className="text-neutral-300 truncate text-xs opacity-80">
-                                        {replyingTo.content.startsWith('[IMG:') ? '📷 Photo' : replyingTo.content}
+                                        {replyingTo.content?.startsWith('[IMG:') ? '📷 Photo' : replyingTo.content}
                                     </span>
                                 </div>
                                 <button
