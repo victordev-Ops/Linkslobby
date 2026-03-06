@@ -35,7 +35,6 @@ export default function HotSeatListClient({ profile, sessions }: HotSeatListClie
     const router = useRouter()
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [sessionName, setSessionName] = useState('')
-    const [isPrivate, setIsPrivate] = useState(false)
     const [isCreating, setIsCreating] = useState(false)
 
     useScrollLock(showCreateModal)
@@ -53,7 +52,7 @@ export default function HotSeatListClient({ profile, sessions }: HotSeatListClie
                     host_id: profile.id,
                     slug,
                     name: sessionName.trim(),
-                    is_private: isPrivate,
+                    is_private: true,
                     status: 'waiting'
                 })
                 .select('id, slug')
@@ -185,28 +184,6 @@ export default function HotSeatListClient({ profile, sessions }: HotSeatListClie
                                     maxLength={50}
                                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-amber-500/30 transition"
                                 />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2 ml-1">Privacy</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        onClick={() => setIsPrivate(false)}
-                                        className={`p-3 rounded-xl border text-sm font-bold transition-all ${!isPrivate
-                                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                                            : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'}`}
-                                    >
-                                        🌍 Public
-                                    </button>
-                                    <button
-                                        onClick={() => setIsPrivate(true)}
-                                        className={`p-3 rounded-xl border text-sm font-bold transition-all ${isPrivate
-                                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                                            : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'}`}
-                                    >
-                                        🔒 Private
-                                    </button>
-                                </div>
                             </div>
 
                             <div className="p-3 bg-amber-500/5 rounded-xl border border-amber-500/10">

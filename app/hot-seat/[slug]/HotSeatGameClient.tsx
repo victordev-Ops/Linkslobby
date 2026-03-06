@@ -99,10 +99,14 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
         }
 
         if (data) {
-            setParticipants(data.map(p => ({
-                ...p.user,
-                joined_at: p.created_at
-            })))
+            setParticipants(data.map(p => {
+                const userObj = Array.isArray(p.user) ? p.user[0] : p.user
+                return {
+                    ...userObj,
+                    id: p.user_id, // Ensure we keep the participant's user_id as the canonical id
+                    joined_at: p.created_at
+                }
+            }))
         }
         setParticipantCount(count || 0)
     }
@@ -627,7 +631,12 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                                     >
                                                         <div className="p-1.5 space-y-0.5">
                                                             <button
-                                                                onClick={() => router.push(`/profile`)}
+                                                                onClick={() => {
+                                                                    const identifier = p.slug || p.username || p.id;
+                                                                    router.push(`/${identifier}`);
+                                                                    setMenuOpen(null);
+                                                                    setShowParticipants(false);
+                                                                }}
                                                                 className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition"
                                                             >
                                                                 <User size={16} /> View Profile

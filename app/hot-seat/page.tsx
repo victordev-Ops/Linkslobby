@@ -24,6 +24,7 @@ export default async function HotSeatPage() {
       host:profiles!hot_seat_sessions_host_id_fkey(username, slug),
       hot_seat_participants(count)
     `)
+        .eq('host_id', user.id)
         .in('status', ['waiting', 'active'])
         .order('created_at', { ascending: false })
         .limit(20)
