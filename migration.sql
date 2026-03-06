@@ -1,57 +1,85 @@
--- Hot Seat Sessions
-CREATE TABLE IF NOT EXISTS hot_seat_sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  host_id UUID REFERENCES profiles(id) NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  name TEXT NOT NULL DEFAULT 'Hot Seat',
-  status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'active', 'finished')),
-  is_private BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
+-- Run this script in the Supabase SQL Editor to implement or fix the XP functions.
+-- This guarantees the stars actually record to the xp_transactions table when you earn or spend them in the RPS game.
 
--- Hot Seat Participants
-CREATE TABLE IF NOT EXISTS hot_seat_participants (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_id UUID REFERENCES hot_seat_sessions(id) ON DELETE CASCADE NOT NULL,
-  user_id UUID REFERENCES profiles(id) NOT NULL,
-  status TEXT DEFAULT 'joined' CHECK (status IN ('joined', 'pending', 'rejected')),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(session_id, user_id)
-);
+-- Drop the existing functions first to allow changing their return types
+DROP FUNCTION IF EXISTS public.add_xp(uuid, integer, character varying, jsonb);
+DROP FUNCTION IF EXISTS public.spend_xp(uuid, integer, character varying, jsonb);
 
--- Hot Seat Questions
-CREATE TABLE IF NOT EXISTS hot_seat_questions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_id UUID REFERENCES hot_seat_sessions(id) ON DELETE CASCADE NOT NULL,
-  asker_id UUID REFERENCES profiles(id) NOT NULL,
-  question TEXT NOT NULL,
-  answer TEXT,
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'answered', 'skipped', 'timed_out')),
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+CREATE OR REPLACE FUNCTION public.add_xp(
+    p_user_id uuid,
+    p_amount integer,
+    p_reason character varying,
+    p_metadata jsonb DEFAULT NULL::jsonb
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_new_balance integer;
+BEGIN
+    -- Insert the transaction history
+    INSERT INTO public.xp_transactions (user_id, amount, type, reason, metadata)
+    VALUES (p_user_id, p_amount, 'earn', p_reason, p_metadata);
 
--- Enable RLS
-ALTER TABLE hot_seat_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hot_seat_participants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hot_seat_questions ENABLE ROW LEVEL SECURITY;
+    -- Increase the user's total stars balance
+    UPDATE public.profiles
+    SET xp_balance = xp_balance + p_amount
+    WHERE id = p_user_id
+    RETURNING xp_balance INTO v_new_balance;
 
--- RLS Policies
--- Sessions
-CREATE POLICY "Anyone can read sessions" ON hot_seat_sessions FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can create sessions" ON hot_seat_sessions FOR INSERT WITH CHECK (auth.uid() = host_id);
-CREATE POLICY "Host can update session" ON hot_seat_sessions FOR UPDATE USING (auth.uid() = host_id);
+    RETURN json_build_object('success', true, 'new_balance', v_new_balance);
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$;
 
--- Participants
-CREATE POLICY "Anyone can read participants" ON hot_seat_participants FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can join" ON hot_seat_participants FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Questions
-CREATE POLICY "Anyone can read questions" ON hot_seat_questions FOR SELECT USING (true);
-CREATE POLICY "Authenticated can ask" ON hot_seat_questions FOR INSERT WITH CHECK (auth.uid() = asker_id);
-CREATE POLICY "Host can update questions" ON hot_seat_questions FOR UPDATE USING (
-  EXISTS (SELECT 1 FROM hot_seat_sessions WHERE id = session_id AND host_id = auth.uid())
-);
+CREATE OR REPLACE FUNCTION public.spend_xp(
+    p_user_id uuid,
+    p_amount integer,
+    p_reason character varying,
+    p_metadata jsonb DEFAULT NULL::jsonb
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_current_balance integer;
+    v_new_balance integer;
+BEGIN
+    -- Only deduct if the user actually has enough stars
+    SELECT xp_balance INTO v_current_balance 
+    FROM public.profiles 
+    WHERE id = p_user_id;
 
--- Enable Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE hot_seat_sessions, hot_seat_participants, hot_seat_questions;
+    IF v_current_balance IS NULL THEN
+        RETURN json_build_object('success', false, 'error', 'User profile not found');
+    END IF;
+
+    IF v_current_balance < p_amount THEN
+        RETURN json_build_object('success', false, 'error', 'Insufficient stars');
+    END IF;
+
+    -- Insert the transaction history (note the 'spend' type)
+    INSERT INTO public.xp_transactions (user_id, amount, type, reason, metadata)
+    VALUES (p_user_id, p_amount, 'spend', p_reason, p_metadata);
+
+    -- Decrease the user's total stars balance
+    UPDATE public.profiles
+    SET xp_balance = xp_balance - p_amount
+    WHERE id = p_user_id
+    RETURNING xp_balance INTO v_new_balance;
+
+    RETURN json_build_object('success', true, 'new_balance', v_new_balance);
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$;
+
+-- Allow logged in users to execute these functions
+GRANT EXECUTE ON FUNCTION public.add_xp(uuid, integer, character varying, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.spend_xp(uuid, integer, character varying, jsonb) TO authenticated;
