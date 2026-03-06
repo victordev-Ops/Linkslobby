@@ -28,7 +28,6 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const loading = !profile && authLoading
 
   // Link States
-  const [heroCopied, setHeroCopied] = useState(false)
   const [dykmCopied, setDykmCopied] = useState(false)
   const [amaCopied, setAmaCopied] = useState(false)
   const [confessCopied, setConfessCopied] = useState(false)
@@ -44,6 +43,8 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const [isNavigatingToTod, setIsNavigatingToTod] = useState(false)
   const [isNavigatingToHotSeat, setIsNavigatingToHotSeat] = useState(false)
   const [isNavigatingToRps, setIsNavigatingToRps] = useState(false)
+  const [isAnonymousOpen, setIsAnonymousOpen] = useState(false)
+  const [anonymousCopied, setAnonymousCopied] = useState(false)
 
 
   // DYKM Logic
@@ -128,14 +129,14 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const anonymousUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
   const hotSeatUrl = `https://say-app.vercel.app/hot-seat/${profile.slug}`
 
-  const handleCopy = async (text: string, type: 'hero' | 'ama' | 'confess' | 'dykm' | 'hotSeat') => {
+  const handleCopy = async (text: string, type: 'hero' | 'ama' | 'confess' | 'dykm' | 'hotSeat' | 'anonymous') => {
     try {
       await navigator.clipboard.writeText(text)
-      if (type === 'hero') { setHeroCopied(true); setTimeout(() => setHeroCopied(false), 2000) }
-      else if (type === 'ama') { setAmaCopied(true); setTimeout(() => setAmaCopied(false), 2000) }
+      if (type === 'ama') { setAmaCopied(true); setTimeout(() => setAmaCopied(false), 2000) }
       else if (type === 'confess') { setConfessCopied(true); setTimeout(() => setConfessCopied(false), 2000) }
       else if (type === 'dykm') { setDykmCopied(true); setTimeout(() => setDykmCopied(false), 2000) }
       else if (type === 'hotSeat') { setHotSeatCopied(true); setTimeout(() => setHotSeatCopied(false), 2000) }
+      else if (type === 'anonymous') { setAnonymousCopied(true); setTimeout(() => setAnonymousCopied(false), 2000) }
       toast.success("Link copied!")
     } catch (err) {
       toast.error("Failed to copy")
@@ -180,72 +181,14 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
       <main className="max-w-xl mx-auto px-4 py-8 space-y-8 relative z-10">
 
-        {/* Hero Section */}
-        <section className="relative overflow-hidden bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-xl rounded-[2.5rem] p-6 md:p-8 shadow-xl border border-slate-100 dark:border-white/10 transition-all group">
-          {/* Decorative Gradients */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-purple-500/20 transition-colors" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -ml-16 -mb-16 group-hover:bg-indigo-500/20 transition-colors" />
-
-          {/* Profile Section - Centered for Modern Look */}
-          <div className="flex flex-col items-center gap-3 mb-6">
-            <div className="relative group/avatar">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-400 to-indigo-600 rounded-full blur-md opacity-20 group-hover/avatar:opacity-40 transition-opacity" />
-              {profile.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt={profile.username}
-                  className="w-20 h-20 rounded-full border-4 border-white dark:border-[#1a1429] object-cover relative z-10"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 border-4 border-white dark:border-[#1a1429] flex items-center justify-center text-white font-black text-2xl relative z-10 shadow-lg">
-                  {profile.username?.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="absolute -bottom-1 -right-1 bg-green-500 w-5 h-5 rounded-full border-4 border-white dark:border-[#1a1429] z-20" />
-            </div>
-            <div className="text-center">
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-                Welcome back
-              </h1>
-              <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
-                @{profile.username}
-              </p>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="text-center space-y-4">
-            <div className="space-y-2">
-              <h2 className="text-lg font-bold text-slate-800 dark:text-white/90">Your Anonymous link</h2>
-              <p className="text-slate-500 dark:text-white/60 text-xs max-w-[280px] mx-auto leading-relaxed">
-                Send this link to friends to receive anonymous messages
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl max-w-sm mx-auto transition-all group-hover:border-purple-500/30">
-              <div className="pl-3 text-slate-400 dark:text-white/40 shrink-0">
-                <Share2 size={16} />
-              </div>
-              <input
-                readOnly
-                value={anonymousUrl}
-                className="flex-1 bg-transparent py-2 text-xs font-semibold text-slate-600 dark:text-white focus:outline-none truncate"
-              />
-              <button
-                onClick={() => handleCopy(anonymousUrl, 'hero')}
-                className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 ${heroCopied ? "bg-green-500 text-white shadow-md" : "text-slate-600 dark:text-white/80 hover:bg-slate-200/50 dark:hover:bg-white/10"}`}
-              >
-                {heroCopied ? <Check size={18} /> : <Copy size={18} />}
-              </button>
-              <button
-                onClick={() => handleNativeShare(anonymousUrl, 'Send me an anonymous message!')}
-                className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all shadow-md bg-white dark:bg-transparent border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 active:scale-90"
-              >
-                <Share2 size={18} />
-              </button>
-            </div>
-          </div>
-        </section>
+        <header className="py-2">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+            Hi, {profile.username?.split(' ')[0]} 👋
+          </h1>
+          <p className="text-slate-500 dark:text-white/60 text-sm font-medium">
+            Ready for some fun today?
+          </p>
+        </header>
 
         {/* Game Collection Section */}
         <section className="space-y-4">
@@ -255,6 +198,52 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
           </div>
 
           <div className="grid grid-cols-1 gap-3">
+            {/* Anonymous Link Card */}
+            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+              <div
+                onClick={() => setIsAnonymousOpen(!isAnonymousOpen)}
+                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+              >
+                <div className="w-12 h-12 shrink-0 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Share2 size={24} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Anonymous Link</h3>
+                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Receive anonymous messages from friends</p>
+                </div>
+                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isAnonymousOpen ? "rotate-180" : ""}`} />
+              </div>
+
+              {isAnonymousOpen && (
+                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
+                    <p className="text-[11px] text-indigo-700 dark:text-indigo-300 leading-relaxed font-medium">
+                      How it works: Share this link on your Story or Bio. Anyone can send you anonymous messages through this link!
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
+                    <input
+                      readOnly
+                      value={anonymousUrl}
+                      className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
+                    />
+                    <button
+                      onClick={() => handleCopy(anonymousUrl, 'anonymous')}
+                      className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${anonymousCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-transparent border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+                    >
+                      {anonymousCopied ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                    <button
+                      onClick={() => handleNativeShare(anonymousUrl, 'Send me an anonymous message!')}
+                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 active:scale-90 bg-white dark:bg-transparent"
+                    >
+                      <Share2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Truth or Dare Card */}
             <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">

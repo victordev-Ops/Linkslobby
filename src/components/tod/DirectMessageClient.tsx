@@ -130,8 +130,11 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         sender_id: m.sender_id,
                         isOwn: m.sender_id === currentUser.id,
                         isOptimistic: false,
+                        reply_to_id: m.metadata?.reply_to_id,
+                        reply: m.metadata?.reply
                     }))
                     setMessages(cachedMsgs)
+                    setIsLoading(false) // Hide skeleton immediately if we have cached messages
                     setTimeout(() => scrollToBottom('instant'), 50)
                 }
             } catch { }
@@ -146,13 +149,14 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                     created_at: m.created_at,
                     sender_id: m.sender_id,
                     isOwn: m.sender_id === currentUser.id,
-                    isOptimistic: false
+                    isOptimistic: false,
+                    reply_to_id: m.reply_to_id,
+                    reply: m.reply
                 }))
 
                 setMessages(serverMsgs)
                 setHasMore(serverMsgs.length >= PAGE_SIZE)
 
-                // Cache in Dexie (Clear old cache? Or just merge? Merge is fine)
                 const now = Date.now()
                 db.chatMessages.bulkPut(
                     serverMsgs.map(m => ({
@@ -161,7 +165,11 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         sender_id: m.sender_id,
                         content: m.content,
                         created_at: m.created_at,
-                        cached_at: now
+                        cached_at: now,
+                        metadata: {
+                            reply_to_id: m.reply_to_id,
+                            reply: m.reply
+                        }
                     }))
                 ).catch(() => { })
 
@@ -247,6 +255,20 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         reply_to_id: newMsg.reply_to_id,
                         reply: replyData
                     }
+
+                    // Cache in Dexie
+                    db.chatMessages.put({
+                        id: newMsg.id,
+                        session_id: sessionId,
+                        sender_id: newMsg.sender_id,
+                        content: newMsg.content,
+                        created_at: newMsg.created_at,
+                        cached_at: Date.now(),
+                        metadata: {
+                            reply_to_id: newMsg.reply_to_id,
+                            reply: replyData
+                        }
+                    }).catch(() => { })
 
                     if (existingOptimisticIndex !== -1) {
                         // Replace the optimistic message with the real one
@@ -385,7 +407,16 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                     sender_id: currentUser.id,
                     content: content,
                     created_at: result.data.created_at,
-                    cached_at: Date.now()
+                    cached_at: Date.now(),
+                    metadata: {
+                        reply_to_id: replyingTo?.id,
+                        reply: replyingTo ? {
+                            id: replyingTo.id,
+                            content: replyingTo.content,
+                            sender_id: replyingTo.sender_id,
+                            profiles: { username: targetProfile.username || 'User' }
+                        } : undefined
+                    }
                 }).catch(() => { })
             } else {
                 toast.error('Failed to send message')
@@ -458,7 +489,9 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                     created_at: m.created_at,
                     sender_id: m.sender_id,
                     isOwn: m.sender_id === currentUser.id,
-                    isOptimistic: false
+                    isOptimistic: false,
+                    reply_to_id: m.reply_to_id,
+                    reply: m.reply
                 }))
 
                 setMessages(prev => [...newMsgs, ...prev])
@@ -473,7 +506,11 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         sender_id: m.sender_id,
                         content: m.content,
                         created_at: m.created_at,
-                        cached_at: now
+                        cached_at: now,
+                        metadata: {
+                            reply_to_id: m.reply_to_id,
+                            reply: m.reply
+                        }
                     }))
                 ).catch(() => { })
 
@@ -509,14 +546,39 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
     }, [messages, lastReadByPartner])
 
     return (
-        <div className="flex flex-col h-[100dvh] bg-neutral-950 text-neutral-200">
+        <div className="flex flex-col h-[100dvh] bg-neutral-950 text-neutral-200 overflow-hidden">
             {/* Header */}
-            <div className="flex-shrink-0 px-6 py-4 bg-neutral-900/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between sticky top-0 z-10">
-                {/* ... existing header ... */}
+            <div className="flex-shrink-0 px-4 py-3 bg-neutral-900/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between sticky top-0 z-50">
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => router.push('/inbox')}
+                        className="p-2 hover:bg-white/5 rounded-full transition-colors text-neutral-400 hover:text-white"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-purple-900/20">
+                            {targetProfile.username?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="font-bold text-sm leading-tight text-neutral-100">
+                                @{targetProfile.username || 'user'}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="text-[10px] font-bold text-emerald-500/80 uppercase tracking-wider">Online</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Messages Area */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 scroll-smooth">
+            <div
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto p-4 pb-2 scroll-smooth custom-scrollbar"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+            >
                 {isLoading ? (
                     <div className="flex flex-col gap-3 px-2 py-4">
                         {[...Array(6)].map((_, i) => (
@@ -664,7 +726,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             </div>
 
             {/* Input Area */}
-            <div className="flex-shrink-0 bg-neutral-900 border-t border-white/5 pb-5 sm:pb-6 relative z-20">
+            <div className="flex-shrink-0 bg-neutral-900/95 backdrop-blur-md border-t border-white/5 sticky bottom-0 z-50 safe-area-bottom">
                 <AnimatePresence>
                     {replyingTo && (
                         <motion.div
@@ -673,27 +735,30 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                             exit={{ height: 0, opacity: 0 }}
                             className="px-4 pt-3"
                         >
-                            <div className="flex items-center justify-between bg-neutral-800/50 rounded-xl p-3 border-l-4 border-purple-500">
+                            <div className="flex items-center justify-between bg-neutral-800/80 rounded-xl p-3 border-l-4 border-purple-500 shadow-lg">
                                 <div className="flex flex-col text-sm overflow-hidden">
-                                    <span className="text-purple-400 font-medium text-xs mb-0.5">
-                                        Replying to {replyingTo.isOwn ? 'Yourself' : targetProfile.username}
-                                    </span>
-                                    <span className="text-neutral-300 truncate">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <Reply size={12} className="text-purple-400" />
+                                        <span className="text-purple-400 font-bold text-[10px] uppercase tracking-wider">
+                                            Replying to {replyingTo.isOwn ? 'Yourself' : `@${targetProfile.username}`}
+                                        </span>
+                                    </div>
+                                    <span className="text-neutral-300 truncate text-xs opacity-80">
                                         {replyingTo.content.startsWith('[IMG:') ? '📷 Photo' : replyingTo.content}
                                     </span>
                                 </div>
                                 <button
                                     onClick={() => setReplyingTo(null)}
-                                    className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                                    className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
                                 >
-                                    <X size={16} className="text-neutral-400" />
+                                    <X size={14} className="text-neutral-500" />
                                 </button>
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                <div className="p-4">
+                <div className="p-3 sm:p-4">
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -702,16 +767,16 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         onChange={handlePhotoSelect}
                     />
 
-                    <div className="flex items-end gap-2">
+                    <div className="flex items-end gap-2 max-w-5xl mx-auto">
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isUploading}
-                            className="p-3.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-full transition-all active:scale-90 border border-white/5 mb-0.5"
+                            className="p-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-full transition-all active:scale-95 border border-white/5 mb-1 shadow-lg"
                         >
                             {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={22} />}
                         </button>
 
-                        <div className="flex-1 flex items-end gap-3 bg-neutral-800/50 rounded-[2rem] p-2 border border-white/10 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 transition-all shadow-inner">
+                        <div className="flex-1 flex items-end gap-2 bg-neutral-800/50 rounded-3xl p-1.5 border border-white/10 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 transition-all shadow-inner">
                             <textarea
                                 value={inputText}
                                 onChange={(e) => {
@@ -720,15 +785,15 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                                 }}
                                 onKeyDown={handleKeyPress}
                                 placeholder="Message..."
-                                className="flex-1 bg-transparent text-neutral-100 text-[16px] resize-none focus:outline-none max-h-32 py-3 px-5 min-h-[48px] custom-scrollbar"
+                                className="flex-1 bg-transparent text-neutral-100 text-[16px] resize-none focus:outline-none max-h-32 py-2 px-4 min-h-[44px] custom-scrollbar"
                                 rows={1}
                             />
                             <button
                                 onClick={() => handleSend()}
                                 disabled={!inputText.trim()}
-                                className="p-3.5 bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full disabled:opacity-30 transition-all active:scale-90 shadow-xl shadow-purple-900/40 flex-shrink-0"
+                                className="p-3 bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full disabled:opacity-30 transition-all active:scale-95 shadow-xl shadow-purple-900/40 flex-shrink-0"
                             >
-                                <Send size={20} className="ml-0.5" />
+                                <Send size={18} className="translate-x-0.5" />
                             </button>
                         </div>
                     </div>
