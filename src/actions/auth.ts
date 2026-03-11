@@ -59,11 +59,35 @@ export async function deleteAccount(): Promise<AuthResponse> {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 
     if (serviceRoleKey && supabaseUrl) {
-      // Use admin API to hard-delete the auth user (cascades to profile via FK)
       const { createClient: createAdminClient } = await import('@supabase/supabase-js')
       const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false }
       })
+
+      // Delete user data from all tables in correct FK order to avoid constraint violations
+      const tablesToClean: { table: string; column: string }[] = [
+        { table: 'xp_transactions', column: 'user_id' },
+        { table: 'chat_messages', column: 'sender_id' },
+        { table: 'chat_participants', column: 'user_id' },
+        { table: 'notifications', column: 'user_id' },
+        { table: 'blocked_users', column: 'blocker_id' },
+        { table: 'blocked_users', column: 'blocked_id' },
+        { table: 'blocked_anonymous', column: 'user_id' },
+        { table: 'dykm_answers', column: 'user_id' },
+        { table: 'dykm_quizzes', column: 'user_id' },
+        { table: 'subscriptions', column: 'user_id' },
+        { table: 'friendships', column: 'requester_id' },
+        { table: 'friendships', column: 'addressee_id' },
+      ]
+
+      for (const { table, column } of tablesToClean) {
+        await adminClient.from(table).delete().eq(column, user.id)
+      }
+
+      // Delete the profile row (cascades to any remaining dependents)
+      await adminClient.from('profiles').delete().eq('id', user.id)
+
+      // Finally delete the auth user
       const { error } = await adminClient.auth.admin.deleteUser(user.id)
       if (error) throw error
     } else {

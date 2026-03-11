@@ -78,6 +78,67 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const [opponentHasChosen, setOpponentHasChosen] = useState(false)
     const [collateralPaid, setCollateralPaid] = useState(false)
     const gameStartedRef = useRef(false)
+    const restoredRef = useRef(false)
+
+    // --- Session persistence helpers ---
+    const SESSION_KEY = 'rps_game_state'
+
+    const saveSession = useCallback(() => {
+        try {
+            const state = {
+                mode, playerScore, opponentScore, roundHistory, phase,
+                matchResult, collateralPaid, roomId, opponentName,
+                multiplayerRole, multiplayerState,
+                gameStarted: gameStartedRef.current,
+            }
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify(state))
+        } catch { /* ignore quota errors */ }
+    }, [mode, playerScore, opponentScore, roundHistory, phase, matchResult, collateralPaid, roomId, opponentName, multiplayerRole, multiplayerState])
+
+    const clearSession = () => {
+        try { sessionStorage.removeItem(SESSION_KEY) } catch { /* noop */ }
+    }
+
+    // Restore session on mount
+    useEffect(() => {
+        if (restoredRef.current) return
+        restoredRef.current = true
+        try {
+            const raw = sessionStorage.getItem(SESSION_KEY)
+            if (!raw) return
+            const s = JSON.parse(raw)
+            if (!s.mode) return
+
+            // For friend mode, only restore if the match already ended
+            // (can't reconnect the realtime channel after refresh)
+            if (s.mode === 'friend' && s.phase !== 'matchEnd') {
+                clearSession()
+                return
+            }
+
+            setMode(s.mode)
+            setPlayerScore(s.playerScore || 0)
+            setOpponentScore(s.opponentScore || 0)
+            setRoundHistory(s.roundHistory || [])
+            setPhase(s.phase || 'choosing')
+            setMatchResult(s.matchResult || null)
+            setCollateralPaid(s.collateralPaid || false)
+            setRoomId(s.roomId || '')
+            setOpponentName(s.opponentName || '')
+            setMultiplayerRole(s.multiplayerRole || null)
+            setMultiplayerState(s.multiplayerState || 'idle')
+            gameStartedRef.current = s.gameStarted || false
+
+            if (s.mode === 'solo' && s.phase !== 'matchEnd') {
+                toast('Game restored from your last session', { icon: '🔄' })
+            }
+        } catch { clearSession() }
+    }, [])
+
+    // Persist game state whenever key values change
+    useEffect(() => {
+        if (mode) saveSession()
+    }, [mode, playerScore, opponentScore, roundHistory, phase, matchResult, saveSession])
 
     // Generate a short room code
     const generateRoomId = () => {
@@ -387,6 +448,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setCollateralPaid(false)
         gameStartedRef.current = false
         playerHasChosenRef.current = false
+        clearSession()
         if (!keepMode) {
             setMode(null)
             setMultiplayerState("idle")

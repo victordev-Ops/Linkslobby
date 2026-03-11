@@ -155,7 +155,7 @@ export default function SettingsClient({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0f0a1e] transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0f0a1e] transition-colors duration-300 pb-24">
 
       {/* Background Ambience */}
       <div className="fixed inset-0 pointer-events-none hidden dark:block">

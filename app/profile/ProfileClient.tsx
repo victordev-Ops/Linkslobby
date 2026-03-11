@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Save, Copy, Check, Loader2, User as UserIcon, XCircle, CheckCircle, Camera } from 'lucide-react'
+import { ArrowLeft, Save, Copy, Check, Loader2, User as UserIcon, XCircle, CheckCircle, Camera, UserPlus, UserMinus, Users, X, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { updateProfile, checkSlugAvailability } from '@/actions/profile'
@@ -9,6 +9,10 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { useDebounce } from '@/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
+import {
+    sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend,
+    type FriendshipWithProfile, type FriendProfile,
+} from '@/actions/friends'
 
 interface ProfileClientProps {
     user: any
@@ -19,9 +23,12 @@ interface ProfileClientProps {
         avatar_url?: string
         dms_disabled: boolean
     }
+    initialFriends?: FriendshipWithProfile[]
+    initialPendingRequests?: FriendshipWithProfile[]
+    initialSuggestedFriends?: FriendProfile[]
 }
 
-export default function ProfileClient({ user, profile }: ProfileClientProps) {
+export default function ProfileClient({ user, profile, initialFriends = [], initialPendingRequests = [], initialSuggestedFriends = [] }: ProfileClientProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [copied, setCopied] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
@@ -41,6 +48,12 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
     const [slugMessage, setSlugMessage] = useState('')
     const [isAvatarUploading, setIsAvatarUploading] = useState(false)
     const supabaseClient = createClient()
+
+    // Friendship state
+    const [friends, setFriends] = useState<FriendshipWithProfile[]>(initialFriends)
+    const [pendingRequests, setPendingRequests] = useState<FriendshipWithProfile[]>(initialPendingRequests)
+    const [suggestedFriends, setSuggestedFriends] = useState<FriendProfile[]>(initialSuggestedFriends)
+    const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
 
     useEffect(() => {
         // Don't check if it matches initial profile slug (unless they change back and forth, but checking against DB handles 'taken by others')
@@ -152,6 +165,75 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
             setIsEditing(false)
             router.refresh()
         }
+    }
+
+    // ─── Friend action handlers ───
+    const handleSendRequest = async (targetUserId: string) => {
+        setActionLoadingId(targetUserId)
+        const result = await sendFriendRequest(targetUserId)
+        if (result.success) {
+            setSuggestedFriends(prev => prev.filter(f => f.id !== targetUserId))
+            toast.success('Friend request sent!')
+        } else {
+            toast.error(result.error || 'Failed to send request')
+        }
+        setActionLoadingId(null)
+    }
+
+    const handleAcceptRequest = async (friendshipId: string, requesterProfile: FriendProfile) => {
+        setActionLoadingId(friendshipId)
+        const result = await acceptFriendRequest(friendshipId)
+        if (result.success) {
+            setPendingRequests(prev => prev.filter(r => r.id !== friendshipId))
+            // Add to friends list
+            const accepted = initialPendingRequests.find(r => r.id === friendshipId)
+            if (accepted) {
+                setFriends(prev => [...prev, { ...accepted, status: 'accepted', profile: requesterProfile }])
+            }
+            toast.success('Friend request accepted!')
+        } else {
+            toast.error(result.error || 'Failed to accept request')
+        }
+        setActionLoadingId(null)
+    }
+
+    const handleDeclineRequest = async (friendshipId: string) => {
+        setActionLoadingId(friendshipId)
+        const result = await declineFriendRequest(friendshipId)
+        if (result.success) {
+            setPendingRequests(prev => prev.filter(r => r.id !== friendshipId))
+            toast.success('Request declined')
+        } else {
+            toast.error(result.error || 'Failed to decline request')
+        }
+        setActionLoadingId(null)
+    }
+
+    const handleRemoveFriend = async (friendshipId: string) => {
+        setActionLoadingId(friendshipId)
+        const result = await removeFriend(friendshipId)
+        if (result.success) {
+            setFriends(prev => prev.filter(f => f.id !== friendshipId))
+            toast.success('Friend removed')
+        } else {
+            toast.error(result.error || 'Failed to remove friend')
+        }
+        setActionLoadingId(null)
+    }
+
+    // ─── Avatar helper ───
+    const AvatarCircle = ({ url, name, size = 'md' }: { url?: string | null; name: string; size?: 'sm' | 'md' }) => {
+        const dim = size === 'sm' ? 'w-10 h-10' : 'w-12 h-12'
+        const textSize = size === 'sm' ? 'text-sm' : 'text-base'
+        return url ? (
+            <img src={url} alt={name} className={`${dim} rounded-full object-cover ring-2 ring-slate-100 dark:ring-white/10`} />
+        ) : (
+            <div className={`${dim} bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white ring-2 ring-slate-100 dark:ring-white/10`}>
+                <span className={`${textSize} font-black italic`}>
+                    {name ? name.charAt(0).toUpperCase() : '?'}
+                </span>
+            </div>
+        )
     }
 
     return (
@@ -337,6 +419,125 @@ export default function ProfileClient({ user, profile }: ProfileClientProps) {
                         To change your email or password, please contact support.
                     </p>
                 </div>
+
+                {/* ─── Pending Friend Requests ─── */}
+                {pendingRequests.length > 0 && (
+                    <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 p-6">
+                        <div className="flex items-center gap-3 mb-5">
+                            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                                <Clock size={18} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Friend Requests</h3>
+                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">{pendingRequests.length} pending</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            {pendingRequests.map(req => (
+                                <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                                    <AvatarCircle url={req.profile.avatar_url} name={req.profile.username} size="sm" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{req.profile.username}</p>
+                                        <p className="text-[10px] text-slate-400 dark:text-slate-500">Wants to be friends</p>
+                                    </div>
+                                    <div className="flex gap-1.5">
+                                        <button
+                                            onClick={() => handleAcceptRequest(req.id, req.profile)}
+                                            disabled={actionLoadingId === req.id}
+                                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            {actionLoadingId === req.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                            Accept
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeclineRequest(req.id)}
+                                            disabled={actionLoadingId === req.id}
+                                            className="px-3 py-1.5 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95 disabled:opacity-50"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ─── Friends List ─── */}
+                <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 p-6">
+                    <div className="flex items-center gap-3 mb-5">
+                        <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                            <Users size={18} />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Friends</h3>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">{friends.length} friends</p>
+                        </div>
+                    </div>
+
+                    {friends.length === 0 ? (
+                        <div className="flex flex-col items-center py-6 text-center">
+                            <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-3">
+                                <Users size={28} className="text-slate-300 dark:text-white/20" />
+                            </div>
+                            <p className="text-sm font-bold text-slate-400 dark:text-slate-500">No friends yet</p>
+                            <p className="text-[10px] text-slate-300 dark:text-white/20 mt-1">Add friends from the suggestions below!</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {friends.map(f => (
+                                <div key={f.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                                    <AvatarCircle url={f.profile.avatar_url} name={f.profile.username} size="sm" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{f.profile.username}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleRemoveFriend(f.id)}
+                                        disabled={actionLoadingId === f.id}
+                                        className="text-xs font-bold text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors px-2.5 py-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-500/10 active:scale-95 disabled:opacity-50"
+                                    >
+                                        {actionLoadingId === f.id ? <Loader2 size={14} className="animate-spin" /> : <UserMinus size={14} />}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* ─── Suggested Friends ─── */}
+                {suggestedFriends.length > 0 && (
+                    <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 p-6">
+                        <div className="flex items-center gap-3 mb-5">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                <UserPlus size={18} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">People You May Know</h3>
+                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Suggested</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            {suggestedFriends.map(person => (
+                                <div key={person.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                                    <AvatarCircle url={person.avatar_url} name={person.username} size="sm" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{person.username}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleSendRequest(person.id)}
+                                        disabled={actionLoadingId === person.id}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                        {actionLoadingId === person.id ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
+                                        Add
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     )

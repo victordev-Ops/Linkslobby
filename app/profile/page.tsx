@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import ProfileClient from "./ProfileClient"
 import { getProfile } from "@/actions/profile"
+import { getFriends, getPendingRequests, getSuggestedFriends } from "@/actions/friends"
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,12 @@ export default async function ProfilePage() {
         redirect("/login")
     }
 
-    const profile = await getProfile()
+    const [profile, friends, pendingRequests, suggestedFriends] = await Promise.all([
+        getProfile(),
+        getFriends(),
+        getPendingRequests(),
+        getSuggestedFriends(),
+    ])
 
     if (!profile) {
         // Handle edge case where auth user exists but profile doesn't
@@ -30,6 +36,10 @@ export default async function ProfilePage() {
                 avatar_url: profile.avatar_url,
                 dms_disabled: profile.dms_disabled || false
             }}
+            initialFriends={friends}
+            initialPendingRequests={pendingRequests}
+            initialSuggestedFriends={suggestedFriends}
         />
     )
 }
+

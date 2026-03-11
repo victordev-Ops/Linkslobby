@@ -182,9 +182,22 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
       <main className="max-w-xl mx-auto px-4 py-8 space-y-8 relative z-10">
 
         <header className="py-2">
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-            Hi, {profile.username?.split(' ')[0]} 👋
-          </h1>
+          <div className="flex items-center gap-3 mb-1">
+            {profile.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={profile.username}
+                className="w-10 h-10 rounded-full object-cover ring-2 ring-purple-500/30 shadow-md"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-lg ring-2 ring-purple-500/30 shadow-md">
+                {profile.username?.charAt(0).toUpperCase() || '?'}
+              </div>
+            )}
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+              Hi, {profile.username?.split(' ')[0]} 👋
+            </h1>
+          </div>
           <p className="text-slate-500 dark:text-white/60 text-sm font-medium">
             Ready for some fun today?
           </p>
