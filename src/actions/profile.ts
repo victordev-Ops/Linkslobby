@@ -58,25 +58,41 @@ export async function setupProfile(username: string) {
         return { error: 'Session expired. Please sign in again.' }
     }
 
-    const slug = username.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    // Server-side validation — never trust the client
+    const trimmed = username.trim()
+    if (!trimmed || trimmed.length < 3) {
+        return { error: 'Username must be at least 3 characters.' }
+    }
+    if (trimmed.length > 30) {
+        return { error: 'Username must be at most 30 characters.' }
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+        return { error: 'Username can only contain letters, numbers, hyphens, and underscores.' }
+    }
 
-    // Check if this is a new profile (first time setup)
+    const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+
+    if (slug.length < 3) {
+        return { error: 'Username produces an invalid URL slug. Try a different name.' }
+    }
+
+    // Check if this is a first-time setup (skeleton profile from DB trigger has NULL username)
     const { data: existingProfile } = await supabase
         .from('profiles')
-        .select('id, is_pro')
+        .select('id, username, is_pro')
         .eq('id', user.id)
         .maybeSingle()
 
-    const isNewProfile = !existingProfile
+    const isFirstTimeSetup = !existingProfile || !existingProfile.username
 
     const { error } = await supabase
         .from('profiles')
         .upsert({
             id: user.id,
             email: user.email,
-            username: username,
+            username: trimmed,
             slug: slug,
-            ...(isNewProfile && { xp_balance: 0 }),
+            ...(isFirstTimeSetup && { xp_balance: 0 }),
             updated_at: new Date().toISOString(),
         }, {
             onConflict: 'id'
@@ -84,12 +100,12 @@ export async function setupProfile(username: string) {
 
     if (error) {
         console.error("Profile Setup Error:", error.message)
-        if (error.code === '23505') return { error: 'That username is already taken.' }
+        if (error.code === '23505') return { error: 'That username is already taken. Please try another.' }
         return { error: 'Could not save profile. Please try again.' }
     }
 
     let xpAwarded: number | undefined
-    if (isNewProfile) {
+    if (isFirstTimeSetup) {
         try {
             const isPro = existingProfile?.is_pro ?? false
             const amount = applyProRewardMultiplier(XP_REWARDS.PROFILE_CREATED, isPro)
@@ -99,7 +115,7 @@ export async function setupProfile(username: string) {
                 p_user_id: user.id,
                 p_amount: amount,
                 p_reason: reason,
-                p_metadata: { action: 'profile_created', username }
+                p_metadata: { action: 'profile_created', username: trimmed }
             })
             xpAwarded = amount
         } catch (xpError) {

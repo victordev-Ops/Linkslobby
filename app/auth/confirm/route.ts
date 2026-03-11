@@ -30,8 +30,23 @@ export async function GET(request: NextRequest) {
         console.error('Profile check error:', profileError)
       }
 
-      // Note: Profile creation happens in setupProfile action via upsert
-      // Just redirect based on current state
+      // 3. Safety net: create skeleton profile if it doesn't exist
+      //    (redundant with DB trigger, but covers edge cases where trigger
+      //     didn't fire or was not yet installed)
+      if (!profile) {
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            email: data.user.email,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'id' })
+
+        if (insertError) {
+          console.error('Safety net profile creation error:', insertError)
+        }
+      }
 
       // 4. Redirect based on profile completion
       if (profile?.username && profile?.slug) {

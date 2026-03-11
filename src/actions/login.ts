@@ -19,6 +19,7 @@ export async function signIn(email: string, next?: string): Promise<AuthResponse
     const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
         options: {
+            shouldCreateUser: false, // Login should never create new auth users — that's signup's job
             emailRedirectTo: `${cleanOrigin}/auth/confirm${next ? `?next=${encodeURIComponent(next)}` : ''}`,
         },
     })

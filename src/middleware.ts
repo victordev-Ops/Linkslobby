@@ -75,13 +75,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // 5. Profile Completion Check - Apply to all protected routes
-  const protectedRoutesRequiringProfile = ['/dashboard', '/inbox', '/settings', '/notifications', '/profile', '/tod', '/hot-seat']
-  const needsProfileCheck = user && protectedRoutesRequiringProfile.some(route =>
-    pathname === route || pathname.startsWith(route + '/')
-  )
+  // 5. Profile Completion Check - guard ALL authenticated routes
+  //    (except public routes and /auth/setup itself) to prevent users
+  //    from accessing any part of the app without a complete profile.
+  const profileExemptPaths = ['/auth/setup']
+  const isProfileExempt = profileExemptPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
 
-  if (needsProfileCheck) {
+  if (user && !isPublicRoute && !isProfileExempt) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('username, slug')
