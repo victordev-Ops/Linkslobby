@@ -5,7 +5,10 @@ import { ArrowLeft, MessageSquare, Star, Calendar, UserPlus, Loader2, Check } fr
 import { useRouter } from 'next/navigation'
 import VerifiedBadge from '@/components/VerifiedBadge'
 import { sendFriendRequest } from '@/actions/friends'
+import { updateBio } from '@/actions/profile'
 import { toast } from 'sonner'
+import Link from 'next/link'
+import { FileText, BadgeCheck } from 'lucide-react'
 
 interface PublicProfileClientProps {
     profile: {
@@ -17,12 +20,24 @@ interface PublicProfileClientProps {
         xp_balance?: number
         created_at?: string
     }
+    isOwnProfile?: boolean
+    initialBio?: string
+    friendshipStatus?: 'none' | 'pending' | 'accepted'
+    viewerIsPro?: boolean
 }
 
-export default function PublicProfileClient({ profile }: PublicProfileClientProps) {
+export default function PublicProfileClient({ 
+    profile, 
+    isOwnProfile = false,
+    initialBio = '',
+    friendshipStatus = 'none',
+    viewerIsPro = false
+}: PublicProfileClientProps) {
     const router = useRouter()
     const [isSendingRequest, setIsSendingRequest] = useState(false)
-    const [requestSent, setRequestSent] = useState(false)
+    const [requestSent, setRequestSent] = useState(friendshipStatus === 'pending')
+    const [bio, setBio] = useState(initialBio)
+    const [isSavingBio, setIsSavingBio] = useState(false)
 
     const joinDate = profile.created_at
         ? new Date(profile.created_at).toLocaleDateString([], { month: 'long', year: 'numeric' })
@@ -74,15 +89,68 @@ export default function PublicProfileClient({ profile }: PublicProfileClientProp
 
                 {/* Name & Badge */}
                 <div className="space-y-1 mb-6">
-                    <div className="flex items-center gap-1.5">
-                        {profile.is_pro && <VerifiedBadge size={20} />}
-                        <h1 className="text-2xl font-black">@{profile.username}</h1>
+                    <div className="flex flex-col gap-1 items-start">
+                        {!viewerIsPro && (
+                            <Link href="/upgrade" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition bg-blue-500/10 px-2 py-1 rounded-full mb-1">
+                            <BadgeCheck size={14} /> Get Verified
+                            </Link>
+                        )}
+                        <div className="flex items-center gap-1.5">
+                            <h1 className="text-2xl font-black">@{profile.username}</h1>
+                            {profile.is_pro && <VerifiedBadge size={20} />}
+                        </div>
                     </div>
                     {joinDate && (
                         <div className="flex items-center gap-1.5 text-white/40 text-sm">
                             <Calendar size={14} />
                             <span>Joined {joinDate}</span>
                         </div>
+                    )}
+                </div>
+
+                {/* Bio Section */}
+                <div className="mb-6 bg-white/5 border border-white/10 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <FileText size={14} className="text-white/40" />
+                        <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Bio</p>
+                    </div>
+                    {isOwnProfile ? (
+                        <>
+                            <textarea
+                                value={bio}
+                                onChange={e => setBio(e.target.value.slice(0, 160))}
+                                placeholder="Write a short bio..."
+                                maxLength={160}
+                                rows={2}
+                                className="w-full bg-black/20 border border-white/5 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-purple-400/40 focus:border-purple-400/40 transition-all resize-none"
+                            />
+                            <div className="flex items-center justify-between mt-2">
+                                <p className="text-[10px] text-white/40">{bio.length}/160</p>
+                                <button
+                                    onClick={async () => {
+                                        setIsSavingBio(true)
+                                        try {
+                                            const result = await updateBio(bio)
+                                            if (result.success) toast.success('Bio updated!')
+                                            else toast.error(result.error || 'Failed to update bio')
+                                        } catch {
+                                            toast.error('Something went wrong')
+                                        } finally {
+                                            setIsSavingBio(false)
+                                        }
+                                    }}
+                                    disabled={isSavingBio || bio === initialBio}
+                                    className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                                >
+                                    {isSavingBio ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                    Save
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <p className="text-sm text-white/80 whitespace-pre-wrap">
+                            {bio || <span className="text-white/30 italic">No bio written yet.</span>}
+                        </p>
                     )}
                 </div>
 
@@ -106,23 +174,29 @@ export default function PublicProfileClient({ profile }: PublicProfileClientProp
                         <MessageSquare size={18} />
                         Message
                     </button>
-                    <button
-                        onClick={handleAddFriend}
-                        disabled={isSendingRequest || requestSent}
-                        className={`px-5 py-3.5 border font-bold rounded-2xl transition-all active:scale-95 disabled:opacity-60 ${
-                            requestSent
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
-                        }`}
-                    >
-                        {isSendingRequest ? (
-                            <Loader2 size={18} className="animate-spin" />
-                        ) : requestSent ? (
-                            <Check size={18} />
-                        ) : (
-                            <UserPlus size={18} />
-                        )}
-                    </button>
+                    {!isOwnProfile && (
+                        <button
+                            onClick={friendshipStatus === 'accepted' ? undefined : handleAddFriend}
+                            disabled={isSendingRequest || requestSent || friendshipStatus === 'accepted'}
+                            className={`px-5 py-3.5 border font-bold rounded-2xl transition-all active:scale-95 disabled:opacity-60 flex items-center gap-2 justify-center ${
+                                friendshipStatus === 'accepted'
+                                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-400 cursor-default'
+                                    : requestSent
+                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                        : 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
+                            }`}
+                        >
+                            {isSendingRequest ? (
+                                <Loader2 size={18} className="animate-spin" />
+                            ) : requestSent ? (
+                                <><Check size={18} /> Sent</>
+                            ) : friendshipStatus === 'accepted' ? (
+                                <><UserPlus size={18} /> Friends ✓</>
+                            ) : (
+                                <><UserPlus size={18} /> Add</>
+                            )}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

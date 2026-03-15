@@ -403,9 +403,9 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             reply_to_id: replyingTo?.id,
             reply: replyingTo ? {
                 id: replyingTo.id,
-                content: replyingTo.content,
+                content: replyingTo.content || '',
                 sender_id: replyingTo.sender_id,
-                profiles: { username: targetProfile.username || 'User' } // Approximate
+                profiles: { username: replyingTo.isOwn ? 'You' : (targetProfile.username || 'User') }
             } : undefined
         }
 
@@ -439,9 +439,9 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                         reply_to_id: replyingTo?.id,
                         reply: replyingTo ? {
                             id: replyingTo.id,
-                            content: replyingTo.content,
+                            content: replyingTo.content || '',
                             sender_id: replyingTo.sender_id,
-                            profiles: { username: targetProfile.username || 'User' }
+                            profiles: { username: replyingTo.isOwn ? 'You' : (targetProfile.username || 'User') }
                         } : undefined
                     }
                 }).catch(() => { })
@@ -757,11 +757,18 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
 
                                             {/* Reply Context */}
                                             {msg.reply && msg.reply.content !== undefined && (
-                                                <div className={`text-xs mb-2 pl-2 border-l-2 ${msg.isOwn ? 'border-white/30 text-white/70' : 'border-purple-500 text-neutral-400'}`}>
-                                                    <div className="font-bold opacity-80 mb-0.5">
+                                                <div 
+                                                    onClick={() => {
+                                                        // Fallback feature: find index of replied message and scroll up
+                                                        const el = document.getElementById(`msg-${msg.reply?.id}`)
+                                                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                                    }}
+                                                    className={`cursor-pointer text-xs mb-2 pl-2.5 py-1 border-l-2 ${msg.isOwn ? 'border-white/40 text-white/80 bg-black/10' : 'border-purple-500 text-neutral-300 bg-black/20'} rounded-r-md transition-colors hover:opacity-80`}
+                                                >
+                                                    <div className="font-bold opacity-90 mb-0.5 text-[11px] uppercase tracking-wider">
                                                         {msg.reply.sender_id === currentUser.id ? 'You' : (msg.reply.profiles as any)?.username || 'User'}
                                                     </div>
-                                                    <div className="truncate opacity-70 italic">
+                                                    <div className="truncate opacity-80 italic">
                                                         {msg.reply.content?.startsWith('[IMG:') ? '📷 Photo' : msg.reply.content}
                                                     </div>
                                                 </div>
