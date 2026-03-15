@@ -34,7 +34,8 @@ export default async function ProfilePage() {
                 slug: profile.slug || '',
                 email: profile.email || user.email, // Fallback to auth email
                 avatar_url: profile.avatar_url,
-                dms_disabled: profile.dms_disabled || false
+                dms_disabled: profile.dms_disabled || false,
+                is_pro: profile.is_pro || false
             }}
             initialFriends={friends}
             initialPendingRequests={pendingRequests}

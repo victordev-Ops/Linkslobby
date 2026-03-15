@@ -188,7 +188,7 @@ export default function HotSeatListClient({ profile, sessions }: HotSeatListClie
 
                             <div className="p-3 bg-amber-500/5 rounded-xl border border-amber-500/10">
                                 <p className="text-[11px] text-amber-300/60 leading-relaxed font-medium">
-                                    ⚡ You sit in the hot seat. Friends fire rapid questions at you. Answer within <strong className="text-amber-300">30 seconds</strong> or lose <strong className="text-amber-300">10 ⭐</strong>!
+                                    You sit in the hot seat. Friends fire rapid questions at you. Answer within <strong className="text-amber-300">30 seconds</strong> or lose <strong className="text-amber-300">10 ⭐</strong>!
                                 </p>
                             </div>
                         </div>

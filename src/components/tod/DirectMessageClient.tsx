@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Send, Loader2, MessageCircle, Plus, ChevronUp, X, Reply } from 'lucide-react'
+import VerifiedBadge from '@/components/VerifiedBadge'
 import { motion, AnimatePresence, PanInfo } from 'framer-motion'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
@@ -17,7 +18,7 @@ import { compressImage } from '@/lib/image-utils'
 interface DirectMessageClientProps {
     sessionId: string
     currentUser: { id: string, email?: string }
-    targetProfile: { id: string, username: string | null }
+    targetProfile: { id: string, username: string | null, avatar_url?: string | null, is_pro?: boolean, slug?: string | null }
 }
 
 interface Message {
@@ -49,18 +50,14 @@ function groupMessages(msgs: Message[]): Message[] {
         const prev = msgs[i - 1]
         const next = msgs[i + 1]
 
-        // Break group if sender changes OR if the message is a reply OR if the previous message was a reply
-        // This ensures replies stand out visually
+        // Only break groups on sender change or time gap.
+        // Replies stay in their sender's group — the reply context bar provides distinction.
         const isFirstInGroup = !prev ||
             prev.isOwn !== msg.isOwn ||
-            (msg.reply && msg.reply.content !== undefined) ||
-            (prev?.reply && prev.reply.content !== undefined) ||
-            (new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() > 2 * 60 * 1000) // 2 min gap breaks group
+            (new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() > 2 * 60 * 1000)
 
         const isLastInGroup = !next ||
             next.isOwn !== msg.isOwn ||
-            !!next.reply ||
-            !!msg.reply ||
             (new Date(next.created_at).getTime() - new Date(msg.created_at).getTime() > 2 * 60 * 1000)
 
         return { ...msg, isFirstInGroup, isLastInGroup }
@@ -577,20 +574,34 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                     >
                         <ArrowLeft size={20} />
                     </button>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-purple-900/20">
-                            {targetProfile.username?.[0]?.toUpperCase() || '?'}
-                        </div>
+                    <button
+                        onClick={() => router.push(`/u/${targetProfile.slug || targetProfile.username}`)}
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                    >
+                        {targetProfile.avatar_url ? (
+                            <img
+                                src={targetProfile.avatar_url}
+                                alt={targetProfile.username || 'User'}
+                                className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10 shadow-lg"
+                            />
+                        ) : (
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-purple-900/20">
+                                {targetProfile.username?.[0]?.toUpperCase() || '?'}
+                            </div>
+                        )}
                         <div className="flex flex-col">
-                            <span className="font-bold text-sm leading-tight text-neutral-100">
-                                @{targetProfile.username || 'user'}
-                            </span>
+                            <div className="flex items-center gap-1">
+                                <span className="font-bold text-sm leading-tight text-neutral-100">
+                                    @{targetProfile.username || 'user'}
+                                </span>
+                                {targetProfile.is_pro && <VerifiedBadge size={14} />}
+                            </div>
                             <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 <span className="text-[10px] font-bold text-emerald-500/80 uppercase tracking-wider">Online</span>
                             </div>
                         </div>
-                    </div>
+                    </button>
                 </div>
             </div>
 

@@ -56,7 +56,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                    id,
                    username,
                    slug,
-                   xp_balance
+                   xp_balance,
+                   avatar_url,
+                   is_pro
                 )
             )
         `)
@@ -86,7 +88,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
     const targetProfile = {
         id: profileData?.id || fallback.id,
-        username: profileData?.username || fallback.username
+        username: profileData?.username || fallback.username,
+        avatar_url: profileData?.avatar_url || null,
+        is_pro: profileData?.is_pro || false,
+        slug: profileData?.slug || null
     }
 
     return <DirectMessageClient sessionId={sessionId} currentUser={user} targetProfile={targetProfile} />

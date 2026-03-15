@@ -84,9 +84,23 @@ function LoginContent() {
                 </div>
 
                 {message.text && message.type === 'error' && (
-                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-xs font-medium text-center">
-                    {message.text}
-                  </div>
+                  message.text === 'no_account' ? (
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
+                      <p className="text-amber-200 text-sm font-medium">
+                        looks like you don't have an account yet 👀
+                      </p>
+                      <Link
+                        href={`/signup${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`}
+                        className="inline-block text-sm font-bold text-purple-400 hover:text-purple-300 underline underline-offset-2 transition-colors"
+                      >
+                        sign up here →
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-xs font-medium text-center">
+                      {message.text}
+                    </div>
+                  )
                 )}
 
                 <button

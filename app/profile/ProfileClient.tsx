@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Save, Copy, Check, Loader2, User as UserIcon, XCircle, CheckCircle, Camera, UserPlus, UserMinus, Users, X, Clock } from 'lucide-react'
+import { ArrowLeft, Save, Copy, Check, Loader2, User as UserIcon, XCircle, CheckCircle, Camera, UserPlus, UserMinus, Users, X, Clock, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { updateProfile, checkSlugAvailability } from '@/actions/profile'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import VerifiedBadge from '@/components/VerifiedBadge'
 import { useDebounce } from '@/hooks/use-debounce'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -22,6 +23,7 @@ interface ProfileClientProps {
         email: string
         avatar_url?: string
         dms_disabled: boolean
+        is_pro: boolean
     }
     initialFriends?: FriendshipWithProfile[]
     initialPendingRequests?: FriendshipWithProfile[]
@@ -238,33 +240,36 @@ export default function ProfileClient({ user, profile, initialFriends = [], init
 
     return (
         <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24">
-            {/* Header */}
-            <div className="bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 sticky top-0 z-30 px-4 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <Link href="/dashboard" className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
-                        <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
-                    </Link>
-                    <h1 className="text-xl font-bold text-slate-900 dark:text-white">My Profile</h1>
+            {/* Gradient Cover Banner */}
+            <div className="h-36 bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 relative">
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#F8F9FD] dark:to-[#0f0a1e]" />
+                <div className="absolute top-0 left-0 right-0 bg-black/10 backdrop-blur-sm px-4 py-3 flex items-center justify-between z-10">
+                    <div className="flex items-center gap-4">
+                        <Link href="/dashboard" className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                            <ArrowLeft size={20} className="text-white" />
+                        </Link>
+                        <h1 className="text-lg font-bold text-white">My Profile</h1>
+                    </div>
+                    {!isEditing && (
+                        <button
+                            onClick={() => setIsEditing(true)}
+                            className="text-sm font-bold text-white/90 hover:text-white bg-white/10 hover:bg-white/20 px-4 py-1.5 rounded-full transition"
+                        >
+                            Edit Profile
+                        </button>
+                    )}
                 </div>
-                {!isEditing && (
-                    <button
-                        onClick={() => setIsEditing(true)}
-                        className="text-sm font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 transition"
-                    >
-                        Edit Profile
-                    </button>
-                )}
             </div>
 
-            <main className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+            <main className="max-w-2xl mx-auto px-4 -mt-16 relative z-10 space-y-6">
                 {/* Profile Card */}
-                <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-white/10 p-8 flex flex-col items-center">
+                <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-[2.5rem] shadow-lg border border-slate-200 dark:border-white/10 p-8 flex flex-col items-center">
                     <div className="relative group mb-4">
-                        <div className="w-32 h-32 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-xl ring-4 ring-white dark:ring-[#1a1429] overflow-hidden">
+                        <div className="w-28 h-28 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white shadow-xl ring-4 ring-white dark:ring-[#1a1429] overflow-hidden">
                             {avatarUrl ? (
                                 <img src={avatarUrl} alt={displayUsername} className="w-full h-full object-cover" />
                             ) : (
-                                <span className="text-4xl font-black italic">
+                                <span className="text-3xl font-black italic">
                                     {displayUsername ? displayUsername.charAt(0).toUpperCase() : "?"}
                                 </span>
                             )}
@@ -290,12 +295,32 @@ export default function ProfileClient({ user, profile, initialFriends = [], init
 
                     {!isEditing ? (
                         <>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white text-center">
-                                @{displayUsername}
-                            </h2>
-                            <p className="text-slate-500 dark:text-slate-400 font-medium text-center mt-1 mb-6">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white text-center">
+                                    @{displayUsername}
+                                </h2>
+                                {profile.is_pro && <VerifiedBadge size={20} />}
+                            </div>
+                            {!profile.is_pro && (
+                                <Link
+                                    href="/upgrade"
+                                    className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-full text-xs font-bold text-blue-500 hover:text-blue-400 transition mb-2"
+                                >
+                                    <Sparkles size={12} />
+                                    Get Verified
+                                </Link>
+                            )}
+                            <p className="text-slate-500 dark:text-slate-400 font-medium text-center mb-4">
                                 {displaySlug}
                             </p>
+
+                            {/* Stats Row */}
+                            <div className="flex gap-6 mb-5">
+                                <div className="text-center">
+                                    <p className="text-lg font-black text-slate-900 dark:text-white">{friends.length}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Friends</p>
+                                </div>
+                            </div>
 
                             <button
                                 onClick={handleCopy}
@@ -436,11 +461,13 @@ export default function ProfileClient({ user, profile, initialFriends = [], init
                         <div className="space-y-2">
                             {pendingRequests.map(req => (
                                 <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
-                                    <AvatarCircle url={req.profile.avatar_url} name={req.profile.username} size="sm" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{req.profile.username}</p>
-                                        <p className="text-[10px] text-slate-400 dark:text-slate-500">Wants to be friends</p>
-                                    </div>
+                                    <Link href={`/u/${req.profile.slug || req.profile.username}`} className="flex items-center gap-3 flex-1 min-w-0">
+                                        <AvatarCircle url={req.profile.avatar_url} name={req.profile.username} size="sm" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{req.profile.username}</p>
+                                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Wants to be friends</p>
+                                        </div>
+                                    </Link>
                                     <div className="flex gap-1.5">
                                         <button
                                             onClick={() => handleAcceptRequest(req.id, req.profile)}
@@ -488,10 +515,12 @@ export default function ProfileClient({ user, profile, initialFriends = [], init
                         <div className="space-y-2">
                             {friends.map(f => (
                                 <div key={f.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
-                                    <AvatarCircle url={f.profile.avatar_url} name={f.profile.username} size="sm" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{f.profile.username}</p>
-                                    </div>
+                                    <Link href={`/u/${f.profile.slug || f.profile.username}`} className="flex items-center gap-3 flex-1 min-w-0">
+                                        <AvatarCircle url={f.profile.avatar_url} name={f.profile.username} size="sm" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{f.profile.username}</p>
+                                        </div>
+                                    </Link>
                                     <button
                                         onClick={() => handleRemoveFriend(f.id)}
                                         disabled={actionLoadingId === f.id}
@@ -521,10 +550,12 @@ export default function ProfileClient({ user, profile, initialFriends = [], init
                         <div className="space-y-2">
                             {suggestedFriends.map(person => (
                                 <div key={person.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
-                                    <AvatarCircle url={person.avatar_url} name={person.username} size="sm" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{person.username}</p>
-                                    </div>
+                                    <Link href={`/u/${person.slug || person.username}`} className="flex items-center gap-3 flex-1 min-w-0">
+                                        <AvatarCircle url={person.avatar_url} name={person.username} size="sm" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-sm text-slate-900 dark:text-white truncate">@{person.username}</p>
+                                        </div>
+                                    </Link>
                                     <button
                                         onClick={() => handleSendRequest(person.id)}
                                         disabled={actionLoadingId === person.id}

@@ -618,8 +618,8 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                                         <div className="p-1.5 space-y-0.5">
                                                             <button
                                                                 onClick={() => {
-                                                                    const identifier = p.slug || p.username || p.id;
-                                                                    router.push(`/${identifier}`);
+                                                                    const identifier = p.slug || p.username;
+                                                                    router.push(`/u/${identifier}`);
                                                                     setMenuOpen(null);
                                                                     setShowParticipants(false);
                                                                 }}

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Share2, Loader2, Users, RotateCcw, Swords, Wifi, WifiOff, Monitor, UserPlus, Star } from "lucide-react"
 import { toast } from "sonner"
-import { earnXP, spendXP } from "@/hooks/xp"
+import { earnXP, spendXP, getXPBalance } from "@/hooks/xp"
 
 type Choice = "rock" | "paper" | "scissors" | null
 type RoundResult = "win" | "lose" | "tie"
@@ -79,6 +79,54 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const [collateralPaid, setCollateralPaid] = useState(false)
     const gameStartedRef = useRef(false)
     const restoredRef = useRef(false)
+
+    // Star balance gate state
+    const [starBalance, setStarBalance] = useState<number | null>(null)
+    const [stakeAmount, setStakeAmount] = useState(100)
+    const [showBalanceGate, setShowBalanceGate] = useState(false)
+    const [isCheckingBalance, setIsCheckingBalance] = useState(false)
+    const [pendingMode, setPendingMode] = useState<'solo' | 'friend' | null>(null)
+
+    // --- Star balance gate helpers ---
+    const handleModeSelect = async (selectedMode: 'solo' | 'friend') => {
+        setIsCheckingBalance(true)
+        try {
+            const balance = await getXPBalance()
+            setStarBalance(balance)
+            if (balance >= 100) {
+                // Enough stars — proceed with standard 100 stake
+                if (selectedMode === 'solo') {
+                    startSoloWithStake(100)
+                } else {
+                    createRoom()
+                }
+            } else {
+                // Not enough for 100 — show gate modal
+                setPendingMode(selectedMode)
+                setShowBalanceGate(true)
+            }
+        } catch {
+            toast.error('Failed to check star balance')
+        } finally {
+            setIsCheckingBalance(false)
+        }
+    }
+
+    const startSoloWithStake = async (stake: number) => {
+        setStakeAmount(stake)
+        // Deduct collateral upfront
+        const res = await spendXP(stake, 'RPS solo collateral', { game: 'rps' })
+        if (res.success) {
+            setCollateralPaid(true)
+            gameStartedRef.current = true
+            setMode('solo')
+            toast(`${stake} Stars locked as collateral ⭐`, { icon: '🔒' })
+            // Update displayed balance
+            setStarBalance(prev => prev !== null ? prev - stake : null)
+        } else {
+            toast.error(res.error || 'Failed to deduct stars')
+        }
+    }
 
     // --- Session persistence helpers ---
     const SESSION_KEY = 'rps_game_state'
@@ -412,17 +460,14 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     // Won: get collateral back + opponent's collateral
                     earnXP(200, "Won Rock Paper Scissors match", { game: "rps" }, true, profile.is_pro).catch(console.error)
                 } else {
-                    // Solo: +100 stars
-                    earnXP(100, "Won Rock Paper Scissors match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                    // Solo: earn 2x stake (collateral back + winnings)
+                    earnXP(stakeAmount * 2, "Won Rock Paper Scissors match", { game: "rps" }, true, profile.is_pro).catch(console.error)
                 }
             } else if (newOpponentScore >= 3) {
                 setMatchResult("lost")
                 setPhase("matchEnd")
-                if (mode === "solo") {
-                    // Solo: -100 stars
-                    spendXP(100, "Lost Rock Paper Scissors match", { game: "rps" }).catch(console.error)
-                }
-                // Friend mode: no extra deduction (already lost collateral)
+                // No extra deduction — collateral was already held upfront
+                // Friend mode: also no extra deduction (already paid collateral)
             } else {
                 // Next round
                 setPhase("choosing")
@@ -553,6 +598,12 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         <Swords size={18} className="text-emerald-500" />
                         <h2 className="font-bold text-sm">Rock Paper Scissors</h2>
                     </div>
+                    {starBalance !== null && (
+                        <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 rounded-full text-amber-400 text-xs font-bold">
+                            <Star size={12} />
+                            {starBalance}
+                        </div>
+                    )}
                 </div>
 
                 <main className="max-w-md mx-auto p-6 space-y-8 relative z-10 pt-12">
@@ -568,8 +619,9 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     {/* Mode buttons */}
                     <div className="space-y-3">
                         <button
-                            onClick={() => setMode("solo")}
-                            className="w-full p-5 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all active:scale-[0.98] group"
+                            onClick={() => handleModeSelect('solo')}
+                            disabled={isCheckingBalance}
+                            className="w-full p-5 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all active:scale-[0.98] group disabled:opacity-60"
                         >
                             <div className="flex items-center gap-4">
                                 <div className="w-14 h-14 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -631,6 +683,55 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                             </div>
                         )}
                     </div>
+
+                    {/* Balance Gate Modal */}
+                    {showBalanceGate && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+                            <div className="bg-[#14141f] border border-white/10 rounded-3xl p-6 max-w-sm w-full space-y-5 shadow-2xl">
+                                <div className="text-center space-y-2">
+                                    <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto">
+                                        <Star size={32} className="text-amber-400" />
+                                    </div>
+                                    <h3 className="text-xl font-black text-white">Insufficient Stars</h3>
+                                    <p className="text-white/50 text-sm">
+                                        You need <span className="text-amber-400 font-bold">100 Stars</span> to play.
+                                        You have <span className="text-amber-400 font-bold">{starBalance} Stars</span>.
+                                    </p>
+                                </div>
+
+                                {starBalance !== null && starBalance > 0 ? (
+                                    <div className="space-y-3">
+                                        <button
+                                            onClick={() => {
+                                                setStakeAmount(starBalance!)
+                                                setShowBalanceGate(false)
+                                                startSoloWithStake(starBalance!)
+                                            }}
+                                            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition active:scale-95"
+                                        >
+                                            Play with {starBalance} Stars ⭐
+                                        </button>
+                                        <button
+                                            onClick={() => setShowBalanceGate(false)}
+                                            className="w-full py-3 text-white/40 hover:text-white/60 font-bold text-sm transition"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <p className="text-center text-white/40 text-sm">Earn stars by playing other games!</p>
+                                        <button
+                                            onClick={() => setShowBalanceGate(false)}
+                                            className="w-full py-3 text-white/40 hover:text-white/60 font-bold text-sm transition"
+                                        >
+                                            Close
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </main>
             </div>
         )

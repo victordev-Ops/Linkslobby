@@ -26,6 +26,10 @@ export async function signIn(email: string, next?: string): Promise<AuthResponse
 
     if (error) {
         console.error('Supabase OTP error:', error)
+        // Friendly message when user doesn't have an account
+        if (error.message === 'Signups not allowed for otp') {
+            return { success: false, message: 'no_account' }
+        }
         return { success: false, message: error.message }
     }
 
