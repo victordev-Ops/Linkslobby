@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { db } from '@/lib/db'
 import { compressImage } from '@/lib/image-utils'
+import { useNotifications } from '@/context/NotificationContext'
 // import { queueOfflineAction } from '@/lib/sync' // TODO: Update sync for chat_messages
 
 interface DirectMessageClientProps {
@@ -77,6 +78,7 @@ function formatDateSeparator(dateStr: string): string {
 
 export default function DirectMessageClient({ sessionId, currentUser, targetProfile }: DirectMessageClientProps) {
     const router = useRouter()
+    const notifications = useNotifications()
     const [messages, setMessages] = useState<Message[]>([])
     const [inputText, setInputText] = useState('')
     const [isUploading, setIsUploading] = useState(false)
@@ -184,8 +186,8 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                     }))
                 ).catch(() => { })
 
-                // Mark session as read
-                markSessionRead(sessionId).catch(console.error)
+                // Mark session as read and refresh badge
+                markSessionRead(sessionId).then(() => notifications.refreshUnreadCount()).catch(console.error)
 
                 // Fetch partner's last read time
                 const { data: partnerPart } = await supabase
@@ -223,7 +225,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                 // Here we just check ID
                 // Side effects
                 if (newMsg.sender_id !== currentUser.id) {
-                    markSessionRead(sessionId).catch(() => { })
+                    markSessionRead(sessionId).then(() => notifications.refreshUnreadCount()).catch(() => { })
                 }
                 setTimeout(() => scrollToBottom('smooth'), 100)
 
@@ -336,7 +338,7 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             supabase.removeChannel(readReceiptChannel)
             presenceChannelRef.current = null
         }
-    }, [sessionId, currentUser.id, supabase])
+    }, [sessionId, currentUser.id, supabase, notifications])
 
     // IntersectionObserver for infinite scroll (load older messages on scroll up)
     useEffect(() => {

@@ -2,15 +2,15 @@
 
 import { useState, useTransition, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Crown, Sparkles, Check, Zap, Shield, Palette, Users, Star, ArrowLeft, CreditCard, Loader2 } from "lucide-react"
+import { Sparkles, Check, Zap, Shield, Palette, Users, Star, ArrowLeft, Loader2, BadgeCheck } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createStripeCheckout, createPaystackCheckout } from "@/actions/subscription"
+import { createPaystackCheckout } from "@/actions/subscription"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
+import VerifiedBadge from "@/components/VerifiedBadge"
 
 type Plan = "weekly" | "monthly" | "annual"
-type Provider = "stripe" | "paystack"
 
 const plans = [
     {
@@ -40,6 +40,7 @@ const plans = [
 ]
 
 const benefits = [
+    { icon: BadgeCheck, text: "Verified blue tick on your profile", color: "text-blue-500" },
     { icon: Users, text: "5 TOD lobbies (vs 3 for free)", color: "text-purple-400" },
     { icon: Zap, text: "2x XP on all activities", color: "text-yellow-400" },
     { icon: Palette, text: "Remove watermark from shares", color: "text-pink-400" },
@@ -50,7 +51,6 @@ const benefits = [
 
 function UpgradeContent() {
     const [selectedPlan, setSelectedPlan] = useState<Plan>("monthly")
-    const [selectedProvider, setSelectedProvider] = useState<Provider>("stripe")
     const [isPending, startTransition] = useTransition()
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -61,9 +61,7 @@ function UpgradeContent() {
     const handleCheckout = () => {
         startTransition(async () => {
             try {
-                const result = selectedProvider === "stripe"
-                    ? await createStripeCheckout(selectedPlan)
-                    : await createPaystackCheckout(selectedPlan)
+                const result = await createPaystackCheckout(selectedPlan)
 
                 if (result.success && result.url) {
                     window.location.href = result.url
@@ -85,10 +83,10 @@ function UpgradeContent() {
                     animate={{ opacity: 1, y: 0 }}
                     className="text-center space-y-4"
                 >
-                    <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-yellow-600 rounded-3xl flex items-center justify-center mx-auto shadow-xl shadow-amber-500/20">
-                        <Crown size={40} className="text-white" />
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl flex items-center justify-center mx-auto shadow-xl shadow-blue-500/20">
+                        <BadgeCheck size={40} className="text-white" />
                     </div>
-                    <h1 className="text-3xl font-black">You&apos;re already Pro! 👑</h1>
+                    <h1 className="text-3xl font-black">You&apos;re Verified! <VerifiedBadge size={28} /></h1>
                     <p className="text-white/50">Manage your subscription in Settings.</p>
                     <Link
                         href="/settings"
@@ -140,9 +138,9 @@ function UpgradeContent() {
                     <motion.div
                         animate={{ rotate: [0, 5, -5, 0], scale: [1, 1.05, 1] }}
                         transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                        className="w-24 h-24 bg-gradient-to-br from-amber-400 via-yellow-500 to-orange-500 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-amber-500/30"
+                        className="w-24 h-24 bg-gradient-to-br from-blue-400 via-blue-500 to-indigo-500 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-blue-500/30"
                     >
-                        <Crown size={48} className="text-white drop-shadow-lg" />
+                        <BadgeCheck size={48} className="text-white drop-shadow-lg" />
                     </motion.div>
                     <h2 className="text-4xl font-black tracking-tight mb-2">
                         Go <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-300">Pro</span> ✨
@@ -229,39 +227,7 @@ function UpgradeContent() {
                     </div>
                 </motion.div>
 
-                {/* Payment provider selection */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    className="mb-8"
-                >
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white/40 mb-4 px-1">Payment method</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button
-                            onClick={() => setSelectedProvider("stripe")}
-                            className={`p-4 rounded-2xl border-2 transition-all duration-200 flex flex-col items-center gap-2 ${selectedProvider === "stripe"
-                                ? "border-indigo-400/60 bg-indigo-400/10"
-                                : "border-white/10 bg-white/[0.02] hover:border-white/20"
-                                }`}
-                        >
-                            <CreditCard size={24} className={selectedProvider === "stripe" ? "text-indigo-400" : "text-white/50"} />
-                            <span className="text-sm font-bold">Stripe</span>
-                            <span className="text-[10px] text-white/40">Cards & more</span>
-                        </button>
-                        <button
-                            onClick={() => setSelectedProvider("paystack")}
-                            className={`p-4 rounded-2xl border-2 transition-all duration-200 flex flex-col items-center gap-2 ${selectedProvider === "paystack"
-                                ? "border-emerald-400/60 bg-emerald-400/10"
-                                : "border-white/10 bg-white/[0.02] hover:border-white/20"
-                                }`}
-                        >
-                            <Shield size={24} className={selectedProvider === "paystack" ? "text-emerald-400" : "text-white/50"} />
-                            <span className="text-sm font-bold">Paystack</span>
-                            <span className="text-[10px] text-white/40">Africa-friendly</span>
-                        </button>
-                    </div>
-                </motion.div>
+
 
                 {/* Checkout button */}
                 <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-gradient-to-t from-[#0f0a1e] via-[#0f0a1e] to-transparent">

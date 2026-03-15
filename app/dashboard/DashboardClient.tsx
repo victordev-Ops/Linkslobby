@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import {
   Copy, Check, MessageCircleQuestion, Loader2, Share2,
   LayoutGrid, Lock, ChevronDown, Brain, X, Save,
-  Dices, Sparkles, Flame, Swords
+  Dices, Sparkles, Flame, Swords, BadgeCheck
 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -12,6 +12,8 @@ import { useAuth } from "@/context/AuthContext"
 import { createClient } from "@/lib/supabase/client"
 import { useScrollLock } from "@/hooks/useScrollLock"
 import XPBalance from "@/components/XPBalance"
+import VerifiedBadge from "@/components/VerifiedBadge"
+import Link from "next/link"
 
 interface DashboardClientProps {
   initialDykmQuestions?: any[]
@@ -194,10 +196,16 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 {profile.username?.charAt(0).toUpperCase() || '?'}
               </div>
             )}
-            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
               Hi, {profile.username?.split(' ')[0]} 👋
+              {profile.is_pro && <VerifiedBadge size={22} />}
             </h1>
           </div>
+          {!profile.is_pro && (
+            <Link href="/upgrade" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-600 transition">
+              <BadgeCheck size={14} /> Get Verified
+            </Link>
+          )}
           <p className="text-slate-500 dark:text-white/60 text-sm font-medium">
             Ready for some fun today?
           </p>

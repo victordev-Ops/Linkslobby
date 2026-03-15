@@ -204,5 +204,3 @@ export async function getXPTransactions(limit: number = 20): Promise<XPTransacti
     return []
   }
 }
-
-

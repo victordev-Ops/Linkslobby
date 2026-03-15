@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { penalizeHotSeatTimeout } from "@/actions/hot-seat-xp"
 import { banParticipant } from "@/actions/hot-seat"
 import { useScrollLock } from "@/hooks/useScrollLock"
+import VerifiedBadge from "@/components/VerifiedBadge"
 
 interface HotSeatGameClientProps {
     session: any
@@ -583,7 +584,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <p className="font-bold text-white text-sm truncate">{p.username}</p>
-                                                        {p.is_pro && <Sparkles size={12} className="text-amber-500" />}
+                                                        {p.is_pro && <VerifiedBadge size={14} />}
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         {session.host_id === p.id ? (

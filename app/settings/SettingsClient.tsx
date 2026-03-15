@@ -3,9 +3,10 @@
 import { useState, useRef, useTransition } from "react"
 import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
-import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home, Shield, Trash2, X, Plus, UserX, AlertTriangle, Loader2, Smartphone, Check, Crown, Sparkles } from "lucide-react"
+import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home, Shield, Trash2, X, Plus, UserX, AlertTriangle, Loader2, Smartphone, Check, Sparkles, BadgeCheck } from "lucide-react"
 import PushToggle from "@/components/PushToggle"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import VerifiedBadge from "@/components/VerifiedBadge"
 import { updateRestrictedWords, updateWatermarkSetting } from "@/actions/profile"
 import { unblockUser, unblockAnonymous } from "@/actions/blocked-users"
 import { cancelSubscription, type SubscriptionInfo } from "@/actions/subscription"
@@ -26,6 +27,7 @@ interface SettingsClientProps {
   initialBlockedUsers: BlockedUser[]
   initialBlockedAnonymous: BlockedAnonymous[]
   initialSubscription?: SubscriptionInfo | null
+  isPro?: boolean
 }
 
 export default function SettingsClient({
@@ -38,6 +40,7 @@ export default function SettingsClient({
   initialBlockedUsers,
   initialBlockedAnonymous,
   initialSubscription,
+  isPro,
 }: SettingsClientProps) {
   const user = initialUser
   const username = initialUsername
@@ -209,12 +212,20 @@ export default function SettingsClient({
                 </div>
 
                 <div className="text-center sm:text-left">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-                    {user ? `@${username}` : "Guest Explorer"}
-                  </h2>
+                  <div className="flex items-center gap-1.5 justify-center sm:justify-start">
+                    {isPro && <VerifiedBadge size={20} />}
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+                      {user ? `@${username}` : "Guest Explorer"}
+                    </h2>
+                  </div>
                   <p className="text-gray-500 dark:text-gray-400 font-medium">
                     {user ? user.email : "Log in to save your settings"}
                   </p>
+                  {user && !isPro && (
+                    <Link href="/upgrade" className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-600 transition">
+                      <BadgeCheck size={14} /> Get Verified
+                    </Link>
+                  )}
                   {!user && (
                     <Link href="/login" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 transition">
                       Join now <LogIn size={16} />
@@ -228,8 +239,8 @@ export default function SettingsClient({
             {user && (
               <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl shadow-sm border border-gray-100 dark:border-white/10 p-6 sm:p-8 transition-all">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400">
-                    <Crown size={20} />
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <BadgeCheck size={20} />
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-900 dark:text-white">Subscription</h3>
@@ -290,10 +301,10 @@ export default function SettingsClient({
                     </p>
                     <Link
                       href="/upgrade"
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-bold text-sm rounded-2xl shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all active:scale-95"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-400 to-blue-600 text-white font-bold text-sm rounded-2xl shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all active:scale-95"
                     >
-                      <Sparkles size={16} />
-                      Upgrade to Pro
+                      <VerifiedBadge size={16} />
+                      Get Verified
                     </Link>
                   </div>
                 )}

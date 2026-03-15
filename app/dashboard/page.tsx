@@ -20,7 +20,7 @@ export default async function DashboardPage() {
   const [profileResponse, dykmResponse] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, username, slug, avatar_url')
+      .select('id, username, slug, avatar_url, is_pro')
       .eq('id', userId)
       .single(), // Use single() since middleware guarantees profile exists
     supabase

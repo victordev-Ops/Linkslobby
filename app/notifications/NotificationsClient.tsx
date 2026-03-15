@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import {
     Bell, MessageSquare, Brain, Users, Lock,
     ArrowLeft, ChevronRight, Trophy, Sparkles,
-    Eye, EyeOff, Loader2, X, Trash2, Flame
+    Eye, EyeOff, Loader2, X, Trash2, Flame, BadgeCheck
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation"
 import { db } from '@/lib/db'
 import { queueOfflineAction } from '@/lib/sync'
 import { useNotifications } from "@/context/NotificationContext"
+import VerifiedBadge from "@/components/VerifiedBadge"
 
 interface NotificationsClientProps {
     initialConfessions: any[]
@@ -398,7 +399,7 @@ export default function NotificationsClient({
                 if (content.includes('your turn')) return `🎯 It's your turn${lobbyName}!`
                 return item.content + (lobbyName ? ` ${lobbyName}` : '')
             case 'xp':
-                return `${item.amount > 0 ? '+' : ''}${item.amount} Stars — ${item.reason}`
+                return `${item.amount >= 0 ? '+' : ''}${item.amount} Stars — ${item.reason}`
             case 'hot_seat':
                 return `Hot Seat: New Question! 🔥`
             default:
@@ -568,7 +569,7 @@ export default function NotificationsClient({
 
             {!isPro && showProCard && (
                 <div className="fixed bottom-28 left-4 right-4 max-w-xl mx-auto">
-                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-2xl shadow-xl shadow-purple-500/20 text-white flex items-center justify-between gap-4 relative">
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-xl shadow-blue-500/20 text-white flex items-center justify-between gap-4 relative">
                         <button
                             onClick={() => setShowProCard(false)}
                             className="absolute -top-2 -right-2 w-8 h-8 bg-white dark:bg-[#1a1429] text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center shadow-lg border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
@@ -577,16 +578,16 @@ export default function NotificationsClient({
                         </button>
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                                <Sparkles size={20} />
+                                <BadgeCheck size={20} />
                             </div>
                             <div>
-                                <p className="text-xs font-black uppercase tracking-wider opacity-80">Pro Feature</p>
-                                <p className="text-sm font-bold">See who takes your quizzes</p>
+                                <p className="text-xs font-black uppercase tracking-wider opacity-80">Get Verified</p>
+                                <p className="text-sm font-bold">Unlock the blue tick & more</p>
                             </div>
                         </div>
-                        <button className="bg-white text-purple-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-purple-50 transition-colors active:scale-95">
-                            Upgrade
-                        </button>
+                        <Link href="/upgrade" className="bg-white text-blue-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-blue-50 transition-colors active:scale-95">
+                            Verify
+                        </Link>
                     </div>
                 </div>
             )}

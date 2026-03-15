@@ -1,8 +1,11 @@
 'use client'
 
-import { ArrowLeft, MessageSquare, Star, Calendar, UserPlus } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, MessageSquare, Star, Calendar, UserPlus, Loader2, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import VerifiedBadge from '@/components/VerifiedBadge'
+import { sendFriendRequest } from '@/actions/friends'
+import { toast } from 'sonner'
 
 interface PublicProfileClientProps {
     profile: {
@@ -18,10 +21,29 @@ interface PublicProfileClientProps {
 
 export default function PublicProfileClient({ profile }: PublicProfileClientProps) {
     const router = useRouter()
+    const [isSendingRequest, setIsSendingRequest] = useState(false)
+    const [requestSent, setRequestSent] = useState(false)
 
     const joinDate = profile.created_at
         ? new Date(profile.created_at).toLocaleDateString([], { month: 'long', year: 'numeric' })
         : null
+
+    const handleAddFriend = async () => {
+        setIsSendingRequest(true)
+        try {
+            const result = await sendFriendRequest(profile.id)
+            if (result.success) {
+                setRequestSent(true)
+                toast.success('Friend request sent!')
+            } else {
+                toast.error(result.error || 'Failed to send request')
+            }
+        } catch {
+            toast.error('Something went wrong')
+        } finally {
+            setIsSendingRequest(false)
+        }
+    }
 
     return (
         <div className="min-h-screen bg-[#0f0a1e] text-white">
@@ -53,8 +75,8 @@ export default function PublicProfileClient({ profile }: PublicProfileClientProp
                 {/* Name & Badge */}
                 <div className="space-y-1 mb-6">
                     <div className="flex items-center gap-1.5">
-                        <h1 className="text-2xl font-black">@{profile.username}</h1>
                         {profile.is_pro && <VerifiedBadge size={20} />}
+                        <h1 className="text-2xl font-black">@{profile.username}</h1>
                     </div>
                     {joinDate && (
                         <div className="flex items-center gap-1.5 text-white/40 text-sm">
@@ -85,13 +107,21 @@ export default function PublicProfileClient({ profile }: PublicProfileClientProp
                         Message
                     </button>
                     <button
-                        onClick={() => {
-                            // TODO: Send friend request
-                            import('sonner').then(({ toast }) => toast.info('Friend request feature coming soon!'))
-                        }}
-                        className="px-5 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold rounded-2xl transition-all active:scale-95"
+                        onClick={handleAddFriend}
+                        disabled={isSendingRequest || requestSent}
+                        className={`px-5 py-3.5 border font-bold rounded-2xl transition-all active:scale-95 disabled:opacity-60 ${
+                            requestSent
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
+                        }`}
                     >
-                        <UserPlus size={18} />
+                        {isSendingRequest ? (
+                            <Loader2 size={18} className="animate-spin" />
+                        ) : requestSent ? (
+                            <Check size={18} />
+                        ) : (
+                            <UserPlus size={18} />
+                        )}
                     </button>
                 </div>
             </div>

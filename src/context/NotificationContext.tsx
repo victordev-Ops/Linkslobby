@@ -25,6 +25,7 @@ export function NotificationProvider({
   const [unreadCount, setUnreadCount] = useState(0)
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
   const [hostedSessionIds, setHostedSessionIds] = useState<string[]>([])
+  const [userSessionIds, setUserSessionIds] = useState<string[]>([])
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
 
@@ -36,13 +37,29 @@ export function NotificationProvider({
         .from('hot_seat_sessions')
         .select('id')
         .eq('host_id', profileId)
-        .eq('status', 'active') // Only care about active sessions
+        .eq('status', 'active')
 
       if (data) {
         setHostedSessionIds(data.map(s => s.id))
       }
     }
     fetchHostedSessions()
+  }, [profileId, supabase])
+
+  // Fetch user's chat session IDs for scoping the chat_messages listener
+  useEffect(() => {
+    if (!profileId) return
+    const fetchUserSessions = async () => {
+      const { data } = await supabase
+        .from('chat_participants')
+        .select('session_id')
+        .eq('user_id', profileId)
+
+      if (data) {
+        setUserSessionIds(data.map(s => s.session_id))
+      }
+    }
+    fetchUserSessions()
   }, [profileId, supabase])
 
   const refreshUnreadCount = useCallback(async () => {
@@ -57,7 +74,8 @@ export function NotificationProvider({
         .from('confessions')
         .select('id')
         .eq('profile_id', profileId)
-        .eq('is_read', false),
+        .eq('is_read', false)
+        .eq('is_hidden', false),
       supabase
         .from('dykm_scores')
         .select('id')
@@ -154,11 +172,11 @@ export function NotificationProvider({
         const msg = payload.new
         if (msg.sender_id === profileId) return // Ignore my own messages
 
+        // Only count if this message is in one of my sessions
+        if (userSessionIds.length > 0 && !userSessionIds.includes(msg.session_id)) return
+
         refreshUnreadCount()
 
-        // Fetch session to get sender name? Or just show "New Message"
-        // Ideally we want "New Message from User"
-        // fast query or generic toast
         toast('New Message! 💬', {
           description: msg.content.substring(0, 50),
           action: {
@@ -166,6 +184,16 @@ export function NotificationProvider({
             onClick: () => window.location.href = `/messages/${msg.session_id}`
           }
         })
+      })
+      // Listen for chat_participants updates (last_read_at changes = user read messages)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'chat_participants',
+        filter: `user_id=eq.${profileId}`
+      }, () => {
+        // User marked a session as read → refresh to decrement badge
+        refreshUnreadCount()
       })
       // 1. Confessions / DMs
       .on('postgres_changes', {
@@ -309,7 +337,7 @@ export function NotificationProvider({
     return () => {
       channel.unsubscribe()
     }
-  }, [profileId, refreshUnreadCount, hostedSessionIds]) // Re-sub if hosted sessions change implies we might miss some, but it's ok for now
+  }, [profileId, refreshUnreadCount, hostedSessionIds, userSessionIds])
 
   return (
     <NotificationContext.Provider value={{
