@@ -3,11 +3,11 @@
 import { useState, useRef, useTransition } from "react"
 import LogoutButton from "@/components/LogoutButton"
 import Link from "next/link"
-import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home, Shield, Trash2, X, Plus, UserX, AlertTriangle, Loader2, Smartphone, Check, Sparkles, BadgeCheck } from "lucide-react"
+import { User, Mail, ArrowLeft, LogIn, Bell, Moon, Home, Shield, Trash2, X, Plus, UserX, AlertTriangle, Loader2, Smartphone, Check, Sparkles, BadgeCheck, FileText } from "lucide-react"
 import PushToggle from "@/components/PushToggle"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import VerifiedBadge from "@/components/VerifiedBadge"
-import { updateRestrictedWords, updateWatermarkSetting } from "@/actions/profile"
+import { updateRestrictedWords, updateWatermarkSetting, updateBio } from "@/actions/profile"
 import { unblockUser, unblockAnonymous } from "@/actions/blocked-users"
 import { cancelSubscription, type SubscriptionInfo } from "@/actions/subscription"
 import { deleteAccount } from "@/actions/auth"
@@ -28,6 +28,7 @@ interface SettingsClientProps {
   initialBlockedAnonymous: BlockedAnonymous[]
   initialSubscription?: SubscriptionInfo | null
   isPro?: boolean
+  initialBio?: string
 }
 
 export default function SettingsClient({
@@ -41,6 +42,7 @@ export default function SettingsClient({
   initialBlockedAnonymous,
   initialSubscription,
   isPro,
+  initialBio,
 }: SettingsClientProps) {
   const user = initialUser
   const username = initialUsername
@@ -72,6 +74,10 @@ export default function SettingsClient({
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Bio state
+  const [bio, setBio] = useState(initialBio || '')
+  const [isSavingBio, setIsSavingBio] = useState(false)
 
   // Scroll Lock for delete modal
   useScrollLock(showDeleteModal)
@@ -213,10 +219,10 @@ export default function SettingsClient({
 
                 <div className="text-center sm:text-left">
                   <div className="flex items-center gap-1.5 justify-center sm:justify-start">
-                    {isPro && <VerifiedBadge size={20} />}
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
                       {user ? `@${username}` : "Guest Explorer"}
                     </h2>
+                    {isPro && <VerifiedBadge size={20} />}
                   </div>
                   <p className="text-gray-500 dark:text-gray-400 font-medium">
                     {user ? user.email : "Log in to save your settings"}
@@ -233,6 +239,46 @@ export default function SettingsClient({
                   )}
                 </div>
               </div>
+
+              {/* Bio Section */}
+              {user && (
+                <div className="mt-6 pt-6 border-t border-gray-100 dark:border-white/10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText size={14} className="text-gray-400" />
+                    <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Bio</p>
+                  </div>
+                  <textarea
+                    value={bio}
+                    onChange={e => setBio(e.target.value.slice(0, 160))}
+                    placeholder="Write a short bio..."
+                    maxLength={160}
+                    rows={2}
+                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-400/40 focus:border-purple-400/40 transition-all resize-none"
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[10px] text-gray-400 dark:text-gray-600">{bio.length}/160</p>
+                    <button
+                      onClick={async () => {
+                        setIsSavingBio(true)
+                        try {
+                          const result = await updateBio(bio)
+                          if (result.success) toast.success('Bio updated!')
+                          else toast.error(result.error || 'Failed to update bio')
+                        } catch {
+                          toast.error('Something went wrong')
+                        } finally {
+                          setIsSavingBio(false)
+                        }
+                      }}
+                      disabled={isSavingBio}
+                      className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {isSavingBio ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Subscription Card */}

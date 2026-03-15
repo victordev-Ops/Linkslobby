@@ -3,41 +3,21 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+/**
+ * Atomically get or create a DM session between the current user and otherUserId.
+ * Uses a re-check after creation to prevent race conditions (double-creation).
+ */
 export async function getOrCreateSession(otherUserId: string) {
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) return { success: false, message: 'Unauthorized' }
+    if (user.id === otherUserId) return { success: false, message: 'Cannot message yourself' }
 
-    // 1. Check if session exists
-    // We need to find a session where both users are participants
-    // This is a bit tricky in Supabase/Postgres without a specific query or view
-    // Strategy: Find all sessions I am in, then check if otherUserId is also in them.
-    // Optimization: filtering by participant count = 2 for DMs
-
-    // RPC or detailed query is best here. For now, let's do a client-side filter approach or raw query if possible.
-    // Supabase JS doesn't support complex joins easily for this "intersection" query without RPC.
-    // Let's try to fetch my sessions and their participants.
-
-    // Actually, let's use a stored procedure if performance matters, but for now:
-    const { data: mySessions } = await supabase
-        .from('chat_participants')
-        .select('session_id')
-        .eq('user_id', user.id)
-
-    if (mySessions && mySessions.length > 0) {
-        const sessionIds = mySessions.map(s => s.session_id)
-
-        const { data: existingSession } = await supabase
-            .from('chat_participants')
-            .select('session_id')
-            .eq('user_id', otherUserId)
-            .in('session_id', sessionIds)
-            .single()
-
-        if (existingSession) {
-            return { success: true, sessionId: existingSession.session_id }
-        }
+    // 1. Try to find existing session atomically
+    const existingSessionId = await findExistingSession(supabase, user.id, otherUserId)
+    if (existingSessionId) {
+        return { success: true, sessionId: existingSessionId }
     }
 
     // 2. Check if other user has DMs disabled
@@ -67,7 +47,7 @@ export async function getOrCreateSession(otherUserId: string) {
         return { success: false, message: 'Failed to create session' }
     }
 
-    // 3. Add participants
+    // 4. Add participants
     const { error: participantsError } = await supabase
         .from('chat_participants')
         .insert([
@@ -77,11 +57,45 @@ export async function getOrCreateSession(otherUserId: string) {
 
     if (participantsError) {
         console.error('Error adding participants:', participantsError)
-        return { success: false, message: 'Failed to add participants' }
+        // Clean up the orphaned session
+        await supabase.from('chat_sessions').delete().eq('id', newSession.id)
+        
+        // Race condition: another request may have created the session 
+        // between our check and insert. Re-check before failing.
+        const raceSessionId = await findExistingSession(supabase, user.id, otherUserId)
+        if (raceSessionId) {
+            return { success: true, sessionId: raceSessionId }
+        }
+
+        return { success: false, message: 'Failed to create session' }
     }
 
     revalidatePath('/messages')
     return { success: true, sessionId: newSession.id }
+}
+
+/**
+ * Helper: find an existing DM session between two users.
+ */
+async function findExistingSession(supabase: any, userId: string, otherUserId: string): Promise<string | null> {
+    const { data: mySessions } = await supabase
+        .from('chat_participants')
+        .select('session_id')
+        .eq('user_id', userId)
+
+    if (!mySessions || mySessions.length === 0) return null
+
+    const sessionIds = mySessions.map((s: any) => s.session_id)
+
+    const { data: match } = await supabase
+        .from('chat_participants')
+        .select('session_id')
+        .eq('user_id', otherUserId)
+        .in('session_id', sessionIds)
+        .limit(1)
+        .single()
+
+    return match?.session_id || null
 }
 
 export async function sendMessage(sessionId: string, content: string, replyToId?: string) {
@@ -141,12 +155,16 @@ export async function sendMessage(sessionId: string, content: string, replyToId?
         })
         .eq('id', sessionId)
 
-    // 3. Trigger Revalidation / Notification logic (if needed beyond realtime)
-    // Realtime subscription in client will handle the UI update.
-
     return { success: true, message: 'Message sent', data: message }
 }
 
+/**
+ * Get all chat sessions for the current user, enriched with:
+ * - other_user profile data
+ * - unread_count
+ * - is_friend (for inbox/spam classification)
+ * - has_messages (whether any messages exist)
+ */
 export async function getSessions() {
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -173,40 +191,48 @@ export async function getSessions() {
         return { success: false, message: 'Failed to fetch sessions', data: [] }
     }
 
-    const sessionIds = myParticipants.map(p => p.session_id)
+    const sessionIds = myParticipants.map((p: any) => p.session_id)
 
     if (sessionIds.length === 0) {
         return { success: true, data: [] }
     }
 
-    // 2. Batch fetch other participants
+    // 2. Batch fetch other participants with profiles
     const { data: otherParticipants } = await supabase
         .from('chat_participants')
-        .select('session_id, profiles(username, id, avatar_url)')
+        .select('session_id, user_id, profiles(username, id, avatar_url, is_pro)')
         .in('session_id', sessionIds)
         .neq('user_id', user.id)
 
     // Map other participants by session_id
-    const participantsMap = new Map()
+    const participantsMap = new Map<string, any>()
     otherParticipants?.forEach((p: any) => {
-        participantsMap.set(p.session_id, p.profiles)
+        participantsMap.set(p.session_id, { ...p.profiles, user_id: p.user_id })
     })
 
-    // 3. Batch fetch unread counts? 
-    // Optimization: Only fetch count if updated_at > last_read_at
-    // But we can't easily batch count with condition per row.
-    // We'll proceed with Promise.all for now but it's only for "Unread" ones, and simpler.
-    // Actually, let's just stick to the current unread logic for now but at least we saved N queries for profiles.
-    // That's 50% reduction.
+    // 3. Batch fetch accepted friendships for inbox/spam classification
+    const { data: friendships } = await supabase
+        .from('friends')
+        .select('user_id, friend_id')
+        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
+        .eq('status', 'accepted')
 
+    const friendIds = new Set<string>()
+    friendships?.forEach((f: any) => {
+        if (f.user_id === user.id) friendIds.add(f.friend_id)
+        else friendIds.add(f.user_id)
+    })
+
+    // 4. Build session details with unread counts
     const sessionsWithDetails = await Promise.all(myParticipants.map(async (p: any) => {
-        const otherProfile = participantsMap.get(p.session_id) || { username: 'Unknown' }
+        const otherProfile = participantsMap.get(p.session_id) || { username: 'Unknown', id: null }
         const session = p.chat_sessions
+        const hasMessages = !!session.last_message_preview
 
         let unreadCount = 0
 
-        // Only query count if potentially unread
-        if (new Date(session.updated_at) > new Date(p.last_read_at || 0)) {
+        // Only query count if potentially unread and has messages
+        if (hasMessages && new Date(session.updated_at) > new Date(p.last_read_at || 0)) {
             const { count } = await supabase
                 .from('chat_messages')
                 .select('*', { count: 'exact', head: true })
@@ -221,7 +247,9 @@ export async function getSessions() {
             ...session,
             other_user: otherProfile,
             last_read_at: p.last_read_at,
-            unread_count: unreadCount
+            unread_count: unreadCount,
+            is_friend: friendIds.has(otherProfile.user_id || otherProfile.id),
+            has_messages: hasMessages,
         }
     }))
 
@@ -292,4 +320,83 @@ export async function markSessionRead(sessionId: string) {
     if (error) console.error('Error marking read:', error)
 
     return { success: !error }
+}
+
+/**
+ * Clear all messages in a session for the current user.
+ * Deletes all chat_messages in the session.
+ */
+export async function clearChat(sessionId: string) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { success: false, message: 'Unauthorized' }
+
+    // Verify membership
+    const { data: participation } = await supabase
+        .from('chat_participants')
+        .select('session_id')
+        .eq('session_id', sessionId)
+        .eq('user_id', user.id)
+        .single()
+
+    if (!participation) return { success: false, message: 'Unauthorized' }
+
+    // Delete all messages in session
+    const { error: msgError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('session_id', sessionId)
+
+    if (msgError) {
+        console.error('Error clearing chat:', msgError)
+        return { success: false, message: 'Failed to clear chat' }
+    }
+
+    // Reset session preview
+    await supabase
+        .from('chat_sessions')
+        .update({ last_message_preview: null, updated_at: new Date().toISOString() })
+        .eq('id', sessionId)
+
+    revalidatePath('/inbox')
+    return { success: true }
+}
+
+/**
+ * Report a user from a chat session context.
+ */
+export async function reportChatUser(sessionId: string, reason: string) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { success: false, message: 'Unauthorized' }
+
+    // Get the other participant
+    const { data: otherParticipant } = await supabase
+        .from('chat_participants')
+        .select('user_id')
+        .eq('session_id', sessionId)
+        .neq('user_id', user.id)
+        .single()
+
+    if (!otherParticipant) return { success: false, message: 'User not found' }
+
+    // Insert report (relies on reports table existing — degrades gracefully)
+    const { error } = await supabase
+        .from('reports')
+        .insert({
+            reporter_id: user.id,
+            reported_id: otherParticipant.user_id,
+            reason: reason.trim().slice(0, 500),
+            context: 'chat',
+            context_id: sessionId,
+        })
+
+    if (error) {
+        console.error('Error reporting user:', error)
+        return { success: false, message: 'Failed to submit report' }
+    }
+
+    return { success: true }
 }

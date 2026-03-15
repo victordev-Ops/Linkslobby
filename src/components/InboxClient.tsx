@@ -32,11 +32,14 @@ type ChatSession = {
   last_message_preview?: string
   last_read_at?: string
   unread_count: number
+  is_friend?: boolean
+  has_messages?: boolean
   other_user: {
     username: string | null
     id: string
     slug?: string | null
     avatar_url?: string | null
+    is_pro?: boolean
   }
 }
 
@@ -102,7 +105,7 @@ export default function InboxClient({
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'All' | 'Confessions' | 'AMA' | 'Anonymous' | 'DMs'>('All')
+  const [activeTab, setActiveTab] = useState<'All' | 'Confessions' | 'AMA' | 'Anonymous' | 'Inbox' | 'Spam'>('All')
 
   // Pagination state
   const [hasMore, setHasMore] = useState(initialConfessions.length >= PAGE_SIZE)
@@ -219,12 +222,7 @@ export default function InboxClient({
   useEffect(() => {
     setConfessions(prev => mergeConfessions(prev, initialConfessions))
 
-    // Initial fetch of sessions
-    getSessions().then(res => {
-      if (res.success && res.data) {
-        setSessions(res.data as unknown as ChatSession[])
-      }
-    })
+    // Sessions are loaded by fetchLatest on mount, no need for duplicate call
 
     const unread = initialConfessions.filter(c => !c.is_read).length
     setUnreadCount(unread) // Note: this might be overwritten by fetchLatest
@@ -385,7 +383,10 @@ export default function InboxClient({
   const filteredItems = useMemo(() => {
     return unifiedItems.filter(item => {
       if (item.type === 'session') {
-        if (activeTab === 'DMs' || activeTab === 'All') return true
+        const s = item.data as ChatSession
+        if (activeTab === 'All') return s.has_messages !== false
+        if (activeTab === 'Inbox') return s.is_friend && s.has_messages !== false
+        if (activeTab === 'Spam') return !s.is_friend || !s.has_messages
         return false
       }
 
@@ -394,7 +395,8 @@ export default function InboxClient({
       const isDM = c.message_type === 'confession' && c.message.startsWith('[DM:')
 
       if (activeTab === 'All') return true
-      if (activeTab === 'DMs') return isDM
+      if (activeTab === 'Inbox') return isDM
+      if (activeTab === 'Spam') return false
       if (activeTab === 'Confessions') return c.message_type === 'confession' && !isDM
       if (activeTab === 'AMA') return c.message_type === 'ama'
       if (activeTab === 'Anonymous') return c.message_type === 'anonymous'
@@ -470,7 +472,7 @@ export default function InboxClient({
       {/* Grouping Tabs */}
       <div className="px-6 pb-4 overflow-x-auto no-scrollbar">
         <div className="flex bg-gray-50 dark:bg-white/5 p-1 rounded-2xl border border-gray-100 dark:border-white/10 w-max min-w-full">
-          {(['All', 'Confessions', 'AMA', 'Anonymous', 'DMs'] as const).map((tab) => (
+          {(['All', 'Confessions', 'AMA', 'Anonymous', 'Inbox', 'Spam'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}

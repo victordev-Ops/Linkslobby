@@ -5,8 +5,9 @@ import { revalidatePath } from 'next/cache'
 import { cache } from 'react'
 import {
     XP_REWARDS,
-    applyProRewardMultiplier,
+    applyRewardMultiplier,
     formatRewardReason,
+    isBonusActive
 } from '@/hooks/xp'
 
 /**
@@ -76,12 +77,17 @@ export async function setupProfile(username: string) {
         return { error: 'Username produces an invalid URL slug. Try a different name.' }
     }
 
-    // Check if this is a first-time setup (skeleton profile from DB trigger has NULL username)
-    const { data: existingProfile } = await supabase
+    // Determine if first setup
+    const { data: existingProfile, error: existingProfileError } = await supabase
         .from('profiles')
-        .select('id, username, is_pro')
+        .select('username, is_pro, bonus_2x_started_at')
         .eq('id', user.id)
-        .maybeSingle()
+        .maybeSingle() // Kept maybeSingle to correctly determine first-time setup
+
+    if (existingProfileError) {
+        console.error("Error fetching existing profile:", existingProfileError.message)
+        return { error: 'Could not retrieve profile information. Please try again.' }
+    }
 
     const isFirstTimeSetup = !existingProfile || !existingProfile.username
 
@@ -108,8 +114,9 @@ export async function setupProfile(username: string) {
     if (isFirstTimeSetup) {
         try {
             const isPro = existingProfile?.is_pro ?? false
-            const amount = applyProRewardMultiplier(XP_REWARDS.PROFILE_CREATED, isPro)
-            const reason = formatRewardReason('Welcome to Say! 🎉', isPro)
+            const hasBonus = isBonusActive(existingProfile?.bonus_2x_started_at)
+            const amount = applyRewardMultiplier(XP_REWARDS.PROFILE_CREATED, isPro, hasBonus)
+            const reason = formatRewardReason('Welcome to Say! 🎉', isPro, hasBonus)
 
             await supabase.rpc('add_xp', {
                 p_user_id: user.id,
@@ -263,4 +270,26 @@ export async function updateWatermarkSetting(enabled: boolean) {
 
     revalidatePath('/', 'layout')
     return { success: true, enabled }
+}
+
+export async function updateBio(bio: string) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    const trimmed = bio.trim().slice(0, 160)
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({ bio: trimmed })
+        .eq('id', user.id)
+
+    if (error) {
+        console.error('updateBio error:', error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath('/settings')
+    revalidatePath('/', 'layout')
+    return { success: true, bio: trimmed }
 }

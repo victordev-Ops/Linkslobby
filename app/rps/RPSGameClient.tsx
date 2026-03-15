@@ -267,7 +267,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 }
                 // Mid-game leave — opponent forfeited
                 if (gameStartedRef.current) {
-                    earnXP(200, "Opponent forfeited RPS match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                    earnXP(200, "Opponent forfeited RPS match", { game: "rps" }).catch(console.error)
                     toast.success("Opponent forfeited! +200 Stars ⭐")
                 } else {
                     toast.error("Opponent left the game")
@@ -335,7 +335,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 }
                 // Mid-game leave — opponent forfeited
                 if (gameStartedRef.current) {
-                    earnXP(200, "Opponent forfeited RPS match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                    earnXP(200, "Opponent forfeited RPS match", { game: "rps" }).catch(console.error)
                     toast.success("Opponent forfeited! +200 Stars ⭐")
                 } else {
                     toast.error("Opponent left the game")
@@ -458,10 +458,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 setPhase("matchEnd")
                 if (mode === "friend") {
                     // Won: get collateral back + opponent's collateral
-                    earnXP(200, "Won Rock Paper Scissors match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                    earnXP(200, "Won Rock Paper Scissors match", { game: "rps" }).catch(console.error)
                 } else {
                     // Solo: earn 2x stake (collateral back + winnings)
-                    earnXP(stakeAmount * 2, "Won Rock Paper Scissors match", { game: "rps" }, true, profile.is_pro).catch(console.error)
+                    earnXP(stakeAmount * 2, "Won Rock Paper Scissors match", { game: "rps" }).catch(console.error)
                 }
             } else if (newOpponentScore >= 3) {
                 setMatchResult("lost")

@@ -398,8 +398,10 @@ export default function NotificationsClient({
                 if (content.includes('your turn') && content.includes('ask')) return `🎲 It's your turn to ask${lobbyName}!`
                 if (content.includes('your turn')) return `🎯 It's your turn${lobbyName}!`
                 return item.content + (lobbyName ? ` ${lobbyName}` : '')
-            case 'xp':
-                return `${item.amount >= 0 ? '+' : ''}${item.amount} Stars — ${item.reason}`
+            case 'xp': {
+                const sign = item.type === 'spend' ? '-' : '+'
+                return `${sign}${Math.abs(item.amount)} Stars — ${item.reason}`
+            }
             case 'hot_seat':
                 return `Hot Seat: New Question! 🔥`
             default:

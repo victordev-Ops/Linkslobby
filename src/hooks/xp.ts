@@ -33,8 +33,7 @@ export async function earnXP(
   amount: number,
   reason: string,
   metadata?: any,
-  showNotification: boolean = true,
-  isPro: boolean = false
+  showNotification: boolean = true
 ): Promise<XPResult> {
   const supabase = createClient()
 
@@ -44,8 +43,18 @@ export async function earnXP(
       return { success: false, error: 'User not authenticated' }
     }
 
-    const finalAmount = applyProRewardMultiplier(amount, isPro)
-    const finalReason = formatRewardReason(reason, isPro)
+    // Fetch multipliers directly for security
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_pro, bonus_2x_started_at')
+      .eq('id', user.id)
+      .single()
+
+    const isProProfile = profile?.is_pro ?? false
+    const hasBonus = isBonusActive(profile?.bonus_2x_started_at)
+
+    const finalAmount = applyRewardMultiplier(amount, isProProfile, hasBonus)
+    const finalReason = formatRewardReason(reason, isProProfile, hasBonus)
 
     const { data, error } = await supabase.rpc('add_xp', {
       p_user_id: user.id,
@@ -73,23 +82,44 @@ export async function earnXP(
 
 // ... existing spendXP ...
 
-/** Pro users earn this multiplier on reward XP (applied in one place for consistency) */
 export const PRO_REWARD_MULTIPLIER = 2
+export const BONUS_DURATION_DAYS = 7
 
 /**
- * Apply Pro multiplier to a base XP amount. Use everywhere rewards are awarded
- * (client, server actions, webhooks) so changing the multiplier is reliable.
+ * Check if the 7-day 2x bonus is currently active based on its start date.
  */
-export function applyProRewardMultiplier(amount: number, isPro: boolean): number {
-  return isPro ? amount * PRO_REWARD_MULTIPLIER : amount
+export function isBonusActive(bonusStartDate: string | null): boolean {
+  if (!bonusStartDate) return false
+  const start = new Date(bonusStartDate).getTime()
+  const now = Date.now()
+  const daysDiff = (now - start) / (1000 * 60 * 60 * 24)
+  return daysDiff < BONUS_DURATION_DAYS
+}
+
+/**
+ * Apply Pro and Weekly Bonus multipliers to a base XP amount. 
+ * Both multipliers could stack, or we can just apply a max multiplier. Let's make it additive or independent.
+ * For now, returning max multiplier to prevent insane inflation, or apply sequentially. Let's cap at x4.
+ */
+export function applyRewardMultiplier(amount: number, isPro: boolean, isBonusActive: boolean): number {
+  let multiplier = 1
+  if (isPro) multiplier *= PRO_REWARD_MULTIPLIER
+  if (isBonusActive) multiplier *= 2
+  return amount * multiplier
 }
 
 /**
  * Format reward reason for transactions (e.g. "(2x Pro Bonus)" suffix).
- * Keeps reason strings consistent across client, server, and webhooks.
  */
-export function formatRewardReason(reason: string, isPro: boolean): string {
-  return isPro ? `${reason} (2x Pro Bonus)` : reason
+export function formatRewardReason(reason: string, isPro: boolean, isBonusActive: boolean): string {
+  const suffixes = []
+  if (isPro) suffixes.push('2x Pro')
+  if (isBonusActive) suffixes.push('2x Weekly Bonus')
+  
+  if (suffixes.length > 0) {
+    return `${reason} (${suffixes.join(' + ')})`
+  }
+  return reason
 }
 
 /**

@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Send, Loader2, MessageCircle, Plus, ChevronUp, X, Reply } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, MessageCircle, Plus, ChevronUp, X, Reply, MoreVertical, Ban, Flag, Trash2 } from 'lucide-react'
 import VerifiedBadge from '@/components/VerifiedBadge'
 import { motion, AnimatePresence, PanInfo } from 'framer-motion'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
-import { sendMessage, getSessionMessages, markSessionRead } from '@/actions/chat'
+import { sendMessage, getSessionMessages, markSessionRead, clearChat, reportChatUser } from '@/actions/chat'
+import { blockUser } from '@/actions/blocked-users'
 import { uploadDmPhoto } from '@/actions/dm-photos'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -100,6 +101,9 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
     const [hasMore, setHasMore] = useState(false)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [lastReadByPartner, setLastReadByPartner] = useState<Date | null>(null)
+    const [showMenu, setShowMenu] = useState(false)
+    const [isPartnerOnline, setIsPartnerOnline] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
 
     // Scroll to bottom helper
     const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -314,9 +318,19 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
             })
             .subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
-                    await presenceChannel.track({ user_id: currentUser.id, isTyping: false })
+                    await presenceChannel.track({ user_id: currentUser.id, isTyping: false, online: true })
                 }
             })
+
+        // Track partner online status from presence state
+        presenceChannel.on('presence', { event: 'join' }, ({ key, newPresences }) => {
+            const partnerOnline = newPresences?.some((p: any) => p.user_id === targetProfile.id)
+            if (partnerOnline) setIsPartnerOnline(true)
+        })
+        presenceChannel.on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+            const partnerLeft = leftPresences?.some((p: any) => p.user_id === targetProfile.id)
+            if (partnerLeft) setIsPartnerOnline(false)
+        })
 
         const readReceiptChannel = supabase
             .channel(`chat-read-${sessionId}`)
@@ -599,11 +613,76 @@ export default function DirectMessageClient({ sessionId, currentUser, targetProf
                                 {targetProfile.is_pro && <VerifiedBadge size={14} />}
                             </div>
                             <div className="flex items-center gap-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[10px] font-bold text-emerald-500/80 uppercase tracking-wider">Online</span>
+                                <div className={`w-1.5 h-1.5 rounded-full ${isPartnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-600'}`} />
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${isPartnerOnline ? 'text-emerald-500/80' : 'text-neutral-600'}`}>{isPartnerOnline ? 'Online' : 'Offline'}</span>
                             </div>
                         </div>
                     </button>
+                </div>
+                <div className="flex items-center gap-1 relative" ref={menuRef}>
+                    <button
+                        onClick={() => setShowMenu(!showMenu)}
+                        className="p-2 hover:bg-white/5 rounded-full transition-colors text-neutral-400 hover:text-white"
+                    >
+                        <MoreVertical size={20} />
+                    </button>
+                    <AnimatePresence>
+                        {showMenu && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: -5 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: -5 }}
+                                className="absolute right-0 top-full mt-1 w-48 bg-neutral-800 border border-white/10 rounded-xl shadow-2xl z-[100] overflow-hidden"
+                            >
+                                <button
+                                    onClick={async () => {
+                                        setShowMenu(false)
+                                        if (!confirm(`Block @${targetProfile.username}?`)) return
+                                        try {
+                                            await blockUser(targetProfile.id)
+                                            toast.success(`Blocked @${targetProfile.username}`)
+                                            router.push('/inbox')
+                                        } catch { toast.error('Failed to block user') }
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-white/5 transition-colors"
+                                >
+                                    <Ban size={16} /> Block User
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        setShowMenu(false)
+                                        const reason = prompt('Report reason (optional):')
+                                        if (reason === null) return
+                                        try {
+                                            const result = await reportChatUser(sessionId, reason || 'No reason provided')
+                                            if (result.success) toast.success('Report submitted')
+                                            else toast.error(result.message || 'Failed to report')
+                                        } catch { toast.error('Failed to submit report') }
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-amber-400 hover:bg-white/5 transition-colors"
+                                >
+                                    <Flag size={16} /> Report User
+                                </button>
+                                <div className="h-px bg-white/5" />
+                                <button
+                                    onClick={async () => {
+                                        setShowMenu(false)
+                                        if (!confirm('Clear all messages in this chat?')) return
+                                        try {
+                                            const result = await clearChat(sessionId)
+                                            if (result.success) {
+                                                setMessages([])
+                                                toast.success('Chat cleared')
+                                            } else toast.error(result.message || 'Failed to clear chat')
+                                        } catch { toast.error('Failed to clear chat') }
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-300 hover:bg-white/5 transition-colors"
+                                >
+                                    <Trash2 size={16} /> Clear Chat
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </div>
 

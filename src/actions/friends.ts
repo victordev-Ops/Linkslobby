@@ -79,6 +79,38 @@ export async function acceptFriendRequest(friendshipId: string): Promise<ActionR
         return { success: false, error: 'Failed to accept request' }
     }
 
+    // Notify the requester that their request was accepted
+    try {
+        // Fetch the friendship to get requester_id
+        const { data: friendship } = await supabase
+            .from('friendships')
+            .select('requester_id')
+            .eq('id', friendshipId)
+            .single()
+
+        if (friendship) {
+            // Get current user's username for the notification message
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('username')
+                .eq('id', user.id)
+                .single()
+
+            const username = profile?.username || 'Someone'
+
+            await supabase.from('xp_transactions').insert({
+                user_id: friendship.requester_id,
+                amount: 0,
+                type: 'earn',
+                reason: `🤝 @${username} accepted your friend request!`,
+                is_read: false,
+            })
+        }
+    } catch (notifErr) {
+        console.error('Friend accept notification error:', notifErr)
+        // Non-critical — don't fail the accept
+    }
+
     return { success: true }
 }
 

@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import TODGameClient from "@/components/tod/TODGameClient";
-import { XP_REWARDS, applyProRewardMultiplier, formatRewardReason } from "@/hooks/xp";
+import { XP_REWARDS, applyRewardMultiplier, formatRewardReason, isBonusActive } from "@/hooks/xp";
 
 // Next.js 15+ - params is a Promise
 export default async function TODGamePage({
@@ -121,13 +121,14 @@ export default async function TODGamePage({
             // Get user's pro status
             const { data: profile } = await supabase
               .from('profiles')
-              .select('is_pro')
+              .select('is_pro, bonus_2x_started_at')
               .eq('id', user.id)
               .single();
 
             const isPro = profile?.is_pro ?? false;
-            const amount = applyProRewardMultiplier(XP_REWARDS.TOD_PARTICIPANT_JOINED, isPro);
-            const reason = formatRewardReason('Joined Public Lobby', isPro);
+            const hasBonus = isBonusActive(profile?.bonus_2x_started_at);
+            const amount = applyRewardMultiplier(XP_REWARDS.TOD_PARTICIPANT_JOINED, isPro, hasBonus);
+            const reason = formatRewardReason('Joined Public Lobby', isPro, hasBonus);
 
             const { error: xpError } = await supabase.rpc('add_xp', {
               p_user_id: user.id,

@@ -17,12 +17,13 @@ export default async function SettingsPage() {
   let blockedAnonymous: any[] = []
   let subscriptionStatus = null
   let isPro = false
+  let bio = ''
 
   if (user) {
     const [profileResult, blockedResult, blockedAnonResult, subResult] = await Promise.all([
       supabase
         .from('profiles')
-        .select('username, push_subscription, restricted_words, avatar_url, show_watermark, is_pro')
+        .select('username, push_subscription, restricted_words, avatar_url, show_watermark, is_pro, bio')
         .eq('id', user.id)
         .single(),
       getBlockedUsers(),
@@ -39,6 +40,7 @@ export default async function SettingsPage() {
     blockedAnonymous = blockedAnonResult
     avatarUrl = data?.avatar_url
     isPro = !!data?.is_pro
+    bio = data?.bio || ''
     if (subResult.success) {
       subscriptionStatus = subResult.subscription
     }
@@ -56,6 +58,7 @@ export default async function SettingsPage() {
       initialBlockedAnonymous={blockedAnonymous}
       initialSubscription={subscriptionStatus}
       isPro={isPro}
+      initialBio={bio}
     />
   )
 }

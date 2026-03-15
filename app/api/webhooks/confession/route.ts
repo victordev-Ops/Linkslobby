@@ -3,8 +3,9 @@ import webPush from "web-push";
 import { createClient } from "@supabase/supabase-js";
 import {
   XP_REWARDS,
-  applyProRewardMultiplier,
+  applyRewardMultiplier,
   formatRewardReason,
+  isBonusActive
 } from "@/hooks/xp";
 
 export const runtime = 'nodejs';
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
 
         const { data: profile, error: profileError } = await supabaseAdmin
             .from("profiles")
-            .select("push_subscription, username, is_pro")
+            .select("push_subscription, username, is_pro, bonus_2x_started_at")
             .eq("id", record.profile_id)
             .single();
 
@@ -74,8 +75,9 @@ export async function POST(req: NextRequest) {
         // Award XP for receiving a message (single source: XP_REWARDS.MESSAGE_RECEIVED)
         try {
             const isPro = profile.is_pro ?? false;
-            const xpAmount = applyProRewardMultiplier(XP_REWARDS.MESSAGE_RECEIVED, isPro);
-            const xpReason = formatRewardReason('Message Received', isPro);
+            const hasBonus = isBonusActive(profile.bonus_2x_started_at);
+            const xpAmount = applyRewardMultiplier(XP_REWARDS.MESSAGE_RECEIVED, isPro, hasBonus);
+            const xpReason = formatRewardReason('Message Received', isPro, hasBonus);
 
             await supabaseAdmin.rpc('add_xp', {
                 p_user_id: record.profile_id,
