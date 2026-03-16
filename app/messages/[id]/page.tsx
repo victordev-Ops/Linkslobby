@@ -18,9 +18,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         redirect('/login')
     }
 
-    // A. If ID is NOT a UUID, treat as username and redirect
     if (!isUUID(id)) {
-        // 1. Find profile by username
+        // Find profile by username
         const { data: targetProfile } = await supabase
             .from('profiles')
             .select('id')
@@ -31,26 +30,25 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             notFound()
         }
 
-        // 2. Get or create session
+        // Get or create session
         const result = await getOrCreateSession(targetProfile.id)
 
         if (result.success && result.sessionId) {
             redirect(`/messages/${result.sessionId}`)
         } else {
             // Handle error (e.g., self-message attempt or DB error)
-            redirect('/messages')
+            redirect('/inbox')
         }
     }
 
-    // B. If ID IS a UUID, treat as Session ID (Original Logic)
-    const sessionId = id
+    const sessionIdOrUserId = id
 
-    // Fetch Session & Verify Participation
-    const { data: sessionData, error } = await supabase
+    // Try treating ID as a Session ID first
+    const { data: sessionData, error: sessionFetchError } = await supabase
         .from('chat_sessions')
         .select(`
             id,
-            chat_participants (
+            chat_participants!inner (
                 user_id,
                 profiles (
                    id,
@@ -62,27 +60,79 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                 )
             )
         `)
-        .eq('id', sessionId)
-        .single()
+        .eq('id', sessionIdOrUserId)
+        .maybeSingle()
+        
+    // Also ensuring user is a participant using `!inner` doesn't return full participant list
+    // so we re-fetch all participants for that session if it exists to get the other profile
+    let isSessionValidAndJoined = false
+    let finalSessionDataForRender: any = null
 
-    if (error || !sessionData) {
-        notFound()
+    if (sessionData) {
+        // Re-query to get all participants for this session
+         const { data: fullSessionData } = await supabase
+            .from('chat_sessions')
+            .select(`
+                id,
+                chat_participants (
+                    user_id,
+                    profiles (
+                       id,
+                       username,
+                       slug,
+                       xp_balance,
+                       avatar_url,
+                       is_pro
+                    )
+                )
+            `)
+            .eq('id', sessionData.id)
+            .single()
+            
+        if (fullSessionData) {
+            const isParticipant = fullSessionData.chat_participants.some((p: any) => p.user_id === user.id)
+            if (isParticipant) {
+                isSessionValidAndJoined = true
+                finalSessionDataForRender = fullSessionData
+            }
+        }
     }
 
-    // Ensure current user is a participant
-    const isParticipant = sessionData.chat_participants.some((p: any) => p.user_id === user.id)
-    if (!isParticipant) {
-        notFound() // Or redirect to inbox
+    if (!isSessionValidAndJoined) {
+        // Not a valid session or user not in it. Treat ID as user_id.
+        const { data: targetProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', sessionIdOrUserId)
+            .maybeSingle()
+
+        if (!targetProfile) {
+            notFound() // Neither a valid session nor a valid user
+        }
+
+        // Get or create session using the user_id
+        const result = await getOrCreateSession(targetProfile.id)
+
+        if (result.success && result.sessionId) {
+             // Avoid infinite loop if somehow result.sessionId is exactly the SAME as url id
+             if (result.sessionId !== sessionIdOrUserId) {
+                redirect(`/messages/${result.sessionId}`)
+             }
+             // It created a session that somehow shares UUID with user? Exceptionally rare.
+        } else {
+            // Fail safely to inbox
+            redirect('/inbox')
+        }
     }
 
-    // Get the other participant's profile
-    // If only one participant (self-chat loop?), handle accordingly
-    const otherParticipant = sessionData.chat_participants.find((p: any) => p.user_id !== user.id)
+    if (!finalSessionDataForRender) {
+         notFound()
+    }
 
-    // Fallback if chatting with self or data issue
+    // Current session is valid and user is participant. Render Client.
+    const otherParticipant = finalSessionDataForRender.chat_participants.find((p: any) => p.user_id !== user.id)
+
     const fallback = { id: 'unknown', username: 'Unknown User' }
-
-    // Handle array case for profiles (though it should be single obj due to FK)
     const rawProfile = otherParticipant?.profiles
     const profileData = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile
 
@@ -94,5 +144,5 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         slug: profileData?.slug || null
     }
 
-    return <DirectMessageClient sessionId={sessionId} currentUser={user} targetProfile={targetProfile} />
+    return <DirectMessageClient sessionId={finalSessionDataForRender.id} currentUser={user} targetProfile={targetProfile} />
 }
