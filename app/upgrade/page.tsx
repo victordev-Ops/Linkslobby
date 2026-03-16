@@ -16,7 +16,7 @@ const plans = [
     {
         id: "weekly" as Plan,
         name: "Weekly",
-        price: "$1.99",
+        price: "₦499",
         period: "/week",
         badge: null,
         savings: null,
@@ -24,18 +24,18 @@ const plans = [
     {
         id: "monthly" as Plan,
         name: "Monthly",
-        price: "$5.99",
+        price: "₦1,499",
         period: "/month",
         badge: "Popular",
-        savings: "Save 25%",
+        savings: "Save 30%",
     },
     {
         id: "annual" as Plan,
         name: "Annual",
-        price: "$49.99",
+        price: "₦6,999",
         period: "/year",
         badge: "Best Value",
-        savings: "Save 52%",
+        savings: "Save 73%",
     },
 ]
 

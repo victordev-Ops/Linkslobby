@@ -162,14 +162,15 @@ export async function createPaystackCheckout(plan: PaystackPlan): Promise<{
 
         // Calculate amount in kobo based on plan
         const amounts: Record<string, number> = {
-            weekly: 199 * 100,   // $1.99 → 199 cents → 19900 kobo equivalent
-            monthly: 599 * 100,  // $5.99
-            annual: 4999 * 100,  // $49.99
+            weekly: 499 * 100,    // ₦499
+            monthly: 1499 * 100,  // ₦1,499
+            annual: 6999 * 100,   // ₦6,999
         }
 
         const result = await initializeTransaction({
             email: user.email!,
             amount: amounts[plan] || amounts.monthly,
+            currency: 'NGN',
             plan: planCode,
             metadata: {
                 user_id: user.id,

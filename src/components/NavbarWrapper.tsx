@@ -34,6 +34,7 @@ export default function NavbarWrapper() {
             pathname.startsWith("/hot-seat/") ||
             pathname.startsWith("/ama") ||
             pathname.startsWith("/rps/") ||
+            pathname.startsWith("/upgrade") ||
             pathname.startsWith("/messages/");
 
         return isExactMatch || isPrefixMatch;

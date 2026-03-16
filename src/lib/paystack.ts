@@ -38,6 +38,7 @@ async function paystackFetch<T>(path: string, options: RequestInit = {}): Promis
 export async function initializeTransaction(params: {
     email: string
     amount: number      // in kobo (NGN) or cents (USD)
+    currency?: string   // defaults to NGN for Paystack accounts based in Nigeria
     plan?: string       // Paystack plan code for recurring
     metadata?: Record<string, any>
     callback_url?: string
