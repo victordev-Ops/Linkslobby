@@ -212,15 +212,15 @@ export async function getSessions() {
 
     // 3. Batch fetch accepted friendships for inbox/spam classification
     const { data: friendships } = await supabase
-        .from('friends')
-        .select('user_id, friend_id')
-        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
+        .from('friendships')
+        .select('requester_id, addressee_id')
+        .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
         .eq('status', 'accepted')
 
     const friendIds = new Set<string>()
     friendships?.forEach((f: any) => {
-        if (f.user_id === user.id) friendIds.add(f.friend_id)
-        else friendIds.add(f.user_id)
+        if (f.requester_id === user.id) friendIds.add(f.addressee_id)
+        else friendIds.add(f.requester_id)
     })
 
     // 4. Build session details with unread counts

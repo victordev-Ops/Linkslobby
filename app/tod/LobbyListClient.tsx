@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check, ChevronLeft, LayoutGrid } from 'lucide-react';
+import { Plus, Users, Clock, Crown, Play, Loader2, ArrowRight, X, Sparkles, Lock, Ban, Check, ChevronLeft, LayoutGrid, Trash2, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -72,6 +72,15 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     const [lobbyName, setLobbyName] = useState("");
     const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
     const [isPrivateMode, setIsPrivateMode] = useState(false);
+
+    // Tag filter state
+    const [selectedTag, setSelectedTag] = useState<string>('All');
+
+    // Lobby limit management
+    const [showLimitModal, setShowLimitModal] = useState(false);
+    const [userLobbies, setUserLobbies] = useState<any[]>([]);
+    const [isDeletingLobby, setIsDeletingLobby] = useState<string | null>(null);
+    const [pendingCreateAfterDelete, setPendingCreateAfterDelete] = useState(false);
 
     const { profile } = useAuth();
     const router = useRouter();
@@ -332,8 +341,16 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     };
 
     const sortedJoined = useMemo(() => sortGroup(joinedLobbies), [joinedLobbies]);
-    const sortedPublic = useMemo(() => sortGroup(publicLobbies), [publicLobbies]);
-    const sortedPrivate = useMemo(() => sortGroup(privateLobbies), [privateLobbies]);
+    const sortedPublic = useMemo(() => {
+        const sorted = sortGroup(publicLobbies);
+        if (selectedTag === 'All') return sorted;
+        return sorted.filter(l => (l.category || 'Casual') === selectedTag);
+    }, [publicLobbies, selectedTag]);
+    const sortedPrivate = useMemo(() => {
+        const sorted = sortGroup(privateLobbies);
+        if (selectedTag === 'All') return sorted;
+        return sorted.filter(l => (l.category || 'Casual') === selectedTag);
+    }, [privateLobbies, selectedTag]);
 
     const createNewLobby = async () => {
         if (!profile?.id) return;
@@ -354,10 +371,12 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             if (countError) throw countError;
 
             if ((count ?? 0) >= maxLobbies) {
-                toast.error(isPro
-                    ? `You've reached the max of ${maxLobbies} lobbies! 🎯`
-                    : `Free users can create up to ${maxLobbies} lobbies. Go Pro for 5! 💎`
-                );
+                // Show lobby management modal instead of blocking
+                const { getUserLobbies } = await import('@/actions/tod-xp');
+                const lobbies = await getUserLobbies();
+                setUserLobbies(lobbies);
+                setPendingCreateAfterDelete(true);
+                setShowLimitModal(true);
                 setIsCreating(false);
                 return;
             }
@@ -567,6 +586,23 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                         </p>
                     </div>
 
+                    {/* Tag Filter Bar */}
+                    <div className="mt-6 flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                        {['All', ...CATEGORIES].map(tag => (
+                            <button
+                                key={tag}
+                                onClick={() => setSelectedTag(tag)}
+                                className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap border ${
+                                    selectedTag === tag
+                                        ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20'
+                                        : 'bg-slate-900/60 border-slate-800/60 text-slate-500 hover:border-slate-700 hover:text-slate-300'
+                                }`}
+                            >
+                                {tag === 'All' ? '🏷️ All Tags' : tag}
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="space-y-12">
                         {/* 1. Joined Lobbies */}
                         {sortedJoined.length > 0 && (
@@ -769,6 +805,64 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                 {isCreating ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
                                 {isCreating ? 'Finalizing...' : 'Launch Lobby'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Lobby Limit Modal */}
+            {showLimitModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => { setShowLimitModal(false); setPendingCreateAfterDelete(false); }} />
+                    <div className="relative bg-[#0f0f1a] border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+                        <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-xl font-black text-white">Lobby Limit Reached</h3>
+                                <p className="text-xs text-slate-500 mt-1">Delete a lobby to create a new one</p>
+                            </div>
+                            <button onClick={() => { setShowLimitModal(false); setPendingCreateAfterDelete(false); }} className="p-2 hover:bg-white/5 rounded-xl transition">
+                                <X size={20} className="text-slate-500" />
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                            {userLobbies.map(lobby => (
+                                <div key={lobby.id} className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-800/50 rounded-2xl">
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-white text-sm truncate">{lobby.name}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded">{lobby.category || 'Casual'}</span>
+                                            <span className="text-[10px] text-slate-600">{lobby.status || 'active'}</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            setIsDeletingLobby(lobby.id);
+                                            const { deleteLobbyAction } = await import('@/actions/tod-xp');
+                                            const result = await deleteLobbyAction(lobby.id);
+                                            if (result.success) {
+                                                setUserLobbies(prev => prev.filter(l => l.id !== lobby.id));
+                                                toast.success('Lobby deleted');
+                                                // Auto-open create modal after deletion
+                                                if (pendingCreateAfterDelete) {
+                                                    setShowLimitModal(false);
+                                                    setPendingCreateAfterDelete(false);
+                                                    setShowCreateModal(true);
+                                                }
+                                            } else {
+                                                toast.error(result.message || 'Failed to delete lobby');
+                                            }
+                                            setIsDeletingLobby(null);
+                                        }}
+                                        disabled={isDeletingLobby === lobby.id}
+                                        className="p-3 text-red-400 hover:bg-red-500/10 rounded-xl transition disabled:opacity-50 shrink-0"
+                                    >
+                                        {isDeletingLobby === lobby.id ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                                    </button>
+                                </div>
+                            ))}
+                            {userLobbies.length === 0 && (
+                                <p className="text-center text-slate-600 py-8 text-sm">No lobbies found</p>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -79,6 +79,8 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const [collateralPaid, setCollateralPaid] = useState(false)
     const gameStartedRef = useRef(false)
     const restoredRef = useRef(false)
+    const [opponentDisconnected, setOpponentDisconnected] = useState(false)
+    const opponentDisconnectedRef = useRef(false)
 
     // Star balance gate state
     const [starBalance, setStarBalance] = useState<number | null>(null)
@@ -98,7 +100,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 if (selectedMode === 'solo') {
                     startSoloWithStake(100)
                 } else {
-                    createRoom()
+                    startFriendWithStake(100)
                 }
             } else {
                 // Not enough for 100 — show gate modal
@@ -123,6 +125,21 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             toast(`${stake} Stars locked as collateral ⭐`, { icon: '🔒' })
             // Update displayed balance
             setStarBalance(prev => prev !== null ? prev - stake : null)
+        } else {
+            toast.error(res.error || 'Failed to deduct stars')
+        }
+    }
+
+    const startFriendWithStake = async (stake: number) => {
+        setStakeAmount(stake)
+        // Deduct collateral upfront for friend mode
+        const res = await spendXP(stake, 'RPS friend match collateral', { game: 'rps' })
+        if (res.success) {
+            setCollateralPaid(true)
+            gameStartedRef.current = true
+            toast(`${stake} Stars locked as collateral ⭐`, { icon: '🔒' })
+            setStarBalance(prev => prev !== null ? prev - stake : null)
+            createRoom()
         } else {
             toast.error(res.error || 'Failed to deduct stars')
         }
@@ -234,16 +251,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     payload: { username: profile.username }
                 })
                 toast.success(`${payload.username || "Friend"} joined!`)
-                // Deduct collateral
-                if (!gameStartedRef.current) {
-                    gameStartedRef.current = true
-                    spendXP(100, "RPS match collateral", { game: "rps" }).then(res => {
-                        if (res.success) {
-                            setCollateralPaid(true)
-                            toast("100 Stars locked as collateral ⭐", { icon: "🔒" })
-                        }
-                    }).catch(console.error)
-                }
+                // Collateral already deducted in startFriendWithStake for host
             })
             .on("broadcast", { event: "choice" }, ({ payload }) => {
                 opponentChoiceRef.current = payload.choice
@@ -265,17 +273,25 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     toast("Opponent left the game", { icon: "👋" })
                     return
                 }
-                // Mid-game leave — opponent forfeited
+                // Mid-game leave — switch to AI opponent, match continues
                 if (gameStartedRef.current) {
-                    earnXP(200, "Opponent forfeited RPS match", { game: "rps" }).catch(console.error)
-                    toast.success("Opponent forfeited! +200 Stars ⭐")
+                    setOpponentDisconnected(true)
+                    opponentDisconnectedRef.current = true
+                    toast("Your opponent left the match. You are now playing against the computer.", { icon: "🤖", duration: 5000 })
+                    // If waiting for opponent's choice, auto-generate one
+                    if (phaseRef.current === "waiting" && playerHasChosenRef.current) {
+                        opponentChoiceRef.current = getComputerChoice()
+                        setOpponentHasChosen(true)
+                        setPhase("countdown")
+                        setCountdown(3)
+                    }
                 } else {
                     toast.error("Opponent left the game")
+                    setMultiplayerState("idle")
+                    setMode(null)
+                    gameStartedRef.current = false
+                    cleanupChannel()
                 }
-                setMultiplayerState("idle")
-                setMode(null)
-                gameStartedRef.current = false
-                cleanupChannel()
             })
             .subscribe()
 
@@ -302,7 +318,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             .on("broadcast", { event: "host-ready" }, ({ payload }) => {
                 setOpponentName(payload.username || "Friend")
                 setMultiplayerState("connected")
-                // Deduct collateral
+                // Guest deducts collateral when host is ready
                 if (!gameStartedRef.current) {
                     gameStartedRef.current = true
                     spendXP(100, "RPS match collateral", { game: "rps" }).then(res => {
@@ -333,17 +349,25 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     toast("Opponent left the game", { icon: "👋" })
                     return
                 }
-                // Mid-game leave — opponent forfeited
+                // Mid-game leave — switch to AI opponent, match continues
                 if (gameStartedRef.current) {
-                    earnXP(200, "Opponent forfeited RPS match", { game: "rps" }).catch(console.error)
-                    toast.success("Opponent forfeited! +200 Stars ⭐")
+                    setOpponentDisconnected(true)
+                    opponentDisconnectedRef.current = true
+                    toast("Your opponent left the match. You are now playing against the computer.", { icon: "🤖", duration: 5000 })
+                    // If waiting for opponent's choice, auto-generate one
+                    if (phaseRef.current === "waiting" && playerHasChosenRef.current) {
+                        opponentChoiceRef.current = getComputerChoice()
+                        setOpponentHasChosen(true)
+                        setPhase("countdown")
+                        setCountdown(3)
+                    }
                 } else {
                     toast.error("Opponent left the game")
+                    setMultiplayerState("idle")
+                    setMode(null)
+                    gameStartedRef.current = false
+                    cleanupChannel()
                 }
-                setMultiplayerState("idle")
-                setMode(null)
-                gameStartedRef.current = false
-                cleanupChannel()
             })
             .subscribe((status) => {
                 if (status === "SUBSCRIBED") {
@@ -381,8 +405,12 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 payload: { choice }
             })
 
-            // If opponent already picked, start countdown immediately
-            if (opponentChoiceRef.current) {
+            // If opponent already picked or disconnected, start countdown immediately
+            if (opponentChoiceRef.current || opponentDisconnectedRef.current) {
+                if (opponentDisconnectedRef.current && !opponentChoiceRef.current) {
+                    opponentChoiceRef.current = getComputerChoice()
+                    setOpponentHasChosen(true)
+                }
                 setPhase("countdown")
                 setCountdown(3)
             } else {
@@ -635,8 +663,9 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         </button>
 
                         <button
-                            onClick={createRoom}
-                            className="w-full p-5 bg-white/5 hover:bg-teal-500/10 border border-white/10 hover:border-teal-500/30 rounded-2xl transition-all active:scale-[0.98] group"
+                            onClick={() => handleModeSelect('friend')}
+                            disabled={isCheckingBalance}
+                            className="w-full p-5 bg-white/5 hover:bg-teal-500/10 border border-white/10 hover:border-teal-500/30 rounded-2xl transition-all active:scale-[0.98] group disabled:opacity-60"
                         >
                             <div className="flex items-center gap-4">
                                 <div className="w-14 h-14 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -644,7 +673,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                 </div>
                                 <div className="text-left">
                                     <h3 className="font-bold text-lg text-white">Create Room</h3>
-                                    <p className="text-xs text-white/40">Invite a friend to play with you</p>
+                                    <p className="text-xs text-white/40">100 ⭐ collateral required</p>
                                 </div>
                             </div>
                         </button>

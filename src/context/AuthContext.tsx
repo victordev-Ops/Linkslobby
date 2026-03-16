@@ -1,6 +1,6 @@
 // src/context/AuthContext.tsx
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { User, Session } from "@supabase/supabase-js";
@@ -132,6 +132,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // --- Online Status Heartbeat ---
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      // Clear heartbeat when logged out
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      return;
+    }
+
+    const updateLastSeen = () => {
+      supabase
+        .from('profiles')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', user.id)
+        .then(() => {})
+        .catch(() => {});
+    };
+
+    // Immediate update on login
+    updateLastSeen();
+
+    // Heartbeat every 60 seconds
+    heartbeatRef.current = setInterval(updateLastSeen, 60 * 1000);
+
+    // Update on tab refocus
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        updateLastSeen();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [user, supabase]);
 
   const signOut = async () => {
     try {

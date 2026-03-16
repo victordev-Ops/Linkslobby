@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { penalizeHotSeatTimeout } from "@/actions/hot-seat-xp"
 import { banParticipant } from "@/actions/hot-seat"
+import { sendFriendRequest } from "@/actions/friends"
 import { useScrollLock } from "@/hooks/useScrollLock"
 import VerifiedBadge from "@/components/VerifiedBadge"
 
@@ -91,7 +92,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     const fetchParticipants = async () => {
         const { data, count, error } = await supabase
             .from('hot_seat_participants')
-            .select('*, user:profiles!hot_seat_participants_user_id_fkey(username, slug, id, is_pro)', { count: 'exact' })
+            .select('*, user:profiles!hot_seat_participants_user_id_fkey(username, slug, id, is_pro, avatar_url)', { count: 'exact' })
             .eq('session_id', session.id)
 
         if (error) {
@@ -578,8 +579,14 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                     participants.map(p => (
                                         <div key={p.id} className="relative group">
                                             <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 transition group-hover:bg-white/10">
-                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center font-bold text-white text-sm">
-                                                    {p.username?.[0]?.toUpperCase() || '?'}
+                                                <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                                                    {p.avatar_url ? (
+                                                        <img src={p.avatar_url} alt={p.username} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center font-bold text-white text-sm">
+                                                            {p.username?.[0]?.toUpperCase() || '?'}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5">
@@ -639,6 +646,22 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                                             >
                                                                 <MessageSquare size={16} /> Message
                                                             </button>
+                                                            {p.id !== userProfile.id && (
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        const result = await sendFriendRequest(p.id);
+                                                                        if (result.success) {
+                                                                            toast.success('Friend request sent!');
+                                                                        } else {
+                                                                            toast.error(result.error || 'Failed to send request');
+                                                                        }
+                                                                        setMenuOpen(null);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition"
+                                                                >
+                                                                    <Users size={16} /> Add Friend
+                                                                </button>
+                                                            )}
                                                             {isHost && session.host_id !== p.id && (
                                                                 <button
                                                                     onClick={() => handleBan(p.id)}

@@ -208,3 +208,72 @@ export async function joinLobbyAction(lobbyId: string, isPrivate: boolean) {
         return { success: false, error: error.message }
     }
 }
+
+// ─── Delete a lobby (owner only) ───
+export async function deleteLobbyAction(lobbyId: string) {
+    const supabase = await createSupabaseServerClient()
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { success: false, message: 'Not authenticated' }
+
+        // 1. Verify ownership
+        const { data: lobby } = await supabase
+            .from('tod_lobbies')
+            .select('host_id')
+            .eq('id', lobbyId)
+            .single()
+
+        if (!lobby || lobby.host_id !== user.id) {
+            return { success: false, message: 'You can only delete lobbies you created' }
+        }
+
+        // 2. Delete messages first (FK constraint)
+        await supabase
+            .from('tod_messages')
+            .delete()
+            .eq('lobby_id', lobbyId)
+
+        // 3. Delete participants (FK constraint)
+        await supabase
+            .from('tod_participants')
+            .delete()
+            .eq('lobby_id', lobbyId)
+
+        // 4. Delete the lobby
+        const { error } = await supabase
+            .from('tod_lobbies')
+            .delete()
+            .eq('id', lobbyId)
+            .eq('host_id', user.id)
+
+        if (error) throw error
+
+        return { success: true }
+    } catch (error: any) {
+        console.error('Delete lobby error:', error)
+        return { success: false, message: error.message || 'Failed to delete lobby' }
+    }
+}
+
+// ─── Get user's own lobbies (for limit management) ───
+export async function getUserLobbies() {
+    const supabase = await createSupabaseServerClient()
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return []
+
+        const { data, error } = await supabase
+            .from('tod_lobbies')
+            .select('id, name, slug, category, status, created_at')
+            .eq('host_id', user.id)
+            .order('created_at', { ascending: false })
+
+        if (error) throw error
+        return data || []
+    } catch (error) {
+        console.error('Get user lobbies error:', error)
+        return []
+    }
+}

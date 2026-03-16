@@ -58,6 +58,28 @@ export async function sendFriendRequest(targetUserId: string): Promise<ActionRes
         return { success: false, error: 'Failed to send request' }
     }
 
+    // Notify the addressee of the incoming friend request
+    try {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('id', user.id)
+            .single()
+
+        const username = profile?.username || 'Someone'
+
+        await supabase.from('xp_transactions').insert({
+            user_id: targetUserId,
+            amount: 0,
+            type: 'earn',
+            reason: `👋 You received a friend request from @${username}`,
+            is_read: false,
+        })
+    } catch (notifErr) {
+        console.error('Friend request notification error:', notifErr)
+        // Non-critical — don't fail the request
+    }
+
     return { success: true }
 }
 
@@ -120,6 +142,14 @@ export async function declineFriendRequest(friendshipId: string): Promise<Action
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: 'Not authenticated' }
 
+    // Fetch the friendship to get the requester_id before deleting
+    const { data: friendship } = await supabase
+        .from('friendships')
+        .select('requester_id')
+        .eq('id', friendshipId)
+        .eq('addressee_id', user.id)
+        .single()
+
     const { error } = await supabase
         .from('friendships')
         .delete()
@@ -129,6 +159,29 @@ export async function declineFriendRequest(friendshipId: string): Promise<Action
     if (error) {
         console.error('Decline friend request error:', error)
         return { success: false, error: 'Failed to decline request' }
+    }
+
+    // Notify the requester that their request was declined
+    if (friendship) {
+        try {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('username')
+                .eq('id', user.id)
+                .single()
+
+            const username = profile?.username || 'Someone'
+
+            await supabase.from('xp_transactions').insert({
+                user_id: friendship.requester_id,
+                amount: 0,
+                type: 'earn',
+                reason: `😔 @${username} declined your friend request`,
+                is_read: false,
+            })
+        } catch (notifErr) {
+            console.error('Friend decline notification error:', notifErr)
+        }
     }
 
     return { success: true }
