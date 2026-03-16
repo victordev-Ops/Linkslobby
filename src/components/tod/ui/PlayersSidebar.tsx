@@ -3,6 +3,9 @@ import { Users, Crown, Target, MessageCircle, Activity, Flame, Sparkles, Play, S
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { sendFriendRequest } from '@/actions/friends';
+import VerifiedBadge from '@/components/VerifiedBadge';
 
 import { Participant } from '../hooks/useGameLogic';
 
@@ -182,25 +185,38 @@ export const PlayersSidebar = ({
                   }`}
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 relative ${isTarget
-                    ? 'bg-gradient-to-br from-red-500 to-orange-500'
+                  <div className={`w-8 h-8 rounded-full overflow-hidden flex-shrink-0 relative ${isTarget
+                    ? 'ring-2 ring-red-500/50'
                     : isAsker
-                      ? 'bg-gradient-to-br from-blue-500 to-cyan-500'
-                      : 'bg-slate-700'
+                      ? 'ring-2 ring-blue-500/50'
+                      : ''
                     }`}>
-                    <span className="text-white font-bold text-xs uppercase">
-                      {participant.profiles?.username?.slice(0, 2) || '??'}
-                    </span>
+                    {participant.profiles?.avatar_url ? (
+                      <img src={participant.profiles.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`w-full h-full flex items-center justify-center ${isTarget
+                          ? 'bg-gradient-to-br from-red-500 to-orange-500'
+                          : isAsker
+                            ? 'bg-gradient-to-br from-blue-500 to-cyan-500'
+                            : 'bg-slate-700'
+                        }`}>
+                        <span className="text-white font-bold text-xs uppercase">
+                          {participant.profiles?.username?.slice(0, 2) || '??'}
+                        </span>
+                      </div>
+                    )}
                     {isOnline && (
                       <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900 shadow-sm" />
                     )}
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-semibold truncate ${isTarget ? 'text-white' : isAsker ? 'text-blue-100' : 'text-slate-300'
-                      }`}>
-                      {participant.profiles?.username || 'Unknown'}
-                    </p>
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <p className={`text-sm font-semibold truncate ${isTarget ? 'text-white' : isAsker ? 'text-blue-100' : 'text-slate-300'}`}>
+                        {participant.profiles?.username || 'Unknown'}
+                      </p>
+                      {participant.profiles?.is_pro && <VerifiedBadge size={14} />}
+                    </div>
                     <div className="flex items-center gap-1">
                       {isTarget && (
                         <span className="text-[10px] font-black uppercase text-red-400/80 tracking-tighter">Target</span>
@@ -263,6 +279,22 @@ export const PlayersSidebar = ({
                             >
                               <MessageCircle size={14} className="text-blue-400" />
                               Message
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                setActiveMenuId(null);
+                                const result = await sendFriendRequest(participant.user_id);
+                                if (result.success) {
+                                  toast.success('Friend request sent!');
+                                } else {
+                                  toast.error(result.error || 'Failed to send request');
+                                }
+                              }}
+                              className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
+                            >
+                              <UserPlus size={14} className="text-purple-400" />
+                              Add Friend
                             </button>
 
                             {isHost && participant.user_id !== hostId && (

@@ -24,7 +24,7 @@ export interface Participant {
   lobby_id: string;
   has_gone_this_round: boolean;
   status: 'pending' | 'joined' | 'rejected' | 'banned';
-  profiles?: { username: string };
+  profiles?: { username: string; avatar_url?: string; is_pro?: boolean };
 }
 
 interface Message {
@@ -63,7 +63,7 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
 
     const [lobbyRes, partsRes, msgsRes] = await Promise.all([
       supabase.from('tod_lobbies').select('*').eq('id', lobbyId).single(),
-      supabase.from('tod_participants').select('*, profiles(username)').eq('lobby_id', lobbyId),
+      supabase.from('tod_participants').select('*, profiles(username, avatar_url, is_pro)').eq('lobby_id', lobbyId),
       supabase.from('tod_messages')
         .select('*, profiles(username)')
         .eq('lobby_id', lobbyId)
