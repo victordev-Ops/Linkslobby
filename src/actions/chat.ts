@@ -35,30 +35,12 @@ export async function getOrCreateSession(otherUserId: string) {
         return { success: false, message: `@${targetProfile.username} has disabled direct messages.` }
     }
 
-    // 3. Create new session
-    const { data: newSession, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .insert({})
-        .select()
-        .single()
+    // 3. Create new session using RPC (safely creates session and adds participants under RLS)
+    const { data: newSessionId, error: sessionError } = await supabase
+        .rpc('create_dm_session', { p_other_user_id: otherUserId })
 
-    if (sessionError || !newSession) {
-        console.error('Error creating session:', sessionError)
-        return { success: false, message: 'Failed to create session' }
-    }
-
-    // 4. Add participants
-    const { error: participantsError } = await supabase
-        .from('chat_participants')
-        .insert([
-            { session_id: newSession.id, user_id: user.id },
-            { session_id: newSession.id, user_id: otherUserId }
-        ])
-
-    if (participantsError) {
-        console.error('Error adding participants:', participantsError)
-        // Clean up the orphaned session
-        await supabase.from('chat_sessions').delete().eq('id', newSession.id)
+    if (sessionError || !newSessionId) {
+        console.error('Error creating session via RPC:', sessionError)
         
         // Race condition: another request may have created the session 
         // between our check and insert. Re-check before failing.
@@ -67,11 +49,11 @@ export async function getOrCreateSession(otherUserId: string) {
             return { success: true, sessionId: raceSessionId }
         }
 
-        return { success: false, message: 'Failed to create session' }
+        return { success: false, message: sessionError?.message || 'Failed to create session' }
     }
 
     revalidatePath('/messages')
-    return { success: true, sessionId: newSession.id }
+    return { success: true, sessionId: newSessionId }
 }
 
 /**
