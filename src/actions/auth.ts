@@ -52,28 +52,11 @@ export async function deleteAccount(): Promise<AuthResponse> {
         auth: { autoRefreshToken: false, persistSession: false }
       })
 
-      // Delete user data from all tables in correct FK order to avoid constraint violations
-      const tablesToClean: { table: string; column: string }[] = [
-        { table: 'xp_transactions', column: 'user_id' },
-        { table: 'chat_messages', column: 'sender_id' },
-        { table: 'chat_participants', column: 'user_id' },
-        { table: 'notifications', column: 'user_id' },
-        { table: 'blocked_users', column: 'blocker_id' },
-        { table: 'blocked_users', column: 'blocked_id' },
-        { table: 'blocked_anonymous', column: 'user_id' },
-        { table: 'dykm_answers', column: 'user_id' },
-        { table: 'dykm_quizzes', column: 'user_id' },
-        { table: 'subscriptions', column: 'user_id' },
-        { table: 'friendships', column: 'requester_id' },
-        { table: 'friendships', column: 'addressee_id' },
-      ]
-
-      for (const { table, column } of tablesToClean) {
-        await adminClient.from(table).delete().eq(column, user.id)
+      // Delete the profile row first (will trigger cascades across the database)
+      const { error: profileError } = await adminClient.from('profiles').delete().eq('id', user.id)
+      if (profileError) {
+        console.error("Warning: Profile manual delete failed (might be handled by auth cascade):", profileError)
       }
-
-      // Delete the profile row (cascades to any remaining dependents)
-      await adminClient.from('profiles').delete().eq('id', user.id)
 
       // Finally delete the auth user
       const { error } = await adminClient.auth.admin.deleteUser(user.id)
@@ -88,6 +71,9 @@ export async function deleteAccount(): Promise<AuthResponse> {
       }).eq('id', user.id)
       await supabase.auth.signOut()
     }
+
+    // Always ensure the active session is destroyed in the browser
+    await supabase.auth.signOut()
 
     return { success: true, message: 'Account deleted successfully.' }
   } catch (error) {
