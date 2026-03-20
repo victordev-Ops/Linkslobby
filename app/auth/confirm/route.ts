@@ -7,23 +7,38 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
+  const code = searchParams.get('code')
   const next = searchParams.get('next') || searchParams.get('returnTo') || ''
 
-  if (token_hash && type) {
-    const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
+  let userId: string | null = null
+  let userEmail: string | null = null
 
-    // 1. Verify the OTP/Magic Link token
+  if (code) {
+    // OAuth Flow via standard `code` query param
+    const { data: authData, error: authError } = await supabase.auth.exchangeCodeForSession(code)
+    if (!authError && authData.user) {
+      userId = authData.user.id
+      userEmail = authData.user.email ?? null
+    }
+  } else if (token_hash && type) {
+    // Magic Link / OTP Flow
     const { data, error } = await supabase.auth.verifyOtp({
       type,
       token_hash,
     })
-
     if (!error && data.user) {
+      userId = data.user.id
+      userEmail = data.user.email ?? null
+    }
+  }
+
+  if (userId) {
       // 2. Check if profile exists and is complete
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id, username, slug')
-        .eq('id', data.user.id)
+        .eq('id', userId)
         .maybeSingle()
 
       if (profileError) {
@@ -37,8 +52,8 @@ export async function GET(request: NextRequest) {
         const { error: insertError } = await supabase
           .from('profiles')
           .upsert({
-            id: data.user.id,
-            email: data.user.email,
+            id: userId,
+            email: userEmail,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }, { onConflict: 'id' })
@@ -59,7 +74,6 @@ export async function GET(request: NextRequest) {
         if (next) setupUrl.searchParams.set('next', next)
         return NextResponse.redirect(setupUrl)
       }
-    }
   }
 
   // Fallback for expired or invalid tokens
