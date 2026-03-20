@@ -20,16 +20,33 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
     }
 
-    let event
+    let event: Stripe.Event
     try {
         const stripe = getStripe()
-        event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
+        event = stripe.webhooks.constructEvent(body, sig, webhookSecret) as Stripe.Event
     } catch (err: any) {
         console.error('Stripe webhook signature verification failed:', err.message)
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
     const supabase = createSupabaseAdminClient()
+
+    // Idempotency: check if this event was already processed
+    const { data: existing } = await supabase
+        .from('webhook_events')
+        .select('id')
+        .eq('id', event.id)
+        .maybeSingle()
+
+    if (existing) {
+        return NextResponse.json({ received: true, message: 'Already processed' })
+    }
+
+    await supabase.from('webhook_events').insert({
+        id: event.id,
+        provider: 'stripe',
+        event_type: event.type,
+    })
 
     try {
         switch (event.type) {
@@ -149,7 +166,7 @@ export async function POST(req: NextRequest) {
 
             case 'invoice.payment_failed': {
                 const invoice = event.data.object
-                const subId = invoice.subscription as string
+                const subId = (invoice as any).subscription as string
                 if (!subId) break
 
                 const { data: existing } = await supabase

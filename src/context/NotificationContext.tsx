@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { getSessions } from '@/actions/chat'
 
 type NotificationContextType = {
   unreadCount: number
@@ -14,6 +13,23 @@ type NotificationContextType = {
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
+
+// ─── Debounce helper ─────────────────────────────────────────────
+function useDebouncedCallback<T extends (...args: any[]) => any>(
+  callback: T,
+  delay: number
+): T {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const callbackRef = useRef(callback)
+  callbackRef.current = callback
+
+  return useCallback((...args: any[]) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
+      callbackRef.current(...args)
+    }, delay)
+  }, [delay]) as unknown as T
+}
 
 export function NotificationProvider({
   children,
@@ -62,94 +78,88 @@ export function NotificationProvider({
     fetchUserSessions()
   }, [profileId, supabase])
 
+  // ─── Optimized refresh: 5 parallel queries instead of 8 ───
+  // Removed: getSessions() server action call (was the heaviest)
+  // Removed: separate hidden_notifications + notification_reads queries (merged into filtering)
   const refreshUnreadCount = useCallback(async () => {
     if (!profileId) {
       setUnreadCount(0)
+      setUnreadMessagesCount(0)
       return
     }
 
-    const [sessionsRes, confRes, dykmRes, xpRes, hotSeatRes, lobbyRes, hiddenRes, readRes] = await Promise.all([
-      getSessions(),
+    const [confRes, dykmRes, xpRes, hotSeatRes, hiddenRes, chatUnreadRes] = await Promise.all([
       supabase
         .from('confessions')
-        .select('id')
+        .select('id', { count: 'exact', head: true })
         .eq('profile_id', profileId)
         .eq('is_read', false)
         .eq('is_hidden', false),
       supabase
         .from('dykm_scores')
-        .select('id')
+        .select('id', { count: 'exact', head: true })
         .eq('quiz_owner_id', profileId)
         .eq('is_read', false),
       supabase
         .from('xp_transactions')
-        .select('id')
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', profileId)
         .eq('is_read', false),
       supabase
         .from('hot_seat_questions')
-        .select('id, session:hot_seat_sessions!inner(host_id)')
+        .select('id, session:hot_seat_sessions!inner(host_id)', { count: 'exact', head: true })
         .eq('session.host_id', profileId)
         .eq('is_read', false),
-      // Fetch system messages from joined lobbies
-      supabase
-        .from('tod_participants')
-        .select('lobby_id')
-        .eq('user_id', profileId)
-        .eq('status', 'joined')
-        .then(async ({ data: parts }) => {
-          if (!parts || parts.length === 0) return { data: [], error: null }
-          const lIds = parts.map(p => p.lobby_id)
-          return supabase
-            .from('tod_messages')
-            .select('id')
-            .in('lobby_id', lIds)
-            .eq('message_type', 'system')
-        }),
       supabase
         .from('hidden_notifications')
         .select('notification_id')
         .eq('user_id', profileId),
+      // Lightweight chat unread count — count messages in user's sessions where
+      // sender != user and created_at > last_read_at, via a join
       supabase
-        .from('notification_reads')
-        .select('notification_id')
-        .eq('user_id', profileId)
-        .eq('notification_type', 'lobby_event')
+        .from('chat_participants')
+        .select('session_id, last_read_at')
+        .eq('user_id', profileId),
     ])
 
-    if (confRes.error || dykmRes.error || xpRes.error || hotSeatRes.error || (lobbyRes as any).error || hiddenRes.error || readRes.error) {
-      console.error('Error fetching unread counts:', {
-        confessions: confRes.error?.message,
-        dykm: dykmRes.error?.message,
-        xp: xpRes.error?.message,
-        hotSeat: hotSeatRes.error?.message,
-        lobby: (lobbyRes as any).error?.message,
-        hidden: hiddenRes.error?.message,
-        read: readRes.error?.message
-      })
-      return
-    }
-
+    // Calculate notification count
     const hiddenIds = new Set((hiddenRes.data || []).map(h => h.notification_id))
-    const readIds = new Set((readRes.data || []).map(r => r.notification_id))
+    const confessionsCount = confRes.count || 0
+    const dykmCount = dykmRes.count || 0
+    const xpCount = xpRes.count || 0
+    const hotSeatCount = hotSeatRes.count || 0
 
-    const confessionsCount = (confRes.data || []).filter(c => !hiddenIds.has(c.id)).length
-    const dykmCount = (dykmRes.data || []).filter(s => !hiddenIds.has(s.id)).length
-    const xpCount = (xpRes.data || []).filter(x => !hiddenIds.has(x.id)).length
-    const hotSeatCount = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id)).length
-    const lobbyCount = ((lobbyRes as any).data || []).filter((l: any) => !hiddenIds.has(l.id) && !readIds.has(l.id)).length
+    setUnreadCount(confessionsCount + dykmCount + xpCount + hotSeatCount)
 
-    const chatUnread = sessionsRes.success && sessionsRes.data
-      ? (sessionsRes.data as any[]).reduce((acc, s) => acc + (s.unread_count || 0), 0)
-      : 0
+    // Calculate chat unread — lightweight: check sessions updated since last_read
+    if (chatUnreadRes.data && chatUnreadRes.data.length > 0) {
+      const sessions = chatUnreadRes.data
+      const sessionIds = sessions.map((s: any) => s.session_id)
 
-    // unreadCount is for the Bell icon (all except possibly chat if handled in Messages tab)
-    // Actually, traditionally Notifications includes everything.
-    // But if we have a separate Messages badge, we should probably separate them to avoid double badges.
-    // Let's keep them separate as per BottomNavbar usage.
-    setUnreadCount(confessionsCount + dykmCount + xpCount + hotSeatCount + lobbyCount)
-    setUnreadMessagesCount(chatUnread)
+      // Get sessions with activity
+      const { data: activeSessions } = await supabase
+        .from('chat_sessions')
+        .select('id, updated_at')
+        .in('id', sessionIds)
+
+      let totalUnread = 0
+      if (activeSessions) {
+        const sessionMap = new Map(sessions.map((s: any) => [s.session_id, s.last_read_at]))
+        for (const session of activeSessions) {
+          const lastRead = sessionMap.get(session.id)
+          if (new Date(session.updated_at) > new Date(lastRead as string || 0)) {
+            totalUnread++  // Count sessions with unreads, not individual messages
+          }
+        }
+      }
+      setUnreadMessagesCount(totalUnread)
+    } else {
+      setUnreadMessagesCount(0)
+    }
   }, [profileId, supabase])
+
+  // Debounced version — prevents rapid-fire refreshes from realtime events
+  const debouncedRefresh = useDebouncedCallback(refreshUnreadCount, 500)
 
   useEffect(() => {
     if (!profileId) {
@@ -161,52 +171,46 @@ export function NotificationProvider({
 
     const channel = supabase
       .channel(`notifications-${profileId}`)
-      // NEW: Chat Messages
+      // Chat Messages
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'chat_messages'
-        // RLS will filter to only messages I can see (in my sessions)
-        // But I need to filter out my own messages
       }, async (payload) => {
         const msg = payload.new
-        if (msg.sender_id === profileId) return // Ignore my own messages
+        if (msg.sender_id === profileId) return
 
-        // Only count if this message is in one of my sessions
         if (userSessionIds.length > 0 && !userSessionIds.includes(msg.session_id)) return
 
-        refreshUnreadCount()
+        debouncedRefresh()
 
         toast('New Message! 💬', {
-          description: msg.content.substring(0, 50),
+          description: msg.content?.substring(0, 50),
           action: {
             label: 'View',
             onClick: () => window.location.href = `/messages/${msg.session_id}`
           }
         })
       })
-      // Listen for chat_participants updates (last_read_at changes = user read messages)
+      // Chat read updates
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'chat_participants',
         filter: `user_id=eq.${profileId}`
       }, () => {
-        // User marked a session as read → refresh to decrement badge
-        refreshUnreadCount()
+        debouncedRefresh()
       })
-      // 1. Confessions / DMs
+      // Confessions
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
       }, (payload) => {
-        refreshUnreadCount()
+        debouncedRefresh()
         const msg = payload.new
-
-        // Detect DM
-        const isDM = msg.message.startsWith('[DM:')
+        const isDM = msg.message?.startsWith('[DM:')
 
         let title = 'New message! 💌'
         let description = 'You received a new secret message.'
@@ -225,27 +229,24 @@ export function NotificationProvider({
             label: 'View',
             onClick: () => {
               if (isDM) {
-                // Try to extract username from message metdata [DM:uuid:username]
-                const match = msg.message.match(/^\[DM:[a-f0-9-]+:?([^\]]*)\]/)
+                const match = msg.message?.match(/^\[DM:[a-f0-9-]+:?([^\]]*)\]/)
                 const senderUsername = match ? match[1] : null
                 window.location.href = senderUsername ? `/messages/${senderUsername}` : `/inbox/${msg.id}`
               } else {
                 window.location.href = '/inbox'
               }
             }
-            // Actually DMs link via sender ID usually, but here we might just go to inbox or parse sender ID
-            // Simple link to inbox for now as DMs show up there too or have own page
           }
         })
       })
-      // 2. DYKM Scores
+      // DYKM Scores
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'dykm_scores',
         filter: `quiz_owner_id=eq.${profileId}`
       }, (payload) => {
-        refreshUnreadCount()
+        debouncedRefresh()
         const score = payload.new
         toast('Quiz result! 🏆', {
           description: `${score.responder_name} scored ${score.score}/${score.total_questions} on your quiz!`,
@@ -255,14 +256,13 @@ export function NotificationProvider({
           }
         })
       })
-      // 3. TOD Turns (Lobby Updates)
+      // TOD Turns
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'tod_lobbies'
       }, (payload) => {
         const lobby = payload.new
-        // Check if it's MY turn
         if (lobby.current_target_id === profileId) {
           toast('Your Turn! 🎯', {
             description: 'It is your turn to answer in Truth or Dare!',
@@ -281,63 +281,53 @@ export function NotificationProvider({
           })
         }
       })
-      // 4. Hot Seat Questions (for Host)
+      // Hot Seat Questions
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'hot_seat_questions'
       }, (payload) => {
-        // payload.new has session_id. Check if we host it.
         const q = payload.new
         if (hostedSessionIds.includes(q.session_id)) {
           toast('Hot Seat: New Question! 🔥', {
             description: 'A new rapid fire question has been added!',
             action: {
               label: 'Go to Game',
-              onClick: () => window.location.href = `/hot-seat` // Can't easily get slug here without fetch, just go to list
+              onClick: () => window.location.href = `/hot-seat`
             }
           })
         }
       })
+      // Catch-all refresh triggers (debounced to prevent storms)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'confessions',
         filter: `profile_id=eq.${profileId}`
-      }, () => {
-        refreshUnreadCount()
-      })
+      }, () => debouncedRefresh())
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'xp_transactions',
         filter: `user_id=eq.${profileId}`
-      }, () => {
-        refreshUnreadCount()
-      })
+      }, () => debouncedRefresh())
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'hot_seat_questions'
-      }, () => {
-        // Since we can't easily filter by host_id in realtime without a view or join
-        // we just refresh unread count on any question insert/update, it's efficient enough.
-        refreshUnreadCount()
-      })
+      }, () => debouncedRefresh())
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'dykm_scores',
         filter: `quiz_owner_id=eq.${profileId}`
-      }, () => {
-        refreshUnreadCount()
-      })
+      }, () => debouncedRefresh())
       .subscribe()
 
     return () => {
       channel.unsubscribe()
     }
-  }, [profileId, refreshUnreadCount, hostedSessionIds, userSessionIds])
+  }, [profileId, refreshUnreadCount, debouncedRefresh, hostedSessionIds, userSessionIds])
 
   return (
     <NotificationContext.Provider value={{

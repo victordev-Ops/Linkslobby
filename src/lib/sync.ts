@@ -158,3 +158,65 @@ export async function syncToLocal<T extends { id: string }>(
         return []
     }
 }
+
+// ─── Cache Eviction ─────────────────────────────────────────────────
+
+const DEFAULT_EVICT_AGE = 24 * 60 * 60 * 1000 // 24 hours
+
+/**
+ * Evict stale entries from a Dexie table based on their `cached_at` timestamp.
+ * Call periodically (e.g. on app start) to keep IndexedDB lean.
+ */
+export async function evictStaleCache(
+    dexieTable: { where: (key: string) => any },
+    maxAgeMs: number = DEFAULT_EVICT_AGE
+): Promise<number> {
+    try {
+        const cutoff = Date.now() - maxAgeMs
+        const deleted = await dexieTable
+            .where('cached_at')
+            .below(cutoff)
+            .delete()
+        if (deleted > 0) {
+            console.log(`[Cache] Evicted ${deleted} stale entries`)
+        }
+        return deleted
+    } catch (err) {
+        console.error('[Cache] Eviction error:', err)
+        return 0
+    }
+}
+
+/**
+ * Incremental sync — fetch only records updated after the last sync timestamp.
+ * More efficient than full re-sync for tables with updated_at columns.
+ */
+export async function incrementalSync<T extends { id: string }>(
+    tableName: string,
+    supabaseQuery: (since: string) => Promise<{ data: T[] | null; error: any }>,
+    dexieTable: { bulkPut: (items: any[]) => Promise<any> },
+    metaKey: string
+): Promise<T[]> {
+    try {
+        const meta = await db.meta.get(metaKey)
+        const since = meta
+            ? new Date(meta.updated_at).toISOString()
+            : new Date(0).toISOString()
+
+        const { data, error } = await supabaseQuery(since)
+        if (error) throw error
+
+        if (data && data.length > 0) {
+            const now = Date.now()
+            const withTimestamp = data.map(item => ({ ...item, cached_at: now }))
+            await dexieTable.bulkPut(withTimestamp)
+            console.log(`[Sync] Incrementally synced ${data.length} ${tableName} records`)
+        }
+
+        await markFresh(metaKey)
+        return data || []
+    } catch (err) {
+        console.error(`[Sync] Incremental sync failed for ${tableName}:`, err)
+        return []
+    }
+}

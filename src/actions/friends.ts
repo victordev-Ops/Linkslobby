@@ -193,10 +193,12 @@ export async function removeFriend(friendshipId: string): Promise<ActionResult> 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: 'Not authenticated' }
 
+    // Security: only allow deleting friendships the user is part of
     const { error } = await supabase
         .from('friendships')
         .delete()
         .eq('id', friendshipId)
+        .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
 
     if (error) {
         console.error('Remove friend error:', error)

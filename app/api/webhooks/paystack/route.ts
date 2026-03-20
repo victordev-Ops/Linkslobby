@@ -21,6 +21,25 @@ export async function POST(req: NextRequest) {
     const event = JSON.parse(body)
     const supabase = createSupabaseAdminClient()
 
+    // Idempotency: check if this event was already processed
+    const eventId = event.data?.id || event.data?.reference || `paystack_${Date.now()}`
+    const { data: existing } = await supabase
+        .from('webhook_events')
+        .select('id')
+        .eq('id', eventId)
+        .maybeSingle()
+
+    if (existing) {
+        return NextResponse.json({ received: true, message: 'Already processed' })
+    }
+
+    // Log the event as processed
+    await supabase.from('webhook_events').insert({
+        id: eventId,
+        provider: 'paystack',
+        event_type: event.event,
+    })
+
     try {
         switch (event.event) {
             case 'subscription.create': {

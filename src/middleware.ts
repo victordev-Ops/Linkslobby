@@ -2,6 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // 1. Static Asset Pass-through — skip Supabase entirely
+  if (pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|webmanifest)$/) || pathname.startsWith('/_next')) {
+    return NextResponse.next()
+  }
+
   let response = NextResponse.next({
     request: { headers: request.headers },
   })
@@ -23,78 +30,70 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const pathname = request.nextUrl.pathname
-
-  // 1. Static Asset Pass-through
-  if (pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|webmanifest)$/) || pathname.startsWith('/_next')) {
-    return response
-  }
 
   // 2. Define Public Routes
   const publicPaths = ['/login', '/signup', '/manifest.webmanifest', '/sw.js']
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
 
-  // Routes that start with a specific prefix
   const isPublicPrefix =
     pathname.startsWith('/auth/') ||
     pathname.startsWith('/confess/') ||
     pathname.startsWith('/ama/') ||
     pathname.startsWith('/anonymous/') ||
-    pathname.startsWith('/dykm/')// <--- Added this
+    pathname.startsWith('/dykm/')
 
   const isPublicRoute = isExactPublic || isPublicPrefix
 
-  // 3. Logic: Redirect logged-in users away from Login/Signup to Dashboard
-  if (user && (pathname === '/login' || pathname === '/signup')) {
-    // Check if profile is complete before sending to dashboard
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('username, slug')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    // If profile incomplete, redirect to setup
-    if (!profile || !profile.username || !profile.slug) {
-      const setupUrl = new URL('/auth/setup', request.url)
-      const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
-      if (nextParam) setupUrl.searchParams.set('next', nextParam)
-      return NextResponse.redirect(setupUrl)
-    }
-
-    const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
-    if (nextParam) {
-      return NextResponse.redirect(new URL(nextParam, request.url))
-    }
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
-
-  // 4. Logic: Protect authenticated routes
+  // 3. Protect authenticated routes — redirect to login if not authenticated
   if (!user && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  // 5. Profile Completion Check - guard ALL authenticated routes
-  //    (except public routes and /auth/setup itself) to prevent users
-  //    from accessing any part of the app without a complete profile.
-  const profileExemptPaths = ['/auth/setup']
-  const isProfileExempt = profileExemptPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
+  // 4. For authenticated users — fetch profile ONCE and reuse
+  if (user) {
+    const profileExemptPaths = ['/auth/setup']
+    const isProfileExempt = profileExemptPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
+    const isOnLoginPage = pathname === '/login' || pathname === '/signup'
 
-  if (user && !isPublicRoute && !isProfileExempt) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('username, slug')
-      .eq('id', user.id)
-      .maybeSingle()
+    // Only fetch profile if we actually need it (login redirect OR completion check)
+    const needsProfileCheck = isOnLoginPage || (!isPublicRoute && !isProfileExempt)
 
-    // If profile incomplete, redirect to setup
-    if (!profile || !profile.username || !profile.slug) {
-      const setupUrl = new URL('/auth/setup', request.url)
-      const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
-      if (nextParam) setupUrl.searchParams.set('next', nextParam)
-      else setupUrl.searchParams.set('next', pathname)
-      return NextResponse.redirect(setupUrl)
+    if (needsProfileCheck) {
+      // SINGLE profile query — eliminates the double-query bottleneck
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username, slug')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const isProfileComplete = profile && profile.username && profile.slug
+
+      if (isOnLoginPage) {
+        // Logged-in user on /login or /signup
+        if (!isProfileComplete) {
+          const setupUrl = new URL('/auth/setup', request.url)
+          const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
+          if (nextParam) setupUrl.searchParams.set('next', nextParam)
+          return NextResponse.redirect(setupUrl)
+        }
+
+        const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
+        if (nextParam) {
+          return NextResponse.redirect(new URL(nextParam, request.url))
+        }
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+
+      // Authenticated user on protected route — check profile completion
+      if (!isProfileComplete) {
+        const setupUrl = new URL('/auth/setup', request.url)
+        const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
+        if (nextParam) setupUrl.searchParams.set('next', nextParam)
+        else setupUrl.searchParams.set('next', pathname)
+        return NextResponse.redirect(setupUrl)
+      }
     }
   }
 

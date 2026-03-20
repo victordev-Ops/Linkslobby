@@ -7,6 +7,7 @@ import AuthForm from '@/components/AuthForm'
 import { Mail, ArrowRight, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import SocialAuthButtons from '@/components/SocialAuthButtons'
 
 export default function Login() {
   return (
@@ -112,6 +113,10 @@ function LoginContent() {
                   {!loading && <ArrowRight size={16} />}
                 </button>
               </form>
+
+              <div className="pt-2">
+                <SocialAuthButtons mode="login" next={returnTo} />
+              </div>
 
               <div className="text-center">
                 <p className="text-xs text-white/30 font-medium">

@@ -90,7 +90,7 @@ export default function PublicProfileClient({
                 {/* Name & Badge */}
                 <div className="space-y-1 mb-6">
                     <div className="flex flex-col gap-1 items-start">
-                        {!viewerIsPro && (
+                        {isOwnProfile && !profile.is_pro && (
                             <Link href="/upgrade" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition bg-blue-500/10 px-2 py-1 rounded-full mb-1">
                             <BadgeCheck size={14} /> Get Verified
                             </Link>

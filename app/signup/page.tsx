@@ -7,6 +7,7 @@ import AuthForm from '@/components/AuthForm'
 import { Loader2, Mail, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import SocialAuthButtons from '@/components/SocialAuthButtons'
 
 export default function Signup() {
   return (
@@ -114,6 +115,10 @@ function SignupContent() {
             )}
           </button>
         </form>
+
+        <div className="pt-2">
+          <SocialAuthButtons mode="signup" next={returnTo} />
+        </div>
 
         {/* Animated Status Messages */}
         <div aria-live="polite" className="mt-6 min-h-[60px]">

@@ -12,26 +12,14 @@ export async function signUp(email: string, next?: string): Promise<AuthResponse
   const supabase = await createSupabaseServerClient()
 
   // 1. Dynamic Origin Resolution
-  // Prefers VERCEL_URL or custom env, falls back to localhost
   const origin = process.env.NEXT_PUBLIC_SITE_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
   const cleanOrigin = origin.replace(/\/$/, '')
 
-  // Check if user already exists
-  const { data: existingUser } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('email', email.trim().toLowerCase())
-    .single()
-
-  if (existingUser) {
-    return {
-      success: false,
-      message: 'Account already exists. Redirecting to login...',
-      alreadyExists: true
-    }
-  }
+  // Security: Do NOT check if the user exists first — that leaks account existence.
+  // Supabase's signInWithOtp handles both new and existing users seamlessly.
+  // The magic link works for sign-up AND sign-in.
 
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim().toLowerCase(),

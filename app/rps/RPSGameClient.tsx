@@ -3,215 +3,179 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Share2, Loader2, Users, RotateCcw, Swords, Wifi, WifiOff, Monitor, UserPlus, Star } from "lucide-react"
+import { ArrowLeft, Share2, Loader2, Users, RotateCcw, Swords, Star, Monitor, UserPlus } from "lucide-react"
 import { toast } from "sonner"
-import { earnXP, spendXP, getXPBalance } from "@/hooks/xp"
+import {
+    createRPSMatch,
+    joinRPSMatch,
+    submitRPSMove,
+    cancelRPSMatch,
+    getActiveRPSMatch,
+    getRPSBalance,
+    type RPSMatch,
+    type RPSMove,
+    type RPSActionResult,
+} from "@/actions/rps"
 
-type Choice = "rock" | "paper" | "scissors" | null
-type RoundResult = "win" | "lose" | "tie"
-type GameMode = null | "solo" | "friend"
-type MultiplayerRole = "host" | "guest" | null
-type MultiplayerState = "idle" | "waiting" | "connected" | "playing"
+type GamePhase = "choosing" | "waiting" | "countdown" | "reveal" | "matchEnd"
 
 interface RoundHistory {
     round: number
-    playerChoice: Choice
-    opponentChoice: Choice
-    result: RoundResult
+    playerChoice: RPSMove
+    opponentChoice: RPSMove
+    result: "win" | "lose" | "tie"
 }
 
-const CHOICES: { id: Choice; emoji: string; label: string }[] = [
+const CHOICES: { id: RPSMove; emoji: string; label: string }[] = [
     { id: "rock", emoji: "✊", label: "Rock" },
     { id: "paper", emoji: "✋", label: "Paper" },
     { id: "scissors", emoji: "✌️", label: "Scissors" },
 ]
 
-const getResult = (player: Choice, opponent: Choice): RoundResult => {
-    if (player === opponent) return "tie"
-    if (
-        (player === "rock" && opponent === "scissors") ||
-        (player === "paper" && opponent === "rock") ||
-        (player === "scissors" && opponent === "paper")
-    ) return "win"
-    return "lose"
-}
-
-const getComputerChoice = (): Choice => {
-    const choices: Choice[] = ["rock", "paper", "scissors"]
-    return choices[Math.floor(Math.random() * 3)]
-}
-
 interface RPSGameClientProps {
-    profile: any
+    profile: { id: string; username: string; slug: string; is_pro: boolean }
 }
 
 export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const router = useRouter()
     const [supabase] = useState(() => createClient())
 
-    // Game mode
-    const [mode, setMode] = useState<GameMode>(null)
+    // ─── Match state (server-authoritative) ───
+    const [matchId, setMatchId] = useState<string | null>(null)
+    const [match, setMatch] = useState<RPSMatch | null>(null)
+    const [mode, setMode] = useState<"solo" | "friend" | null>(null)
+    const [roomCode, setRoomCode] = useState("")
+    const [isPlayerA, setIsPlayerA] = useState(true)
 
-    // Core game state
-    const [playerChoice, setPlayerChoice] = useState<Choice>(null)
-    const [opponentChoice, setOpponentChoice] = useState<Choice>(null)
+    // ─── UI state ───
+    const [phase, setPhase] = useState<GamePhase>("choosing")
+    const [playerChoice, setPlayerChoice] = useState<RPSMove | null>(null)
+    const [opponentChoice, setOpponentChoice] = useState<RPSMove | null>(null)
     const [playerScore, setPlayerScore] = useState(0)
     const [opponentScore, setOpponentScore] = useState(0)
     const [roundHistory, setRoundHistory] = useState<RoundHistory[]>([])
-    const [phase, setPhase] = useState<"choosing" | "waiting" | "countdown" | "reveal" | "matchEnd">("choosing")
     const [countdown, setCountdown] = useState(3)
     const [matchResult, setMatchResult] = useState<"won" | "lost" | null>(null)
+    const [opponentName, setOpponentName] = useState("")
+
+    // ─── Lobby/UX state ───
     const [showExitConfirm, setShowExitConfirm] = useState(false)
-    const phaseRef = useRef<string>("choosing")
-    const playerHasChosenRef = useRef(false)
-
-    // Multiplayer state
-    const [multiplayerRole, setMultiplayerRole] = useState<MultiplayerRole>(null)
-    const [multiplayerState, setMultiplayerState] = useState<MultiplayerState>("idle")
-    const [roomId, setRoomId] = useState<string>("")
-    const [opponentName, setOpponentName] = useState<string>("")
-    const [joinRoomId, setJoinRoomId] = useState("")
     const [showJoinInput, setShowJoinInput] = useState(false)
-    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
-    const opponentChoiceRef = useRef<Choice>(null)
-    const hasProcessedRound = useRef(false)
-    const [opponentHasChosen, setOpponentHasChosen] = useState(false)
-    const [collateralPaid, setCollateralPaid] = useState(false)
-    const gameStartedRef = useRef(false)
-    const restoredRef = useRef(false)
-    const [opponentDisconnected, setOpponentDisconnected] = useState(false)
-    const opponentDisconnectedRef = useRef(false)
-
-    // Star balance gate state
+    const [joinRoomId, setJoinRoomId] = useState("")
     const [starBalance, setStarBalance] = useState<number | null>(null)
-    const [stakeAmount, setStakeAmount] = useState(100)
     const [showBalanceGate, setShowBalanceGate] = useState(false)
-    const [isCheckingBalance, setIsCheckingBalance] = useState(false)
-    const [pendingMode, setPendingMode] = useState<'solo' | 'friend' | null>(null)
+    const [isLoading, setIsLoading] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isRecovering, setIsRecovering] = useState(true)
+    const [pendingMode, setPendingMode] = useState<"solo" | "friend" | null>(null)
+    const [stakeAmount, setStakeAmount] = useState(100)
 
-    // --- Star balance gate helpers ---
-    const handleModeSelect = async (selectedMode: 'solo' | 'friend') => {
-        setIsCheckingBalance(true)
-        try {
-            const balance = await getXPBalance()
-            setStarBalance(balance)
-            if (balance >= 100) {
-                // Enough stars — proceed with standard 100 stake
-                if (selectedMode === 'solo') {
-                    startSoloWithStake(100)
-                } else {
-                    startFriendWithStake(100)
-                }
-            } else {
-                // Not enough for 100 — show gate modal
-                setPendingMode(selectedMode)
-                setShowBalanceGate(true)
-            }
-        } catch {
-            toast.error('Failed to check star balance')
-        } finally {
-            setIsCheckingBalance(false)
-        }
-    }
+    // ─── Refs ───
+    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+    const phaseRef = useRef<GamePhase>("choosing")
+    const lastRoundRef = useRef(0)
 
-    const startSoloWithStake = async (stake: number) => {
-        setStakeAmount(stake)
-        // Deduct collateral upfront
-        const res = await spendXP(stake, 'RPS solo collateral', { game: 'rps' })
-        if (res.success) {
-            setCollateralPaid(true)
-            gameStartedRef.current = true
-            setMode('solo')
-            toast(`${stake} Stars locked as collateral ⭐`, { icon: '🔒' })
-            // Update displayed balance
-            setStarBalance(prev => prev !== null ? prev - stake : null)
-        } else {
-            toast.error(res.error || 'Failed to deduct stars')
-        }
-    }
+    useEffect(() => { phaseRef.current = phase }, [phase])
 
-    const startFriendWithStake = async (stake: number) => {
-        setStakeAmount(stake)
-        // Deduct collateral upfront for friend mode
-        const res = await spendXP(stake, 'RPS friend match collateral', { game: 'rps' })
-        if (res.success) {
-            setCollateralPaid(true)
-            gameStartedRef.current = true
-            toast(`${stake} Stars locked as collateral ⭐`, { icon: '🔒' })
-            setStarBalance(prev => prev !== null ? prev - stake : null)
-            createRoom()
-        } else {
-            toast.error(res.error || 'Failed to deduct stars')
-        }
-    }
-
-    // --- Session persistence helpers ---
-    const SESSION_KEY = 'rps_game_state'
-
-    const saveSession = useCallback(() => {
-        try {
-            const state = {
-                mode, playerScore, opponentScore, roundHistory, phase,
-                matchResult, collateralPaid, roomId, opponentName,
-                multiplayerRole, multiplayerState,
-                gameStarted: gameStartedRef.current,
-            }
-            sessionStorage.setItem(SESSION_KEY, JSON.stringify(state))
-        } catch { /* ignore quota errors */ }
-    }, [mode, playerScore, opponentScore, roundHistory, phase, matchResult, collateralPaid, roomId, opponentName, multiplayerRole, multiplayerState])
-
-    const clearSession = () => {
-        try { sessionStorage.removeItem(SESSION_KEY) } catch { /* noop */ }
-    }
-
-    // Restore session on mount
+    // ─── Recover active match on mount ───
     useEffect(() => {
-        if (restoredRef.current) return
-        restoredRef.current = true
-        try {
-            const raw = sessionStorage.getItem(SESSION_KEY)
-            if (!raw) return
-            const s = JSON.parse(raw)
-            if (!s.mode) return
+        let cancelled = false
+        const recover = async () => {
+            try {
+                const result = await getActiveRPSMatch()
+                if (cancelled) return
+                if (result.success && result.match) {
+                    const m = result.match
+                    setMatch(m)
+                    setMatchId(m.id)
+                    setMode(m.mode)
+                    setRoomCode(m.room_code || "")
+                    setIsPlayerA(m.player_a === profile.id)
+                    setStakeAmount(m.stake_amount)
+                    setPlayerScore(m.player_a === profile.id ? m.score_a : m.score_b)
+                    setOpponentScore(m.player_a === profile.id ? m.score_b : m.score_a)
+                    lastRoundRef.current = m.current_round - 1
 
-            // For friend mode, only restore if the match already ended
-            // (can't reconnect the realtime channel after refresh)
-            if (s.mode === 'friend' && s.phase !== 'matchEnd') {
-                clearSession()
-                return
+                    if (m.status === "waiting") {
+                        setPhase("choosing")
+                    } else if (m.status === "active") {
+                        setPhase("choosing")
+                        // If we already submitted a move this round, show waiting
+                        const myMove = m.player_a === profile.id ? m.move_a : m.move_b
+                        if (myMove) {
+                            setPlayerChoice(myMove as RPSMove)
+                            setPhase("waiting")
+                        }
+                    }
+
+                    // Subscribe to updates
+                    subscribeToMatch(m.id)
+
+                    // Fetch opponent name for friend matches
+                    if (m.mode === "friend") {
+                        const otherId = m.player_a === profile.id ? m.player_b : m.player_a
+                        if (otherId) {
+                            fetchOpponentName(otherId)
+                        }
+                    }
+
+                    toast("Game restored from server", { icon: "🔄" })
+                }
+            } catch (err) {
+                console.error("Recovery error:", err)
+            } finally {
+                if (!cancelled) setIsRecovering(false)
             }
+        }
 
-            setMode(s.mode)
-            setPlayerScore(s.playerScore || 0)
-            setOpponentScore(s.opponentScore || 0)
-            setRoundHistory(s.roundHistory || [])
-            setPhase(s.phase || 'choosing')
-            setMatchResult(s.matchResult || null)
-            setCollateralPaid(s.collateralPaid || false)
-            setRoomId(s.roomId || '')
-            setOpponentName(s.opponentName || '')
-            setMultiplayerRole(s.multiplayerRole || null)
-            setMultiplayerState(s.multiplayerState || 'idle')
-            gameStartedRef.current = s.gameStarted || false
+        recover()
 
-            if (s.mode === 'solo' && s.phase !== 'matchEnd') {
-                toast('Game restored from your last session', { icon: '🔄' })
-            }
-        } catch { clearSession() }
+        // Check URL for join code
+        const params = new URLSearchParams(window.location.search)
+        const joinCode = params.get("join")
+        if (joinCode) {
+            setJoinRoomId(joinCode.toUpperCase())
+            setShowJoinInput(true)
+        }
+
+        return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Persist game state whenever key values change
-    useEffect(() => {
-        if (mode) saveSession()
-    }, [mode, playerScore, opponentScore, roundHistory, phase, matchResult, saveSession])
-
-    // Generate a short room code
-    const generateRoomId = () => {
-        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        let code = ""
-        for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
-        return code
+    // ─── Fetch opponent name ───
+    const fetchOpponentName = async (userId: string) => {
+        const { data } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", userId)
+            .single()
+        if (data?.username) setOpponentName(data.username)
     }
+
+    // ─── Subscribe to match updates via Postgres Changes ───
+    const subscribeToMatch = useCallback((mId: string) => {
+        // Clean up previous channel
+        if (channelRef.current) {
+            supabase.removeChannel(channelRef.current)
+            channelRef.current = null
+        }
+
+        const channel = supabase
+            .channel(`rps-match-${mId}`)
+            .on("postgres_changes", {
+                event: "UPDATE",
+                schema: "public",
+                table: "rps_matches",
+                filter: `id=eq.${mId}`,
+            }, (payload) => {
+                const updated = payload.new as RPSMatch
+                handleMatchUpdate(updated)
+            })
+            .subscribe()
+
+        channelRef.current = channel
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [supabase, profile.id])
 
     // Cleanup channel on unmount
     useEffect(() => {
@@ -223,371 +187,400 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         }
     }, [supabase])
 
-    // Keep phaseRef in sync with phase state
-    useEffect(() => {
-        phaseRef.current = phase
-    }, [phase])
+    // ─── Handle incoming match state update ───
+    const handleMatchUpdate = useCallback((updated: RPSMatch) => {
+        setMatch(updated)
 
-    // --- Multiplayer: Create Room ---
-    const createRoom = useCallback(() => {
-        const newRoomId = generateRoomId()
-        setRoomId(newRoomId)
-        setMultiplayerRole("host")
-        setMultiplayerState("waiting")
-        setMode("friend")
+        const amA = updated.player_a === profile.id
+        const myScore = amA ? updated.score_a : updated.score_b
+        const oppScore = amA ? updated.score_b : updated.score_a
 
-        const channel = supabase.channel(`rps:${newRoomId}`, {
-            config: { broadcast: { self: false } }
-        })
+        // Opponent joined
+        if (updated.status === "active" && updated.player_b && !opponentName) {
+            const otherId = amA ? updated.player_b : updated.player_a
+            if (otherId) fetchOpponentName(otherId)
+        }
 
-        channel
-            .on("broadcast", { event: "join" }, ({ payload }) => {
-                setOpponentName(payload.username || "Friend")
-                setMultiplayerState("connected")
-                // Tell the guest we're ready
-                channel.send({
-                    type: "broadcast",
-                    event: "host-ready",
-                    payload: { username: profile.username }
-                })
-                toast.success(`${payload.username || "Friend"} joined!`)
-                // Collateral already deducted in startFriendWithStake for host
-            })
-            .on("broadcast", { event: "choice" }, ({ payload }) => {
-                opponentChoiceRef.current = payload.choice
-                setOpponentHasChosen(true)
-                toast("Opponent has made their move! 🎯", { icon: "✅" })
-                // If we already picked, both are ready — start countdown
-                if (playerHasChosenRef.current && phaseRef.current === "waiting") {
-                    setPhase("countdown")
-                    setCountdown(3)
-                }
-            })
-            .on("broadcast", { event: "play-again" }, () => {
-                resetGame(true)
-                toast("Opponent wants to play again!", { icon: "🔄" })
-            })
-            .on("broadcast", { event: "leave" }, () => {
-                // After match concluded — graceful exit, no forfeit
-                if (phaseRef.current === "matchEnd") {
-                    toast("Opponent left the game", { icon: "👋" })
-                    return
-                }
-                // Mid-game leave — switch to AI opponent, match continues
-                if (gameStartedRef.current) {
-                    setOpponentDisconnected(true)
-                    opponentDisconnectedRef.current = true
-                    toast("Your opponent left the match. You are now playing against the computer.", { icon: "🤖", duration: 5000 })
-                    // If waiting for opponent's choice, auto-generate one
-                    if (phaseRef.current === "waiting" && playerHasChosenRef.current) {
-                        opponentChoiceRef.current = getComputerChoice()
-                        setOpponentHasChosen(true)
-                        setPhase("countdown")
-                        setCountdown(3)
-                    }
+        // A round was resolved (scores changed from what we know)
+        const newRoundNum = updated.current_round - 1
+        if (newRoundNum > lastRoundRef.current && updated.move_a === null && updated.move_b === null) {
+            // The server cleared moves — this means a round just resolved
+            // We need the last round's moves to show the reveal
+            // But they've been cleared. We get them from the RPC response in handleChoice.
+            // If this is the OTHER player triggering, we need to handle it.
+            // The move data comes from the RPC return for the triggering player.
+            // For the other player, we rely on the round before clear.
+        }
+
+        // Update scores
+        setPlayerScore(myScore)
+        setOpponentScore(oppScore)
+
+        // Match completed
+        if (updated.status === "completed") {
+            if (updated.winner_id === profile.id) {
+                setMatchResult("won")
+            } else if (updated.winner_id === null) {
+                // Solo forfeit or cancelled
+                setMatchResult("lost")
+            } else {
+                setMatchResult("lost")
+            }
+            setPhase("matchEnd")
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profile.id, opponentName])
+
+    // ─── Mode selection with balance check ───
+    const handleModeSelect = async (selectedMode: "solo" | "friend") => {
+        setIsLoading(true)
+        try {
+            const result = await getRPSBalance()
+            const balance = result.success ? result.balance : 0
+            setStarBalance(balance)
+
+            if (balance >= 100) {
+                if (selectedMode === "solo") {
+                    await startMatch("solo", 100)
                 } else {
-                    toast.error("Opponent left the game")
-                    setMultiplayerState("idle")
-                    setMode(null)
-                    gameStartedRef.current = false
-                    cleanupChannel()
+                    await startMatch("friend", 100)
                 }
-            })
-            .subscribe()
+            } else if (balance > 0 && selectedMode === "solo") {
+                // Low balance — allow staking all in solo
+                setPendingMode(selectedMode)
+                setStakeAmount(balance)
+                setShowBalanceGate(true)
+            } else {
+                setPendingMode(selectedMode)
+                setShowBalanceGate(true)
+            }
+        } catch {
+            toast.error("Failed to check balance")
+        } finally {
+            setIsLoading(false)
+        }
+    }
 
-        channelRef.current = channel
-    }, [supabase, profile.username])
+    // ─── Create match via server action ───
+    const startMatch = async (matchMode: "solo" | "friend", stake: number) => {
+        setIsLoading(true)
+        try {
+            const result = await createRPSMatch(matchMode, stake)
+            if (!result.success) {
+                toast.error(result.error || "Failed to create match")
+                return
+            }
 
-    // --- Multiplayer: Join Room ---
-    const joinRoom = useCallback((code: string) => {
+            setMatchId(result.match_id!)
+            setMode(matchMode)
+            setRoomCode(result.room_code || "")
+            setStakeAmount(stake)
+            setIsPlayerA(true)
+            setPlayerScore(0)
+            setOpponentScore(0)
+            setRoundHistory([])
+            setMatchResult(null)
+            lastRoundRef.current = 0
+            setStarBalance(result.new_balance ?? null)
+
+            toast(`${stake} Stars locked as escrow ⭐`, { icon: "🔒" })
+
+            if (matchMode === "solo") {
+                setPhase("choosing")
+            }
+
+            // Subscribe to match updates
+            subscribeToMatch(result.match_id!)
+        } catch (err) {
+            toast.error("Failed to create match")
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    // ─── Join match via server action ───
+    const handleJoinRoom = async (code: string) => {
         const trimmed = code.trim().toUpperCase()
         if (trimmed.length !== 6) {
             toast.error("Enter a valid 6-character room code")
             return
         }
-        setRoomId(trimmed)
-        setMultiplayerRole("guest")
-        setMultiplayerState("waiting")
-        setMode("friend")
 
-        const channel = supabase.channel(`rps:${trimmed}`, {
-            config: { broadcast: { self: false } }
-        })
+        setIsLoading(true)
+        try {
+            const result = await joinRPSMatch(trimmed)
+            if (!result.success) {
+                toast.error(result.error || "Failed to join match")
+                return
+            }
 
-        channel
-            .on("broadcast", { event: "host-ready" }, ({ payload }) => {
-                setOpponentName(payload.username || "Friend")
-                setMultiplayerState("connected")
-                // Guest deducts collateral when host is ready
-                if (!gameStartedRef.current) {
-                    gameStartedRef.current = true
-                    spendXP(100, "RPS match collateral", { game: "rps" }).then(res => {
-                        if (res.success) {
-                            setCollateralPaid(true)
-                            toast("100 Stars locked as collateral ⭐", { icon: "🔒" })
-                        }
-                    }).catch(console.error)
-                }
-            })
-            .on("broadcast", { event: "choice" }, ({ payload }) => {
-                opponentChoiceRef.current = payload.choice
-                setOpponentHasChosen(true)
-                toast("Opponent has made their move! 🎯", { icon: "✅" })
-                // If we already picked, both are ready — start countdown
-                if (playerHasChosenRef.current && phaseRef.current === "waiting") {
-                    setPhase("countdown")
-                    setCountdown(3)
-                }
-            })
-            .on("broadcast", { event: "play-again" }, () => {
-                resetGame(true)
-                toast("Opponent wants to play again!", { icon: "🔄" })
-            })
-            .on("broadcast", { event: "leave" }, () => {
-                // After match concluded — graceful exit, no forfeit
-                if (phaseRef.current === "matchEnd") {
-                    toast("Opponent left the game", { icon: "👋" })
-                    return
-                }
-                // Mid-game leave — switch to AI opponent, match continues
-                if (gameStartedRef.current) {
-                    setOpponentDisconnected(true)
-                    opponentDisconnectedRef.current = true
-                    toast("Your opponent left the match. You are now playing against the computer.", { icon: "🤖", duration: 5000 })
-                    // If waiting for opponent's choice, auto-generate one
-                    if (phaseRef.current === "waiting" && playerHasChosenRef.current) {
-                        opponentChoiceRef.current = getComputerChoice()
-                        setOpponentHasChosen(true)
-                        setPhase("countdown")
-                        setCountdown(3)
-                    }
-                } else {
-                    toast.error("Opponent left the game")
-                    setMultiplayerState("idle")
-                    setMode(null)
-                    gameStartedRef.current = false
-                    cleanupChannel()
-                }
-            })
-            .subscribe((status) => {
-                if (status === "SUBSCRIBED") {
-                    // Announce arrival
-                    channel.send({
-                        type: "broadcast",
-                        event: "join",
-                        payload: { username: profile.username }
-                    })
-                }
-            })
+            setMatchId(result.match_id!)
+            setMode("friend")
+            setRoomCode(trimmed)
+            setStakeAmount(result.stake!)
+            setIsPlayerA(false)
+            setPlayerScore(0)
+            setOpponentScore(0)
+            setRoundHistory([])
+            setMatchResult(null)
+            lastRoundRef.current = 0
+            setPhase("choosing")
+            setStarBalance(result.new_balance ?? null)
 
-        channelRef.current = channel
-    }, [supabase, profile.username])
+            toast(`${result.stake} Stars locked as escrow ⭐`, { icon: "🔒" })
 
-    const cleanupChannel = () => {
-        if (channelRef.current) {
-            channelRef.current.send({ type: "broadcast", event: "leave", payload: {} })
-            supabase.removeChannel(channelRef.current)
-            channelRef.current = null
+            // Subscribe and fetch opponent name
+            subscribeToMatch(result.match_id!)
+
+            // Fetch the match to get opponent info
+            const { data: matchData } = await supabase
+                .from("rps_matches")
+                .select("player_a")
+                .eq("id", result.match_id)
+                .single()
+            if (matchData?.player_a) fetchOpponentName(matchData.player_a)
+        } catch {
+            toast.error("Failed to join match")
+        } finally {
+            setIsLoading(false)
         }
     }
 
-    // --- Handle choice selection ---
-    const handleChoice = (choice: Choice) => {
-        if (phase !== "choosing" || !choice) return
+    // ─── Submit move via server action ───
+    const handleChoice = async (choice: RPSMove) => {
+        if (phase !== "choosing" || !choice || !matchId || isSubmitting) return
+
         setPlayerChoice(choice)
-        hasProcessedRound.current = false
-        playerHasChosenRef.current = true
+        setIsSubmitting(true)
+        setPhase("waiting")
 
-        if (mode === "friend" && channelRef.current) {
-            channelRef.current.send({
-                type: "broadcast",
-                event: "choice",
-                payload: { choice }
-            })
+        try {
+            const result = await submitRPSMove(matchId, choice)
 
-            // If opponent already picked or disconnected, start countdown immediately
-            if (opponentChoiceRef.current || opponentDisconnectedRef.current) {
-                if (opponentDisconnectedRef.current && !opponentChoiceRef.current) {
-                    opponentChoiceRef.current = getComputerChoice()
-                    setOpponentHasChosen(true)
-                }
-                setPhase("countdown")
-                setCountdown(3)
-            } else {
-                // Wait for opponent
-                setPhase("waiting")
+            if (!result.success) {
+                toast.error(result.error || "Failed to submit move")
+                setPhase("choosing")
+                setPlayerChoice(null)
+                return
             }
+
+            if (result.status === "waiting_for_opponent") {
+                // Stay in waiting phase — the realtime listener will update
+                // when the opponent submits and the round resolves
+                return
+            }
+
+            if (result.status === "round_resolved" || result.status === "match_completed") {
+                // We triggered the resolution — show the reveal
+                showRoundReveal(choice, result)
+            }
+        } catch (err) {
+            toast.error("Failed to submit move")
+            setPhase("choosing")
+            setPlayerChoice(null)
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    // ─── Show round reveal animation ───
+    const showRoundReveal = (myChoice: RPSMove, result: RPSActionResult) => {
+        const amA = isPlayerA
+        const myMove = myChoice
+        const oppMove = (amA ? result.move_b : result.move_a) as RPSMove
+
+        setOpponentChoice(oppMove)
+
+        // Determine personal result
+        let personalResult: "win" | "lose" | "tie"
+        if (result.round_result === "tie") {
+            personalResult = "tie"
+        } else if ((amA && result.round_result === "a_wins") || (!amA && result.round_result === "b_wins")) {
+            personalResult = "win"
         } else {
-            // Solo: start countdown right away
+            personalResult = "lose"
+        }
+
+        const roundNum = (result.current_round || 2) - 1
+        lastRoundRef.current = roundNum
+
+        setRoundHistory(prev => [...prev, {
+            round: roundNum,
+            playerChoice: myMove,
+            opponentChoice: oppMove,
+            result: personalResult,
+        }])
+
+        const myScore = amA ? (result.score_a || 0) : (result.score_b || 0)
+        const oppScore = amA ? (result.score_b || 0) : (result.score_a || 0)
+        setPlayerScore(myScore)
+        setOpponentScore(oppScore)
+
+        // Countdown then reveal
+        setPhase("countdown")
+        setCountdown(3)
+    }
+
+    // ─── Handle realtime round resolution (when OTHER player triggered it) ───
+    useEffect(() => {
+        if (!match || phase === "matchEnd") return
+
+        // If we're in "waiting" phase and the match shows moves cleared + new round
+        // that means the server resolved the round (triggered by opponent's move)
+        const currentServerRound = match.current_round - 1
+        if (
+            phase === "waiting" &&
+            playerChoice &&
+            match.move_a === null &&
+            match.move_b === null &&
+            currentServerRound > lastRoundRef.current
+        ) {
+            // The round was resolved server-side. We need to fetch the result.
+            // Since the moves are cleared, we'll poll for it from the match state.
+            // Actually, the client that submitted second gets the result from the RPC.
+            // The client that submitted first (us, in waiting) sees the update via realtime.
+            // We don't have the moves anymore — but we DO have updated scores.
+            // We can infer the result from score changes.
+
+            const amA = isPlayerA
+            const prevMyScore = playerScore
+            const newMyScore = amA ? match.score_a : match.score_b
+            const newOppScore = amA ? match.score_b : match.score_a
+
+            let personalResult: "win" | "lose" | "tie"
+            if (newMyScore > prevMyScore) {
+                personalResult = "win"
+            } else if (newOppScore > opponentScore) {
+                personalResult = "lose"
+            } else {
+                personalResult = "tie"
+            }
+
+            // We know our move (playerChoice), but we don't know opponent's exact move
+            // For the reveal, we need to infer it
+            const oppMove = inferOpponentMove(playerChoice, personalResult)
+
+            setOpponentChoice(oppMove)
+            lastRoundRef.current = currentServerRound
+
+            setRoundHistory(prev => [...prev, {
+                round: currentServerRound,
+                playerChoice: playerChoice,
+                opponentChoice: oppMove,
+                result: personalResult,
+            }])
+
+            setPlayerScore(newMyScore)
+            setOpponentScore(newOppScore)
+
+            // Show countdown → reveal
             setPhase("countdown")
             setCountdown(3)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [match?.current_round, match?.move_a, match?.move_b])
+
+    // Infer opponent's move from our move and the result
+    const inferOpponentMove = (myMove: RPSMove, result: "win" | "lose" | "tie"): RPSMove => {
+        if (result === "tie") return myMove
+        const winMap: Record<RPSMove, RPSMove> = { rock: "scissors", paper: "rock", scissors: "paper" }
+        const loseMap: Record<RPSMove, RPSMove> = { rock: "paper", paper: "scissors", scissors: "rock" }
+        return result === "win" ? winMap[myMove] : loseMap[myMove]
     }
 
-    // Countdown timer
+    // ─── Countdown timer ───
     useEffect(() => {
         if (phase !== "countdown") return
 
         if (countdown <= 0) {
-            // Resolve the round
-            if (mode === "solo") {
-                const cpuChoice = getComputerChoice()
-                setOpponentChoice(cpuChoice)
-                resolveRound(playerChoice, cpuChoice)
-            } else {
-                // Both have already chosen (guaranteed by waiting phase)
-                const oppChoice = opponentChoiceRef.current
-                if (oppChoice) {
-                    setOpponentChoice(oppChoice)
-                    resolveRound(playerChoice, oppChoice)
-                    opponentChoiceRef.current = null
+            setPhase("reveal")
+            // After reveal, continue to next round or end
+            const timer = setTimeout(() => {
+                if (match?.status === "completed" || matchResult) {
+                    setPhase("matchEnd")
+                } else {
+                    // Next round
+                    setPhase("choosing")
+                    setPlayerChoice(null)
+                    setOpponentChoice(null)
                 }
-            }
-            return
+            }, 2000)
+            return () => clearTimeout(timer)
         }
 
         const timer = setTimeout(() => setCountdown(c => c - 1), 600)
         return () => clearTimeout(timer)
-    }, [phase, countdown, mode, playerChoice])
+    }, [phase, countdown, match?.status, matchResult])
 
-    // --- Resolve round ---
-    const resolveRound = (pChoice: Choice, oChoice: Choice) => {
-        if (hasProcessedRound.current) return
-        hasProcessedRound.current = true
-
-        const result = getResult(pChoice, oChoice)
-        const roundNum = roundHistory.length + 1
-
-        setRoundHistory(prev => [...prev, {
-            round: roundNum,
-            playerChoice: pChoice,
-            opponentChoice: oChoice,
-            result
-        }])
-
-        let newPlayerScore = playerScore
-        let newOpponentScore = opponentScore
-
-        if (result === "win") {
-            newPlayerScore = playerScore + 1
-            setPlayerScore(newPlayerScore)
-        } else if (result === "lose") {
-            newOpponentScore = opponentScore + 1
-            setOpponentScore(newOpponentScore)
+    // ─── Reset / cleanup ───
+    const resetToLobby = () => {
+        if (channelRef.current) {
+            supabase.removeChannel(channelRef.current)
+            channelRef.current = null
         }
-
-        setPhase("reveal")
-        setOpponentHasChosen(false)
-
-        // Check for match end
-        setTimeout(() => {
-            if (newPlayerScore >= 3) {
-                setMatchResult("won")
-                setPhase("matchEnd")
-                if (mode === "friend") {
-                    // Won: get collateral back + opponent's collateral
-                    earnXP(200, "Won Rock Paper Scissors match", { game: "rps" }).catch(console.error)
-                } else {
-                    // Solo: earn 2x stake (collateral back + winnings)
-                    earnXP(stakeAmount * 2, "Won Rock Paper Scissors match", { game: "rps" }).catch(console.error)
-                }
-            } else if (newOpponentScore >= 3) {
-                setMatchResult("lost")
-                setPhase("matchEnd")
-                // No extra deduction — collateral was already held upfront
-                // Friend mode: also no extra deduction (already paid collateral)
-            } else {
-                // Next round
-                setPhase("choosing")
-                setPlayerChoice(null)
-                setOpponentChoice(null)
-            }
-        }, 2000)
-    }
-
-    // Reset game
-    const resetGame = (keepMode = false) => {
+        setMatchId(null)
+        setMatch(null)
+        setMode(null)
+        setRoomCode("")
+        setPhase("choosing")
         setPlayerChoice(null)
         setOpponentChoice(null)
         setPlayerScore(0)
         setOpponentScore(0)
         setRoundHistory([])
-        setPhase("choosing")
         setCountdown(3)
         setMatchResult(null)
-        opponentChoiceRef.current = null
-        hasProcessedRound.current = false
-        setOpponentHasChosen(false)
-        setCollateralPaid(false)
-        gameStartedRef.current = false
-        playerHasChosenRef.current = false
-        clearSession()
-        if (!keepMode) {
-            setMode(null)
-            setMultiplayerState("idle")
-            setMultiplayerRole(null)
-            setRoomId("")
-            setOpponentName("")
-            cleanupChannel()
+        setOpponentName("")
+        setIsPlayerA(true)
+        lastRoundRef.current = 0
+    }
+
+    // ─── Play again ───
+    const handlePlayAgain = async () => {
+        const prevMode = mode
+        const prevStake = stakeAmount
+        resetToLobby()
+
+        // Start a new match with same mode
+        if (prevMode) {
+            await startMatch(prevMode, prevStake)
         }
     }
 
-    const handlePlayAgain = () => {
-        if (mode === "friend" && channelRef.current) {
-            channelRef.current.send({ type: "broadcast", event: "play-again", payload: {} })
-        }
-        resetGame(mode === "friend")
-        // Re-deduct collateral for the new match
-        if (mode === "friend") {
-            gameStartedRef.current = true
-            spendXP(100, "RPS match collateral", { game: "rps" }).then(res => {
-                if (res.success) {
-                    setCollateralPaid(true)
-                    toast("100 Stars locked as collateral ⭐", { icon: "🔒" })
-                }
-            }).catch(console.error)
-        }
-    }
-
+    // ─── Back / exit ───
     const handleBack = () => {
-        // If an active game is ongoing, warn them
-        if (mode === "solo" && (playerChoice || roundHistory.length > 0) && phaseRef.current !== "matchEnd") {
+        if (matchId && phase !== "matchEnd" && match?.status !== "completed") {
             setShowExitConfirm(true)
             return
         }
-        if (mode === "friend" && gameStartedRef.current && phaseRef.current !== "matchEnd") {
-            setShowExitConfirm(true)
-            return
-        }
-
-        // Otherwise safe to leave
         if (mode) {
-            cleanupChannel()
-            resetGame()
+            resetToLobby()
         } else {
             router.push("/dashboard")
         }
     }
 
-    const confirmExit = () => {
+    const confirmExit = async () => {
         setShowExitConfirm(false)
-        if (mode === "solo") {
-            // Solo forfeiture
-            spendXP(100, "Forfeited Rock Paper Scissors match", { game: "rps" }).catch(console.error)
-            toast.error("You forfeited! -100 Stars")
-        } else if (mode === "friend") {
-            // Friend forfeiture (already paid collateral, opponent will get the bonus)
-            toast.error("You forfeited your collateral!")
+        if (matchId) {
+            const result = await cancelRPSMatch(matchId)
+            if (result.success) {
+                if (result.action === "refunded") {
+                    toast("Match cancelled — escrow refunded ⭐", { icon: "↩️" })
+                } else {
+                    toast.error("You forfeited your escrow!")
+                }
+            }
         }
-        cleanupChannel()
-        resetGame()
+        resetToLobby()
     }
 
+    // ─── Share room ───
     const handleShareRoom = async () => {
-        const url = `${window.location.origin}/rps?join=${roomId}`
+        const url = `${window.location.origin}/rps?join=${roomCode}`
         if (navigator.share) {
             try {
-                await navigator.share({ title: `Join my RPS game!`, text: `Room code: ${roomId}`, url })
+                await navigator.share({ title: "Join my RPS game!", text: `Room code: ${roomCode}`, url })
             } catch { /* cancelled */ }
         } else {
             await navigator.clipboard.writeText(url)
@@ -595,19 +588,37 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         }
     }
 
-    // Check URL params for join code on mount
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search)
-        const joinCode = params.get("join")
-        if (joinCode) {
-            joinRoom(joinCode)
-        }
-    }, [joinRoom])
+    // ─── Helpers ───
+    const choiceEmoji = (c: RPSMove | null) => CHOICES.find(x => x.id === c)?.emoji || "❓"
+    const opponentLabel = mode === "solo" ? "Computer" : (opponentName || "Opponent")
 
-    const choiceEmoji = (c: Choice) => CHOICES.find(x => x.id === c)?.emoji || "❓"
-    const opponentLabel = mode === "solo" ? "Computer" : (opponentName || "Friend")
+    const resultColors: Record<string, string> = {
+        win: "text-emerald-400",
+        lose: "text-red-400",
+        tie: "text-yellow-400"
+    }
+    const resultText: Record<string, string> = {
+        win: "You Win!",
+        lose: "You Lose!",
+        tie: "It's a Tie!"
+    }
+    const lastResult = roundHistory.length > 0 ? roundHistory[roundHistory.length - 1].result : null
 
-    // ─── MODE SELECTION ───
+    // ─── Loading state ───
+    if (isRecovering) {
+        return (
+            <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">
+                <div className="text-center space-y-4">
+                    <Loader2 size={40} className="text-emerald-400 animate-spin mx-auto" />
+                    <p className="text-white/40 text-sm">Loading game...</p>
+                </div>
+            </div>
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MODE SELECTION SCREEN
+    // ═══════════════════════════════════════════════════════════════════
     if (!mode) {
         return (
             <div className="min-h-screen bg-[#0a0a0f] text-white relative overflow-hidden">
@@ -627,7 +638,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         <h2 className="font-bold text-sm">Rock Paper Scissors</h2>
                     </div>
                     {starBalance !== null && (
-                        <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 rounded-full text-amber-400 text-xs font-bold">
+                        <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 rounded-full text-amber-400 text-xs font-bold ml-auto">
                             <Star size={12} />
                             {starBalance}
                         </div>
@@ -635,7 +646,6 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 </div>
 
                 <main className="max-w-md mx-auto p-6 space-y-8 relative z-10 pt-12">
-                    {/* Title */}
                     <div className="text-center space-y-3">
                         <div className="text-6xl animate-bounce">✊✋✌️</div>
                         <h1 className="text-3xl font-black bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
@@ -644,11 +654,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         <p className="text-white/50 text-sm max-w-[260px] mx-auto">Best of 5 rounds. First to 3 wins!</p>
                     </div>
 
-                    {/* Mode buttons */}
                     <div className="space-y-3">
                         <button
-                            onClick={() => handleModeSelect('solo')}
-                            disabled={isCheckingBalance}
+                            onClick={() => handleModeSelect("solo")}
+                            disabled={isLoading}
                             className="w-full p-5 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all active:scale-[0.98] group disabled:opacity-60"
                         >
                             <div className="flex items-center gap-4">
@@ -659,12 +668,13 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                     <h3 className="font-bold text-lg text-white">vs Computer</h3>
                                     <p className="text-xs text-white/40">Quick solo match against AI</p>
                                 </div>
+                                {isLoading && <Loader2 size={18} className="text-white/40 animate-spin ml-auto" />}
                             </div>
                         </button>
 
                         <button
-                            onClick={() => handleModeSelect('friend')}
-                            disabled={isCheckingBalance}
+                            onClick={() => handleModeSelect("friend")}
+                            disabled={isLoading}
                             className="w-full p-5 bg-white/5 hover:bg-teal-500/10 border border-white/10 hover:border-teal-500/30 rounded-2xl transition-all active:scale-[0.98] group disabled:opacity-60"
                         >
                             <div className="flex items-center gap-4">
@@ -673,7 +683,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                 </div>
                                 <div className="text-left">
                                     <h3 className="font-bold text-lg text-white">Create Room</h3>
-                                    <p className="text-xs text-white/40">100 ⭐ collateral required</p>
+                                    <p className="text-xs text-white/40">100 ⭐ escrow required</p>
                                 </div>
                             </div>
                         </button>
@@ -703,11 +713,11 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                     className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-center font-mono text-lg tracking-[0.3em] placeholder:text-white/20 focus:outline-none focus:border-emerald-500/50 transition uppercase"
                                 />
                                 <button
-                                    onClick={() => joinRoom(joinRoomId)}
-                                    disabled={joinRoomId.length !== 6}
+                                    onClick={() => handleJoinRoom(joinRoomId)}
+                                    disabled={joinRoomId.length !== 6 || isLoading}
                                     className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
                                 >
-                                    Join
+                                    {isLoading ? <Loader2 size={18} className="animate-spin" /> : "Join"}
                                 </button>
                             </div>
                         )}
@@ -728,15 +738,15 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                     </p>
                                 </div>
 
-                                {starBalance !== null && starBalance > 0 ? (
+                                {starBalance !== null && starBalance > 0 && pendingMode === "solo" ? (
                                     <div className="space-y-3">
                                         <button
                                             onClick={() => {
-                                                setStakeAmount(starBalance!)
                                                 setShowBalanceGate(false)
-                                                startSoloWithStake(starBalance!)
+                                                startMatch("solo", starBalance)
                                             }}
-                                            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition active:scale-95"
+                                            disabled={isLoading}
+                                            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition active:scale-95 disabled:opacity-60"
                                         >
                                             Play with {starBalance} Stars ⭐
                                         </button>
@@ -766,8 +776,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         )
     }
 
-    // ─── WAITING FOR OPPONENT ───
-    if (mode === "friend" && multiplayerState !== "connected" && multiplayerState !== "playing") {
+    // ═══════════════════════════════════════════════════════════════════
+    // WAITING FOR OPPONENT (Friend mode only)
+    // ═══════════════════════════════════════════════════════════════════
+    if (mode === "friend" && match?.status === "waiting") {
         return (
             <div className="min-h-screen bg-[#0a0a0f] text-white relative overflow-hidden">
                 <div className="fixed inset-0 pointer-events-none">
@@ -780,64 +792,44 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         <ArrowLeft size={20} />
                     </button>
                     <Swords size={18} className="text-emerald-500" />
-                    <h2 className="font-bold text-sm">
-                        {multiplayerRole === "host" ? "Waiting for Friend" : "Joining Room..."}
-                    </h2>
+                    <h2 className="font-bold text-sm">Waiting for Friend</h2>
                 </div>
 
                 <main className="max-w-md mx-auto p-6 pt-20 relative z-10 flex flex-col items-center text-center space-y-8">
                     <div className="relative">
                         <div className="w-24 h-24 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                            {multiplayerRole === "host" ? <Wifi size={40} className="text-emerald-400 animate-pulse" /> : <Loader2 size={40} className="text-emerald-400 animate-spin" />}
+                            <Loader2 size={40} className="text-emerald-400 animate-spin" />
                         </div>
                         <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full animate-ping" />
                     </div>
 
-                    {multiplayerRole === "host" ? (
-                        <>
-                            <div className="space-y-2">
-                                <h2 className="text-2xl font-black text-white">Share this code</h2>
-                                <p className="text-sm text-white/40">Give this code to your friend to join</p>
-                            </div>
+                    <div className="space-y-2">
+                        <h2 className="text-2xl font-black text-white">Share this code</h2>
+                        <p className="text-sm text-white/40">Give this code to your friend to join</p>
+                    </div>
 
-                            <div className="bg-white/5 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-xs">
-                                <p className="text-4xl font-black font-mono tracking-[0.4em] text-emerald-400 text-center">
-                                    {roomId}
-                                </p>
-                            </div>
+                    <div className="bg-white/5 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-xs">
+                        <p className="text-4xl font-black font-mono tracking-[0.4em] text-emerald-400 text-center">
+                            {roomCode}
+                        </p>
+                    </div>
 
-                            <button
-                                onClick={handleShareRoom}
-                                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition active:scale-95 shadow-lg shadow-emerald-900/30"
-                            >
-                                <Share2 size={18} />
-                                Share Invite Link
-                            </button>
-                        </>
-                    ) : (
-                        <div className="space-y-2">
-                            <h2 className="text-2xl font-black text-white">Connecting...</h2>
-                            <p className="text-sm text-white/40">Joining room <span className="font-mono text-emerald-400">{roomId}</span></p>
-                        </div>
-                    )}
+                    <button
+                        onClick={handleShareRoom}
+                        className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition active:scale-95 shadow-lg shadow-emerald-900/30"
+                    >
+                        <Share2 size={18} />
+                        Share Invite Link
+                    </button>
                 </main>
             </div>
         )
     }
 
-    // ─── GAME ARENA ───
+    // ═══════════════════════════════════════════════════════════════════
+    // GAME ARENA
+    // ═══════════════════════════════════════════════════════════════════
     const currentRound = roundHistory.length + 1
-    const resultColors: Record<string, string> = {
-        win: "text-emerald-400",
-        lose: "text-red-400",
-        tie: "text-yellow-400"
-    }
-    const resultText: Record<string, string> = {
-        win: "You Win!",
-        lose: "You Lose!",
-        tie: "It's a Tie!"
-    }
-    const lastResult = roundHistory.length > 0 ? roundHistory[roundHistory.length - 1].result : null
 
     return (
         <div className="min-h-screen bg-[#0a0a0f] text-white relative overflow-hidden pb-8">
@@ -851,7 +843,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         <div className="text-center space-y-2">
                             <h3 className="text-2xl font-black text-white">Leave match?</h3>
                             <p className="text-white/60 text-sm">
-                                If you leave now, you will <span className="text-red-400 font-bold">forfeit 100 Stars</span>. Are you sure?
+                                {match?.status === "waiting"
+                                    ? "Your escrow will be refunded."
+                                    : <>If you leave now, you will <span className="text-red-400 font-bold">forfeit {stakeAmount} Stars</span>. Are you sure?</>
+                                }
                             </p>
                         </div>
                         <div className="flex gap-3">
@@ -865,7 +860,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                 onClick={confirmExit}
                                 className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors"
                             >
-                                Leave Game
+                                {match?.status === "waiting" ? "Cancel Match" : "Leave Game"}
                             </button>
                         </div>
                     </div>
@@ -933,8 +928,8 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                 <Star size={16} />
                                 <span className="text-sm font-bold">
                                     {matchResult === "won"
-                                        ? (mode === "friend" ? "+200 Stars (collateral + winnings)" : "+100 Stars")
-                                        : (mode === "friend" ? "-100 Stars (collateral lost)" : "-100 Stars")
+                                        ? `+${stakeAmount * 2} Stars (escrow + winnings)`
+                                        : `-${stakeAmount} Stars (escrow lost)`
                                     }
                                 </span>
                             </div>
@@ -956,9 +951,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
                         <button
                             onClick={handlePlayAgain}
-                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 text-sm"
+                            disabled={isLoading}
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 text-sm disabled:opacity-60"
                         >
-                            <RotateCcw size={18} />
+                            {isLoading ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
                             Play Again
                         </button>
                     </div>
@@ -996,7 +992,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     </div>
                 )}
 
-                {/* Waiting */}
+                {/* Waiting for opponent */}
                 {phase === "waiting" && (
                     <div className="flex flex-col items-center justify-center py-16 space-y-6 animate-in fade-in duration-300">
                         <div className="relative">
@@ -1007,7 +1003,9 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         </div>
                         <div className="text-center space-y-2">
                             <h3 className="text-xl font-black text-emerald-400">Choice Locked!</h3>
-                            <p className="text-white/40 text-sm font-bold uppercase tracking-widest">Waiting for {opponentLabel}...</p>
+                            <p className="text-white/40 text-sm font-bold uppercase tracking-widest">
+                                {mode === "solo" ? "Resolving..." : `Waiting for ${opponentLabel}...`}
+                            </p>
                         </div>
                     </div>
                 )}
@@ -1017,17 +1015,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     <div className="space-y-6 py-4">
                         <div className="text-center space-y-1">
                             <p className="text-white/60 text-sm font-bold">Make your move!</p>
-                            {mode === "friend" && (
+                            {mode === "friend" && opponentName && (
                                 <p className="text-emerald-400/60 text-[10px] font-bold uppercase tracking-wider">
-                                    <Wifi className="inline w-3 h-3 mr-1" />
                                     Playing vs {opponentLabel}
                                 </p>
-                            )}
-                            {mode === "friend" && opponentHasChosen && (
-                                <div className="flex items-center gap-1.5 justify-center mt-1 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 animate-in fade-in duration-300">
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span className="text-[10px] font-bold text-emerald-400">Opponent is ready!</span>
-                                </div>
                             )}
                         </div>
 
@@ -1036,7 +1027,8 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                 <button
                                     key={choice.id}
                                     onClick={() => handleChoice(choice.id)}
-                                    className="group flex flex-col items-center gap-2 p-6 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all active:scale-90 hover:scale-105"
+                                    disabled={isSubmitting}
+                                    className="group flex flex-col items-center gap-2 p-6 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all active:scale-90 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                     <span className="text-5xl group-hover:scale-110 transition-transform">{choice.emoji}</span>
                                     <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider group-hover:text-emerald-400 transition-colors">{choice.label}</span>
