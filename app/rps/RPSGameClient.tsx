@@ -340,22 +340,22 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
             toast(`${stake} Stars locked as escrow ⭐`, { icon: "🔒" })
 
+            setMatch({
+                id: result.match_id!,
+                player_a: profile.id,
+                mode: matchMode,
+                stake_amount: stake,
+                room_code: result.room_code,
+                status: matchMode === 'solo' ? 'active' : 'waiting',
+                score_a: 0,
+                score_b: 0,
+                current_round: 1,
+                escrow_a: true,
+                escrow_b: false,
+            } as RPSMatch)
+
             if (matchMode === "solo") {
                 setPhase("choosing")
-            } else {
-                setMatch({
-                    id: result.match_id!,
-                    player_a: profile.id,
-                    mode: matchMode,
-                    stake_amount: stake,
-                    room_code: result.room_code,
-                    status: 'waiting',
-                    score_a: 0,
-                    score_b: 0,
-                    current_round: 1,
-                    escrow_a: true,
-                    escrow_b: false,
-                } as RPSMatch)
             }
 
             // Subscribe to match updates
