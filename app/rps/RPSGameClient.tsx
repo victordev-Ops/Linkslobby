@@ -77,6 +77,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const lastRoundRef = useRef(0)
     const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
     const modeRef = useRef<"solo" | "friend" | null>(null)
+    const previousMatchRef = useRef<RPSMatch | null>(null)
 
     useEffect(() => { phaseRef.current = phase }, [phase])
     useEffect(() => { modeRef.current = mode }, [mode])
@@ -175,19 +176,36 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 const updated = payload.new as RPSMatch
                 handleMatchUpdate(updated)
             })
-            .on("presence", { event: "leave" }, ({ key, leftPresences }) => {
-                if (modeRef.current === "friend" && leftPresences.some((p: any) => p.user_id !== profile.id)) {
-                    if (!disconnectTimerRef.current) {
-                        toast("Opponent lost connection... Waiting 10s", { icon: "⚠️", id: "disconnect-toast", duration: 10000 })
-                        disconnectTimerRef.current = setTimeout(() => {
-                            handleOpponentDisconnect(mId, leftPresences[0].user_id || "").then(res => {
-                                if (res.success && res.action === 'converted_to_solo') {
-                                    toast.success("Opponent definitively left! AI is taking over. Beat the bot to win the stakes!", { id: "disconnect-toast", duration: 6000 })
-                                } else {
-                                    toast.dismiss("disconnect-toast")
+            .on("presence", { event: "leave" }, () => {
+                if (modeRef.current === "friend") {
+                    const state = channel.presenceState()
+                    const stillPresent = Object.values(state).flat().some((p: any) => p.user_id !== profile.id)
+                    
+                    if (!stillPresent) {
+                        if (!disconnectTimerRef.current) {
+                            toast("Opponent lost connection... Waiting 10s", { icon: "⚠️", id: "disconnect-toast", duration: 10000 })
+                            disconnectTimerRef.current = setTimeout(() => {
+                                // Double check they are still not here before applying
+                                const currentPresence = channel.presenceState()
+                                const isHereNow = Object.values(currentPresence).flat().some((p: any) => p.user_id !== profile.id)
+                                if (isHereNow) {
+                                    disconnectTimerRef.current = null
+                                    return
                                 }
-                            })
-                        }, 10000)
+                                
+                                // Extract the disconnected user id ideally from the last known state, or we fetch it from the match
+                                const leftUserId = match?.player_a === profile.id ? match?.player_b : match?.player_a
+                                if (leftUserId) {
+                                    handleOpponentDisconnect(mId, leftUserId).then(res => {
+                                        if (res.success && res.action === 'converted_to_solo') {
+                                            toast.success("Opponent definitively left! AI is taking over. Beat the bot to win the stakes!", { id: "disconnect-toast", duration: 6000 })
+                                        } else {
+                                            toast.dismiss("disconnect-toast")
+                                        }
+                                    })
+                                }
+                            }, 10000)
+                        }
                     }
                 }
             })
@@ -223,7 +241,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
     // ─── Handle incoming match state update ───
     const handleMatchUpdate = useCallback((updated: RPSMatch) => {
-        setMatch(updated)
+        setMatch(prev => {
+            if (prev) previousMatchRef.current = prev
+            return updated
+        })
 
         const amA = updated.player_a === profile.id
         setIsPlayerA(amA)
@@ -252,14 +273,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             if (updated.winner_id === profile.id) {
                 setMatchResult("won")
             } else if (updated.winner_id === null) {
-                // Solo forfeit or AI won
                 setMatchResult("lost")
             } else {
                 setMatchResult("lost")
             }
-            // We intentionally DO NOT setPhase("matchEnd") here!
-            // We let the countdown/reveal timeout pick up the completed status and transition.
-            // This prevents the final round animation from abruptly cutting off.
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profile.id, opponentName])
@@ -491,15 +508,18 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             // We don't have the moves anymore — but we DO have updated scores.
             // We can infer the result from score changes.
 
+            const prevMatch = previousMatchRef.current
             const amA = isPlayerA
-            const prevMyScore = playerScore
+            const prevMyScore = prevMatch ? (amA ? prevMatch.score_a : prevMatch.score_b) : playerScore
+            const prevOppScore = prevMatch ? (amA ? prevMatch.score_b : prevMatch.score_a) : opponentScore
+
             const newMyScore = amA ? match.score_a : match.score_b
             const newOppScore = amA ? match.score_b : match.score_a
 
             let personalResult: "win" | "lose" | "tie"
             if (newMyScore > prevMyScore) {
                 personalResult = "win"
-            } else if (newOppScore > opponentScore) {
+            } else if (newOppScore > prevOppScore) {
                 personalResult = "lose"
             } else {
                 personalResult = "tie"
