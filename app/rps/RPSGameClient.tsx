@@ -565,18 +565,20 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         return result === "win" ? winMap[myMove] : loseMap[myMove]
     }
 
-    // ─── Countdown timer ───
+    // ─── Countdown & Reveal timer ───
     useEffect(() => {
-        if (phase !== "countdown") return
-
-        if (countdown <= 0) {
-            setPhase("reveal")
-            // After reveal, continue to next round or end
+        if (phase === "countdown") {
+            if (countdown > 0) {
+                const timer = setTimeout(() => setCountdown(c => c - 1), 600)
+                return () => clearTimeout(timer)
+            } else {
+                setPhase("reveal")
+            }
+        } else if (phase === "reveal") {
             const timer = setTimeout(() => {
                 if (match?.status === "completed" || matchResult) {
                     setPhase("matchEnd")
                 } else {
-                    // Next round
                     setPhase("choosing")
                     setPlayerChoice(null)
                     setOpponentChoice(null)
@@ -584,9 +586,6 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             }, 2000)
             return () => clearTimeout(timer)
         }
-
-        const timer = setTimeout(() => setCountdown(c => c - 1), 600)
-        return () => clearTimeout(timer)
     }, [phase, countdown, match?.status, matchResult])
 
     // ─── Reset / cleanup ───
@@ -1094,9 +1093,16 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         <div className="text-center space-y-1">
                             <p className="text-white/60 text-sm font-bold">Make your move!</p>
                             {mode === "friend" && opponentName && (
-                                <p className="text-emerald-400/60 text-[10px] font-bold uppercase tracking-wider">
-                                    Playing vs {opponentLabel}
-                                </p>
+                                <div className="flex items-center justify-center gap-2">
+                                    <p className="text-emerald-400/60 text-[10px] font-bold uppercase tracking-wider">
+                                        Playing vs {opponentLabel}
+                                    </p>
+                                    {((isPlayerA && match?.move_b) || (!isPlayerA && match?.move_a)) && (
+                                        <span className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
+                                            ✅ Ready
+                                        </span>
+                                    )}
+                                </div>
                             )}
                         </div>
 
