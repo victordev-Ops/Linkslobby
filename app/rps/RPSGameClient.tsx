@@ -77,7 +77,9 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const lastRoundRef = useRef(0)
     const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
     const modeRef = useRef<"solo" | "friend" | null>(null)
-    const previousMatchRef = useRef<RPSMatch | null>(null)
+    const scoreHistoryRef = useRef<Record<number, {myScore: number, oppScore: number}>>({
+        0: { myScore: 0, oppScore: 0 }
+    })
 
     useEffect(() => { phaseRef.current = phase }, [phase])
     useEffect(() => { modeRef.current = mode }, [mode])
@@ -97,9 +99,14 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     setRoomCode(m.room_code || "")
                     setIsPlayerA(m.player_a === profile.id)
                     setStakeAmount(m.stake_amount)
-                    setPlayerScore(m.player_a === profile.id ? m.score_a : m.score_b)
-                    setOpponentScore(m.player_a === profile.id ? m.score_b : m.score_a)
+                    const amA = m.player_a === profile.id
+                    setPlayerScore(amA ? m.score_a : m.score_b)
+                    setOpponentScore(amA ? m.score_b : m.score_a)
                     lastRoundRef.current = m.current_round - 1
+                    scoreHistoryRef.current[m.current_round - 1] = {
+                        myScore: amA ? m.score_a : m.score_b,
+                        oppScore: amA ? m.score_b : m.score_a,
+                    }
 
                     if (m.status === "waiting") {
                         setPhase("choosing")
@@ -241,10 +248,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
     // ─── Handle incoming match state update ───
     const handleMatchUpdate = useCallback((updated: RPSMatch) => {
-        setMatch(prev => {
-            if (prev) previousMatchRef.current = prev
-            return updated
-        })
+        setMatch(updated)
 
         const amA = updated.player_a === profile.id
         setIsPlayerA(amA)
@@ -331,6 +335,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             setRoundHistory([])
             setMatchResult(null)
             lastRoundRef.current = 0
+            scoreHistoryRef.current = { 0: { myScore: 0, oppScore: 0 } }
             setStarBalance(result.new_balance ?? null)
 
             toast(`${stake} Stars locked as escrow ⭐`, { icon: "🔒" })
@@ -388,6 +393,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             setRoundHistory([])
             setMatchResult(null)
             lastRoundRef.current = 0
+            scoreHistoryRef.current = { 0: { myScore: 0, oppScore: 0 } }
             setPhase("choosing")
             setStarBalance(result.new_balance ?? null)
 
@@ -482,6 +488,8 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setPlayerScore(myScore)
         setOpponentScore(oppScore)
 
+        scoreHistoryRef.current[roundNum] = { myScore, oppScore }
+
         // Countdown then reveal
         setPhase("countdown")
         setCountdown(3)
@@ -508,18 +516,16 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             // We don't have the moves anymore — but we DO have updated scores.
             // We can infer the result from score changes.
 
-            const prevMatch = previousMatchRef.current
             const amA = isPlayerA
-            const prevMyScore = prevMatch ? (amA ? prevMatch.score_a : prevMatch.score_b) : playerScore
-            const prevOppScore = prevMatch ? (amA ? prevMatch.score_b : prevMatch.score_a) : opponentScore
-
             const newMyScore = amA ? match.score_a : match.score_b
             const newOppScore = amA ? match.score_b : match.score_a
 
+            const prevScores = scoreHistoryRef.current[lastRoundRef.current] || { myScore: 0, oppScore: 0 }
+
             let personalResult: "win" | "lose" | "tie"
-            if (newMyScore > prevMyScore) {
+            if (newMyScore > prevScores.myScore) {
                 personalResult = "win"
-            } else if (newOppScore > prevOppScore) {
+            } else if (newOppScore > prevScores.oppScore) {
                 personalResult = "lose"
             } else {
                 personalResult = "tie"
@@ -541,6 +547,8 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
             setPlayerScore(newMyScore)
             setOpponentScore(newOppScore)
+
+            scoreHistoryRef.current[currentServerRound] = { myScore: newMyScore, oppScore: newOppScore }
 
             // Show countdown → reveal
             setPhase("countdown")
@@ -602,6 +610,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setOpponentName("")
         setIsPlayerA(true)
         lastRoundRef.current = 0
+        scoreHistoryRef.current = { 0: { myScore: 0, oppScore: 0 } }
     }
 
     // ─── Play again ───
