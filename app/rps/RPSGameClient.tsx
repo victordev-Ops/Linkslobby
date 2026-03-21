@@ -12,6 +12,7 @@ import {
     cancelRPSMatch,
     getActiveRPSMatch,
     getRPSBalance,
+    handleOpponentDisconnect,
     type RPSMatch,
     type RPSMove,
     type RPSActionResult,
@@ -74,8 +75,11 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
     const phaseRef = useRef<GamePhase>("choosing")
     const lastRoundRef = useRef(0)
+    const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
+    const modeRef = useRef<"solo" | "friend" | null>(null)
 
     useEffect(() => { phaseRef.current = phase }, [phase])
+    useEffect(() => { modeRef.current = mode }, [mode])
 
     // ─── Recover active match on mount ───
     useEffect(() => {
@@ -152,7 +156,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         if (data?.username) setOpponentName(data.username)
     }
 
-    // ─── Subscribe to match updates via Postgres Changes ───
+    // ─── Subscribe to match updates via Postgres Changes & Presence ───
     const subscribeToMatch = useCallback((mId: string) => {
         // Clean up previous channel
         if (channelRef.current) {
@@ -161,7 +165,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         }
 
         const channel = supabase
-            .channel(`rps-match-${mId}`)
+            .channel(`rps-match-${mId}`, { config: { presence: { key: profile.id } } })
             .on("postgres_changes", {
                 event: "UPDATE",
                 schema: "public",
@@ -171,7 +175,37 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 const updated = payload.new as RPSMatch
                 handleMatchUpdate(updated)
             })
-            .subscribe()
+            .on("presence", { event: "leave" }, ({ key, leftPresences }) => {
+                if (modeRef.current === "friend" && leftPresences.some((p: any) => p.user_id !== profile.id)) {
+                    if (!disconnectTimerRef.current) {
+                        toast("Opponent lost connection... Waiting 10s", { icon: "⚠️", id: "disconnect-toast", duration: 10000 })
+                        disconnectTimerRef.current = setTimeout(() => {
+                            handleOpponentDisconnect(mId, leftPresences[0].user_id || "").then(res => {
+                                if (res.success && res.action === 'converted_to_solo') {
+                                    toast.success("Opponent definitively left! AI is taking over. Beat the bot to win the stakes!", { id: "disconnect-toast", duration: 6000 })
+                                } else {
+                                    toast.dismiss("disconnect-toast")
+                                }
+                            })
+                        }, 10000)
+                    }
+                }
+            })
+            .on("presence", { event: "join" }, ({ key, newPresences }) => {
+                if (newPresences.some((p: any) => p.user_id !== profile.id)) {
+                    if (disconnectTimerRef.current) {
+                        clearTimeout(disconnectTimerRef.current)
+                        disconnectTimerRef.current = null
+                        toast.success("Opponent reconnected!", { id: "disconnect-toast" })
+                    }
+                }
+            })
+
+        channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await channel.track({ user_id: profile.id, online_at: new Date().toISOString() })
+            }
+        })
 
         channelRef.current = channel
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,24 +226,21 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setMatch(updated)
 
         const amA = updated.player_a === profile.id
+        setIsPlayerA(amA)
+
+        // If converted to solo
+        if (updated.mode === "solo" && updated.player_b === null && modeRef.current === "friend") {
+            setMode("solo")
+            setOpponentName("Computer")
+        }
+
         const myScore = amA ? updated.score_a : updated.score_b
         const oppScore = amA ? updated.score_b : updated.score_a
 
         // Opponent joined
-        if (updated.status === "active" && updated.player_b && !opponentName) {
+        if (updated.status === "active" && updated.player_b && !opponentName && updated.mode === "friend") {
             const otherId = amA ? updated.player_b : updated.player_a
             if (otherId) fetchOpponentName(otherId)
-        }
-
-        // A round was resolved (scores changed from what we know)
-        const newRoundNum = updated.current_round - 1
-        if (newRoundNum > lastRoundRef.current && updated.move_a === null && updated.move_b === null) {
-            // The server cleared moves — this means a round just resolved
-            // We need the last round's moves to show the reveal
-            // But they've been cleared. We get them from the RPC response in handleChoice.
-            // If this is the OTHER player triggering, we need to handle it.
-            // The move data comes from the RPC return for the triggering player.
-            // For the other player, we rely on the round before clear.
         }
 
         // Update scores
@@ -221,12 +252,14 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             if (updated.winner_id === profile.id) {
                 setMatchResult("won")
             } else if (updated.winner_id === null) {
-                // Solo forfeit or cancelled
+                // Solo forfeit or AI won
                 setMatchResult("lost")
             } else {
                 setMatchResult("lost")
             }
-            setPhase("matchEnd")
+            // We intentionally DO NOT setPhase("matchEnd") here!
+            // We let the countdown/reveal timeout pick up the completed status and transition.
+            // This prevents the final round animation from abruptly cutting off.
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profile.id, opponentName])
@@ -399,6 +432,9 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
     // ─── Show round reveal animation ───
     const showRoundReveal = (myChoice: RPSMove, result: RPSActionResult) => {
+        const roundNum = (result.current_round || 2) - 1
+        if (roundNum <= lastRoundRef.current) return // Prevent double-reveal if realtime beat the RPC
+
         const amA = isPlayerA
         const myMove = myChoice
         const oppMove = (amA ? result.move_b : result.move_a) as RPSMove
@@ -415,7 +451,6 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             personalResult = "lose"
         }
 
-        const roundNum = (result.current_round || 2) - 1
         lastRoundRef.current = roundNum
 
         setRoundHistory(prev => [...prev, {

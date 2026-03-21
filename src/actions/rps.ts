@@ -53,6 +53,7 @@ export type RPSActionResult = {
     action?: string
     current_balance?: number
     required?: number
+    remaining_player_id?: string
 }
 
 // ─── Create a new match ─────────────────────────────────────────────
@@ -138,6 +139,29 @@ export async function cancelRPSMatch(matchId: string): Promise<RPSActionResult> 
     } catch (err: any) {
         console.error('cancelRPSMatch error:', err)
         return { success: false, error: err.message || 'Failed to cancel match' }
+    }
+}
+
+// ─── Handle Opponent Disconnect (AI Takeover) ───────────────────────
+
+export async function handleOpponentDisconnect(matchId: string, disconnectedUserId: string): Promise<RPSActionResult> {
+    try {
+        const supabase = await createSupabaseServerClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { success: false, error: 'Not authenticated' }
+
+        const { data, error } = await supabase.rpc('rps_convert_to_solo', {
+            p_match_id: matchId,
+            p_disconnected_user_id: disconnectedUserId,
+        })
+        if (error) {
+            console.error('handleOpponentDisconnect RPC error:', error)
+            return { success: false, error: error.message }
+        }
+        return data as RPSActionResult
+    } catch (err: any) {
+        console.error('handleOpponentDisconnect error:', err)
+        return { success: false, error: err.message || 'Failed to handle disconnect' }
     }
 }
 
