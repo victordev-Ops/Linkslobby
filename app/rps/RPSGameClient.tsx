@@ -77,12 +77,14 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const lastRoundRef = useRef(0)
     const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
     const modeRef = useRef<"solo" | "friend" | null>(null)
+    const matchRef = useRef<RPSMatch | null>(null)
     const scoreHistoryRef = useRef<Record<number, {myScore: number, oppScore: number}>>({
         0: { myScore: 0, oppScore: 0 }
     })
 
     useEffect(() => { phaseRef.current = phase }, [phase])
     useEffect(() => { modeRef.current = mode }, [mode])
+    useEffect(() => { matchRef.current = match }, [match])
 
     // ─── Recover active match on mount ───
     useEffect(() => {
@@ -192,7 +194,6 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         if (!disconnectTimerRef.current) {
                             toast("Opponent lost connection... Waiting 10s", { icon: "⚠️", id: "disconnect-toast", duration: 10000 })
                             disconnectTimerRef.current = setTimeout(() => {
-                                // Double check they are still not here before applying
                                 const currentPresence = channel.presenceState()
                                 const isHereNow = Object.values(currentPresence).flat().some((p: any) => p.user_id !== profile.id)
                                 if (isHereNow) {
@@ -200,12 +201,13 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                     return
                                 }
                                 
-                                // Extract the disconnected user id ideally from the last known state, or we fetch it from the match
-                                const leftUserId = match?.player_a === profile.id ? match?.player_b : match?.player_a
+                                // Use matchRef to get the LATEST match state (not the stale closure)
+                                const currentMatch = matchRef.current
+                                const leftUserId = currentMatch?.player_a === profile.id ? currentMatch?.player_b : currentMatch?.player_a
                                 if (leftUserId) {
                                     handleOpponentDisconnect(mId, leftUserId).then(res => {
                                         if (res.success && res.action === 'converted_to_solo') {
-                                            toast.success("Opponent definitively left! AI is taking over. Beat the bot to win the stakes!", { id: "disconnect-toast", duration: 6000 })
+                                            toast.success("Opponent left! AI is taking over. Beat the bot!", { id: "disconnect-toast", duration: 6000 })
                                         } else {
                                             toast.dismiss("disconnect-toast")
                                         }
@@ -253,19 +255,46 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         const amA = updated.player_a === profile.id
         setIsPlayerA(amA)
 
-        // If converted to solo
+        // If converted to solo (AI takeover)
         if (updated.mode === "solo" && updated.player_b === null && modeRef.current === "friend") {
             setMode("solo")
             setOpponentName("Computer")
+            
+            // If we were stuck in 'waiting' phase with a locked move, re-submit it
+            // Since moves are now cleared by the SQL, transition back to choosing
+            if (phaseRef.current === "waiting" && updated.status === "active") {
+                const myLockedMove = amA ? updated.move_a : null
+                if (myLockedMove) {
+                    // Edge case: move survived somehow, re-submit to trigger AI resolution
+                    submitRPSMove(updated.id, myLockedMove as RPSMove).then(result => {
+                        if (result.success && (result.status === "round_resolved" || result.status === "match_completed")) {
+                            showRoundReveal(myLockedMove as RPSMove, result)
+                        }
+                    }).catch(() => {})
+                } else {
+                    // Moves were cleared — player needs to pick again
+                    setPhase("choosing")
+                    setPlayerChoice(null)
+                    setOpponentChoice(null)
+                    toast("Pick your move again — AI is ready!", { icon: "🤖" })
+                }
+            }
         }
 
         const myScore = amA ? updated.score_a : updated.score_b
         const oppScore = amA ? updated.score_b : updated.score_a
 
-        // Opponent joined
-        if (updated.status === "active" && updated.player_b && !opponentName && updated.mode === "friend") {
-            const otherId = amA ? updated.player_b : updated.player_a
-            if (otherId) fetchOpponentName(otherId)
+        // Opponent joined (match went from waiting → active)
+        if (updated.status === "active" && updated.player_b && updated.mode === "friend") {
+            if (!opponentName) {
+                const otherId = amA ? updated.player_b : updated.player_a
+                if (otherId) fetchOpponentName(otherId)
+            }
+            // If we were on the 'Waiting for Friend' screen, transition to choosing
+            if (phaseRef.current === "choosing" || phaseRef.current === "waiting") {
+                setPhase("choosing")
+                toast.success("Opponent joined! Game on! 🎮", { duration: 3000 })
+            }
         }
 
         // Update scores
@@ -1072,6 +1101,13 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 {/* Waiting for opponent */}
                 {phase === "waiting" && (
                     <div className="flex flex-col items-center justify-center py-16 space-y-6 animate-in fade-in duration-300">
+                        {/* If opponent is gone (match converted to solo while we wait), show continue button */}
+                        {match?.mode === "solo" && mode === "solo" && (
+                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center space-y-3 w-full max-w-xs">
+                                <p className="text-amber-400 font-bold text-sm">🤖 Opponent left! AI took over.</p>
+                                <p className="text-white/50 text-xs">Your move has been submitted. The AI will respond now.</p>
+                            </div>
+                        )}
                         <div className="relative">
                             <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
                                 <div className="text-5xl animate-bounce">{choiceEmoji(playerChoice)}</div>

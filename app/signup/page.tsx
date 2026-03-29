@@ -55,7 +55,7 @@ function SignupContent() {
       setEmail('')
     } catch (err: any) {
       setStatus('error')
-      setMessage(err.message || 'failed to send magic link. pls try again.')
+      setMessage(err.message || 'failed to send link. pls try again.')
     }
   }
 

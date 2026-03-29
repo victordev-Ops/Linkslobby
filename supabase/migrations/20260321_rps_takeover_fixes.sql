@@ -220,8 +220,8 @@ BEGIN
       player_b = NULL,
       score_a = v_new_score_a,
       score_b = v_new_score_b,
-      move_a = v_new_move_a,
-      move_b = v_new_move_b,
+      move_a = NULL,
+      move_b = NULL,
       escrow_a = v_new_escrow_a,
       escrow_b = false,
       updated_at = now()
@@ -231,6 +231,8 @@ BEGIN
     UPDATE rps_matches SET
       mode = 'solo',
       player_b = NULL,
+      move_a = NULL,
+      move_b = NULL,
       escrow_b = false,
       updated_at = now()
     WHERE id = p_match_id;
