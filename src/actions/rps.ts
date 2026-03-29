@@ -23,6 +23,9 @@ export type RPSMatch = {
     current_round: number
     move_a: RPSMove | null
     move_b: RPSMove | null
+    last_move_a: RPSMove | null
+    last_move_b: RPSMove | null
+    last_round_result: string | null
     escrow_a: boolean
     escrow_b: boolean
     status: RPSStatus

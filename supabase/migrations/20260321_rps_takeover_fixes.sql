@@ -2,9 +2,13 @@
 -- RPS Game System Fixes — AI Takeover & Solo Completion
 -- =====================================================================
 
+-- ─── 0) Add last_move columns so clients can see what was played ───
+ALTER TABLE public.rps_matches ADD COLUMN IF NOT EXISTS last_move_a text;
+ALTER TABLE public.rps_matches ADD COLUMN IF NOT EXISTS last_move_b text;
+ALTER TABLE public.rps_matches ADD COLUMN IF NOT EXISTS last_round_result text;
+
 -- ─── 1) rps_submit_move FIX ───
--- Fixes the bug where if the computer wins in solo mode, the match never completes
--- because winner_id IS NULL.
+-- Fixes solo completion bug AND stores last moves before clearing.
 
 CREATE OR REPLACE FUNCTION public.rps_submit_move(p_match_id uuid, p_move text)
 RETURNS json
@@ -113,12 +117,15 @@ BEGIN
     v_is_match_over := true;
   END IF;
 
-  -- Update match state
+  -- Update match state: save last moves, then clear current moves
   UPDATE rps_matches SET
+    last_move_a = v_final_move_a,
+    last_move_b = v_final_move_b,
+    last_round_result = v_round_result,
     score_a = v_new_score_a,
     score_b = v_new_score_b,
     current_round = v_match.current_round + 1,
-    move_a = NULL,  -- Clear for next round
+    move_a = NULL,
     move_b = NULL,
     round_started_at = CASE WHEN NOT v_is_match_over THEN now() ELSE round_started_at END,
     status = CASE WHEN v_is_match_over THEN 'completed' ELSE 'active' END,

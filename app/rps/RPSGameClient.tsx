@@ -81,6 +81,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const scoreHistoryRef = useRef<Record<number, {myScore: number, oppScore: number}>>({
         0: { myScore: 0, oppScore: 0 }
     })
+    const pendingScoresRef = useRef<{myScore: number, oppScore: number} | null>(null)
 
     useEffect(() => { phaseRef.current = phase }, [phase])
     useEffect(() => { modeRef.current = mode }, [mode])
@@ -260,29 +261,13 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             setMode("solo")
             setOpponentName("Computer")
             
-            // If we were stuck in 'waiting' phase with a locked move, re-submit it
-            // Since moves are now cleared by the SQL, transition back to choosing
             if (phaseRef.current === "waiting" && updated.status === "active") {
-                const myLockedMove = amA ? updated.move_a : null
-                if (myLockedMove) {
-                    // Edge case: move survived somehow, re-submit to trigger AI resolution
-                    submitRPSMove(updated.id, myLockedMove as RPSMove).then(result => {
-                        if (result.success && (result.status === "round_resolved" || result.status === "match_completed")) {
-                            showRoundReveal(myLockedMove as RPSMove, result)
-                        }
-                    }).catch(() => {})
-                } else {
-                    // Moves were cleared — player needs to pick again
-                    setPhase("choosing")
-                    setPlayerChoice(null)
-                    setOpponentChoice(null)
-                    toast("Pick your move again — AI is ready!", { icon: "🤖" })
-                }
+                setPhase("choosing")
+                setPlayerChoice(null)
+                setOpponentChoice(null)
+                toast("Pick your move again — AI is ready!", { icon: "🤖" })
             }
         }
-
-        const myScore = amA ? updated.score_a : updated.score_b
-        const oppScore = amA ? updated.score_b : updated.score_a
 
         // Opponent joined (match went from waiting → active)
         if (updated.status === "active" && updated.player_b && updated.mode === "friend") {
@@ -290,23 +275,28 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 const otherId = amA ? updated.player_b : updated.player_a
                 if (otherId) fetchOpponentName(otherId)
             }
-            // If we were on the 'Waiting for Friend' screen, transition to choosing
             if (phaseRef.current === "choosing" || phaseRef.current === "waiting") {
                 setPhase("choosing")
                 toast.success("Opponent joined! Game on! 🎮", { duration: 3000 })
             }
         }
 
-        // Update scores
-        setPlayerScore(myScore)
-        setOpponentScore(oppScore)
+        // ═══ DEFERRED SCORE UPDATE LOGIC ═══
+        // Only update scores if we've already revealed this round.
+        // If a new round was just resolved, the realtime useEffect below
+        // will handle the countdown → reveal → score update flow.
+        const resolvedRound = updated.current_round - 1
+        if (resolvedRound <= lastRoundRef.current) {
+            const myScore = amA ? updated.score_a : updated.score_b
+            const oppScore = amA ? updated.score_b : updated.score_a
+            setPlayerScore(myScore)
+            setOpponentScore(oppScore)
+        }
 
-        // Match completed
+        // Match completed — only set result, scores come after reveal
         if (updated.status === "completed") {
             if (updated.winner_id === profile.id) {
                 setMatchResult("won")
-            } else if (updated.winner_id === null) {
-                setMatchResult("lost")
             } else {
                 setMatchResult("lost")
             }
@@ -329,7 +319,6 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     await startMatch("friend", 100)
                 }
             } else if (balance > 0 && selectedMode === "solo") {
-                // Low balance — allow staking all in solo
                 setPendingMode(selectedMode)
                 setStakeAmount(balance)
                 setShowBalanceGate(true)
@@ -387,7 +376,6 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 setPhase("choosing")
             }
 
-            // Subscribe to match updates
             subscribeToMatch(result.match_id!)
         } catch (err) {
             toast.error("Failed to create match")
@@ -428,10 +416,8 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
             toast(`${result.stake} Stars locked as escrow ⭐`, { icon: "🔒" })
 
-            // Subscribe and fetch opponent name
             subscribeToMatch(result.match_id!)
 
-            // Fetch the match to get opponent info
             const { data: matchData } = await supabase
                 .from("rps_matches")
                 .select("player_a")
@@ -464,13 +450,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             }
 
             if (result.status === "waiting_for_opponent") {
-                // Stay in waiting phase — the realtime listener will update
-                // when the opponent submits and the round resolves
                 return
             }
 
             if (result.status === "round_resolved" || result.status === "match_completed") {
-                // We triggered the resolution — show the reveal
                 showRoundReveal(choice, result)
             }
         } catch (err) {
@@ -482,10 +465,10 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         }
     }
 
-    // ─── Show round reveal animation ───
+    // ─── Show round reveal animation (called by RPC trigger player) ───
     const showRoundReveal = (myChoice: RPSMove, result: RPSActionResult) => {
         const roundNum = (result.current_round || 2) - 1
-        if (roundNum <= lastRoundRef.current) return // Prevent double-reveal if realtime beat the RPC
+        if (roundNum <= lastRoundRef.current) return
 
         const amA = isPlayerA
         const myMove = myChoice
@@ -493,7 +476,6 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
 
         setOpponentChoice(oppMove)
 
-        // Determine personal result
         let personalResult: "win" | "lose" | "tie"
         if (result.round_result === "tie") {
             personalResult = "tie"
@@ -512,87 +494,66 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             result: personalResult,
         }])
 
+        // Defer score update — store pending scores for after reveal
         const myScore = amA ? (result.score_a || 0) : (result.score_b || 0)
         const oppScore = amA ? (result.score_b || 0) : (result.score_a || 0)
-        setPlayerScore(myScore)
-        setOpponentScore(oppScore)
-
+        pendingScoresRef.current = { myScore, oppScore }
         scoreHistoryRef.current[roundNum] = { myScore, oppScore }
 
-        // Countdown then reveal
         setPhase("countdown")
         setCountdown(3)
     }
 
     // ─── Handle realtime round resolution (when OTHER player triggered it) ───
+    // Uses last_move_a / last_move_b from the DB — no inference needed!
     useEffect(() => {
         if (!match || phase === "matchEnd") return
 
-        // If we're in "waiting" phase and the match shows moves cleared + new round
-        // that means the server resolved the round (triggered by opponent's move)
         const currentServerRound = match.current_round - 1
         if (
             phase === "waiting" &&
             playerChoice &&
             match.move_a === null &&
             match.move_b === null &&
-            currentServerRound > lastRoundRef.current
+            currentServerRound > lastRoundRef.current &&
+            match.last_move_a && match.last_move_b  // Ensure the server stored the moves
         ) {
-            // The round was resolved server-side. We need to fetch the result.
-            // Since the moves are cleared, we'll poll for it from the match state.
-            // Actually, the client that submitted second gets the result from the RPC.
-            // The client that submitted first (us, in waiting) sees the update via realtime.
-            // We don't have the moves anymore — but we DO have updated scores.
-            // We can infer the result from score changes.
-
             const amA = isPlayerA
-            const newMyScore = amA ? match.score_a : match.score_b
-            const newOppScore = amA ? match.score_b : match.score_a
-
-            const prevScores = scoreHistoryRef.current[lastRoundRef.current] || { myScore: 0, oppScore: 0 }
-
-            let personalResult: "win" | "lose" | "tie"
-            if (newMyScore > prevScores.myScore) {
-                personalResult = "win"
-            } else if (newOppScore > prevScores.oppScore) {
-                personalResult = "lose"
-            } else {
-                personalResult = "tie"
-            }
-
-            // We know our move (playerChoice), but we don't know opponent's exact move
-            // For the reveal, we need to infer it
-            const oppMove = inferOpponentMove(playerChoice, personalResult)
+            const myMove = playerChoice
+            const oppMove = (amA ? match.last_move_b : match.last_move_a) as RPSMove
 
             setOpponentChoice(oppMove)
+
+            // Use the server's round result directly
+            let personalResult: "win" | "lose" | "tie"
+            if (match.last_round_result === "tie") {
+                personalResult = "tie"
+            } else if ((amA && match.last_round_result === "a_wins") || (!amA && match.last_round_result === "b_wins")) {
+                personalResult = "win"
+            } else {
+                personalResult = "lose"
+            }
+
             lastRoundRef.current = currentServerRound
 
             setRoundHistory(prev => [...prev, {
                 round: currentServerRound,
-                playerChoice: playerChoice,
+                playerChoice: myMove,
                 opponentChoice: oppMove,
                 result: personalResult,
             }])
 
-            setPlayerScore(newMyScore)
-            setOpponentScore(newOppScore)
-
+            // Defer score update — store pending scores for after reveal
+            const newMyScore = amA ? match.score_a : match.score_b
+            const newOppScore = amA ? match.score_b : match.score_a
+            pendingScoresRef.current = { myScore: newMyScore, oppScore: newOppScore }
             scoreHistoryRef.current[currentServerRound] = { myScore: newMyScore, oppScore: newOppScore }
 
-            // Show countdown → reveal
             setPhase("countdown")
             setCountdown(3)
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [match?.current_round, match?.move_a, match?.move_b])
-
-    // Infer opponent's move from our move and the result
-    const inferOpponentMove = (myMove: RPSMove, result: "win" | "lose" | "tie"): RPSMove => {
-        if (result === "tie") return myMove
-        const winMap: Record<RPSMove, RPSMove> = { rock: "scissors", paper: "rock", scissors: "paper" }
-        const loseMap: Record<RPSMove, RPSMove> = { rock: "paper", paper: "scissors", scissors: "rock" }
-        return result === "win" ? winMap[myMove] : loseMap[myMove]
-    }
+    }, [match?.current_round, match?.move_a, match?.move_b, match?.last_move_a, match?.last_move_b])
 
     // ─── Countdown & Reveal timer ───
     useEffect(() => {
@@ -604,6 +565,12 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 setPhase("reveal")
             }
         } else if (phase === "reveal") {
+            // Apply pending scores NOW (after countdown, during reveal)
+            if (pendingScoresRef.current) {
+                setPlayerScore(pendingScoresRef.current.myScore)
+                setOpponentScore(pendingScoresRef.current.oppScore)
+                pendingScoresRef.current = null
+            }
             const timer = setTimeout(() => {
                 if (match?.status === "completed" || matchResult) {
                     setPhase("matchEnd")
@@ -639,6 +606,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setIsPlayerA(true)
         lastRoundRef.current = 0
         scoreHistoryRef.current = { 0: { myScore: 0, oppScore: 0 } }
+        pendingScoresRef.current = null
     }
 
     // ─── Play again ───
