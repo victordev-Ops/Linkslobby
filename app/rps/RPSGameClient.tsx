@@ -57,6 +57,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const [roundHistory, setRoundHistory] = useState<RoundHistory[]>([])
     const [countdown, setCountdown] = useState(3)
     const [matchResult, setMatchResult] = useState<"won" | "lost" | null>(null)
+    const [lastResult, setLastResult] = useState<"win" | "lose" | "tie" | null>(null)
     const [opponentName, setOpponentName] = useState("")
 
     // ─── Lobby/UX state ───
@@ -82,6 +83,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         0: { myScore: 0, oppScore: 0 }
     })
     const pendingScoresRef = useRef<{myScore: number, oppScore: number} | null>(null)
+    const opponentJoinedRef = useRef(false)
 
     useEffect(() => { phaseRef.current = phase }, [phase])
     useEffect(() => { modeRef.current = mode }, [mode])
@@ -269,13 +271,14 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             }
         }
 
-        // Opponent joined (match went from waiting → active)
+        // Opponent joined (match went from waiting → active) — fire toast ONCE only
         if (updated.status === "active" && updated.player_b && updated.mode === "friend") {
             if (!opponentName) {
                 const otherId = amA ? updated.player_b : updated.player_a
                 if (otherId) fetchOpponentName(otherId)
             }
-            if (phaseRef.current === "choosing" || phaseRef.current === "waiting") {
+            if (!opponentJoinedRef.current) {
+                opponentJoinedRef.current = true
                 setPhase("choosing")
                 toast.success("Opponent joined! Game on! 🎮", { duration: 3000 })
             }
@@ -486,6 +489,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         }
 
         lastRoundRef.current = roundNum
+        setLastResult(personalResult)
 
         setRoundHistory(prev => [...prev, {
             round: roundNum,
@@ -535,6 +539,7 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
             }
 
             lastRoundRef.current = currentServerRound
+            setLastResult(personalResult)
 
             setRoundHistory(prev => [...prev, {
                 round: currentServerRound,
@@ -602,11 +607,13 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setRoundHistory([])
         setCountdown(3)
         setMatchResult(null)
+        setLastResult(null)
         setOpponentName("")
         setIsPlayerA(true)
         lastRoundRef.current = 0
         scoreHistoryRef.current = { 0: { myScore: 0, oppScore: 0 } }
         pendingScoresRef.current = null
+        opponentJoinedRef.current = false
     }
 
     // ─── Play again ───
@@ -676,7 +683,6 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         lose: "You Lose!",
         tie: "It's a Tie!"
     }
-    const lastResult = roundHistory.length > 0 ? roundHistory[roundHistory.length - 1].result : null
 
     // ─── Loading state ───
     if (isRecovering) {
