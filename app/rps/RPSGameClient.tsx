@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Share2, Loader2, Users, RotateCcw, Swords, Star, Monitor, UserPlus } from "lucide-react"
+import { ArrowLeft, Share2, Loader2, Users, RotateCcw, Swords, Star, Monitor, UserPlus, History } from "lucide-react"
 import { toast } from "sonner"
 import {
     createRPSMatch,
@@ -12,10 +12,12 @@ import {
     cancelRPSMatch,
     getActiveRPSMatch,
     getRPSBalance,
-    handleOpponentDisconnect,
+    triggerAITakeover,
+    getPlayerRPSHistory,
     type RPSMatch,
     type RPSMove,
     type RPSActionResult,
+    type RPSMatchHistoryItem,
 } from "@/actions/rps"
 
 type GamePhase = "choosing" | "waiting" | "countdown" | "reveal" | "matchEnd"
@@ -71,14 +73,24 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     const [isRecovering, setIsRecovering] = useState(true)
     const [pendingMode, setPendingMode] = useState<"solo" | "friend" | null>(null)
     const [stakeAmount, setStakeAmount] = useState(100)
+    const [disconnectCountdown, setDisconnectCountdown] = useState<number | null>(null)
+    const [moveTimeLeft, setMoveTimeLeft] = useState<number | null>(null)
+    const [aiActive, setAiActive] = useState(false)
+    
+    // ─── Match History State ───
+    const [showHistory, setShowHistory] = useState(false)
+    const [historyData, setHistoryData] = useState<RPSMatchHistoryItem[]>([])
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false)
 
     // ─── Refs ───
     const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
     const phaseRef = useRef<GamePhase>("choosing")
     const lastRoundRef = useRef(0)
     const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
+    const disconnectIntervalRef = useRef<NodeJS.Timeout | null>(null)
     const modeRef = useRef<"solo" | "friend" | null>(null)
     const matchRef = useRef<RPSMatch | null>(null)
+    const roundVersionRef = useRef(0)
     const scoreHistoryRef = useRef<Record<number, {myScore: number, oppScore: number}>>({
         0: { myScore: 0, oppScore: 0 }
     })
@@ -108,10 +120,12 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     setPlayerScore(amA ? m.score_a : m.score_b)
                     setOpponentScore(amA ? m.score_b : m.score_a)
                     lastRoundRef.current = m.current_round - 1
+                    roundVersionRef.current = m.round_version || 0
                     scoreHistoryRef.current[m.current_round - 1] = {
                         myScore: amA ? m.score_a : m.score_b,
                         oppScore: amA ? m.score_b : m.score_a,
                     }
+                    if (m.ai_player) setAiActive(true)
 
                     if (m.status === "waiting") {
                         setPhase("choosing")
@@ -195,28 +209,42 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     
                     if (!stillPresent) {
                         if (!disconnectTimerRef.current) {
-                            toast("Opponent lost connection... Waiting 10s", { icon: "⚠️", id: "disconnect-toast", duration: 10000 })
+                            // Start visible 30s countdown
+                            let secondsLeft = 30
+                            setDisconnectCountdown(secondsLeft)
+                            toast("Opponent lost connection… waiting 30s", { icon: "⚠️", id: "disconnect-toast", duration: 31000 })
+                            
+                            disconnectIntervalRef.current = setInterval(() => {
+                                secondsLeft--
+                                setDisconnectCountdown(secondsLeft)
+                                if (secondsLeft <= 0) {
+                                    if (disconnectIntervalRef.current) clearInterval(disconnectIntervalRef.current)
+                                }
+                            }, 1000)
+
                             disconnectTimerRef.current = setTimeout(() => {
                                 const currentPresence = channel.presenceState()
                                 const isHereNow = Object.values(currentPresence).flat().some((p: any) => p.user_id !== profile.id)
                                 if (isHereNow) {
                                     disconnectTimerRef.current = null
+                                    setDisconnectCountdown(null)
                                     return
                                 }
                                 
-                                // Use matchRef to get the LATEST match state (not the stale closure)
                                 const currentMatch = matchRef.current
                                 const leftUserId = currentMatch?.player_a === profile.id ? currentMatch?.player_b : currentMatch?.player_a
                                 if (leftUserId) {
-                                    handleOpponentDisconnect(mId, leftUserId).then(res => {
-                                        if (res.success && res.action === 'converted_to_solo') {
-                                            toast.success("Opponent left! AI is taking over. Beat the bot!", { id: "disconnect-toast", duration: 6000 })
+                                    triggerAITakeover(mId, leftUserId).then(res => {
+                                        if (res.success && (res.action === 'ai_takeover' || res.action === 'already_ai')) {
+                                            setAiActive(true)
+                                            toast.success("AI is stepping in 🤖", { id: "disconnect-toast", duration: 4000 })
                                         } else {
                                             toast.dismiss("disconnect-toast")
                                         }
+                                        setDisconnectCountdown(null)
                                     })
                                 }
-                            }, 10000)
+                            }, 30000)
                         }
                     }
                 }
@@ -226,8 +254,13 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                     if (disconnectTimerRef.current) {
                         clearTimeout(disconnectTimerRef.current)
                         disconnectTimerRef.current = null
-                        toast.success("Opponent reconnected!", { id: "disconnect-toast" })
                     }
+                    if (disconnectIntervalRef.current) {
+                        clearInterval(disconnectIntervalRef.current)
+                        disconnectIntervalRef.current = null
+                    }
+                    setDisconnectCountdown(null)
+                    toast.success("Opponent reconnected!", { id: "disconnect-toast" })
                 }
             })
 
@@ -258,17 +291,12 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         const amA = updated.player_a === profile.id
         setIsPlayerA(amA)
 
-        // If converted to solo (AI takeover)
-        if (updated.mode === "solo" && updated.player_b === null && modeRef.current === "friend") {
+        // If AI takeover detected
+        if (updated.ai_player && !aiActive) {
+            setAiActive(true)
             setMode("solo")
-            setOpponentName("Computer")
-            
-            if (phaseRef.current === "waiting" && updated.status === "active") {
-                setPhase("choosing")
-                setPlayerChoice(null)
-                setOpponentChoice(null)
-                toast("Pick your move again — AI is ready!", { icon: "🤖" })
-            }
+            setOpponentName("AI 🤖")
+            toast("AI has taken over for your opponent!", { icon: "🤖" })
         }
 
         // Opponent joined (match went from waiting → active) — fire toast ONCE only
@@ -443,20 +471,32 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setPhase("waiting")
 
         try {
-            const result = await submitRPSMove(matchId, choice)
+            const result = await submitRPSMove(matchId, choice, roundVersionRef.current)
 
             if (!result.success) {
+                // If it's a duplicate move error, just stay in waiting state
+                if (result.error?.includes('already submitted')) {
+                    return
+                }
                 toast.error(result.error || "Failed to submit move")
                 setPhase("choosing")
                 setPlayerChoice(null)
                 return
             }
 
+            if (result.status === "stale_version") {
+                // Round already resolved — sync and return
+                roundVersionRef.current = result.current_round_version || 0
+                return
+            }
+
             if (result.status === "waiting_for_opponent") {
+                roundVersionRef.current = result.round_version || roundVersionRef.current
                 return
             }
 
             if (result.status === "round_resolved" || result.status === "match_completed") {
+                roundVersionRef.current = result.round_version || roundVersionRef.current
                 showRoundReveal(choice, result)
             }
         } catch (err) {
@@ -589,6 +629,25 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         }
     }, [phase, countdown, match?.status, matchResult])
 
+    // ─── Move deadline countdown (60s per round) ───
+    useEffect(() => {
+        if ((phase === "choosing" || phase === "waiting") && match?.move_deadline_at) {
+            const deadline = new Date(match.move_deadline_at).getTime()
+            const tick = () => {
+                const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+                setMoveTimeLeft(remaining)
+            }
+            tick()
+            const interval = setInterval(tick, 1000)
+            return () => {
+                clearInterval(interval)
+                setMoveTimeLeft(null)
+            }
+        } else {
+            setMoveTimeLeft(null)
+        }
+    }, [phase, match?.move_deadline_at])
+
     // ─── Reset / cleanup ───
     const resetToLobby = () => {
         if (channelRef.current) {
@@ -610,10 +669,18 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         setLastResult(null)
         setOpponentName("")
         setIsPlayerA(true)
+        setAiActive(false)
+        setDisconnectCountdown(null)
+        setMoveTimeLeft(null)
         lastRoundRef.current = 0
+        roundVersionRef.current = 0
         scoreHistoryRef.current = { 0: { myScore: 0, oppScore: 0 } }
         pendingScoresRef.current = null
         opponentJoinedRef.current = false
+        if (disconnectIntervalRef.current) {
+            clearInterval(disconnectIntervalRef.current)
+            disconnectIntervalRef.current = null
+        }
     }
 
     // ─── Play again ───
@@ -669,6 +736,19 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
         }
     }
 
+    // ─── Match history ───
+    const handleLoadHistory = async () => {
+        setIsLoadingHistory(true)
+        setShowHistory(true)
+        const result = await getPlayerRPSHistory(20)
+        setIsLoadingHistory(false)
+        if (result.success && result.matches) {
+            setHistoryData(result.matches)
+        } else {
+            toast.error("Failed to load match history")
+        }
+    }
+
     // ─── Helpers ───
     const choiceEmoji = (c: RPSMove | null) => CHOICES.find(x => x.id === c)?.emoji || "❓"
     const opponentLabel = mode === "solo" ? "Computer" : (opponentName || "Opponent")
@@ -717,12 +797,20 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         <Swords size={18} className="text-emerald-500" />
                         <h2 className="font-bold text-sm">Rock Paper Scissors</h2>
                     </div>
-                    {starBalance !== null && (
-                        <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 rounded-full text-amber-400 text-xs font-bold ml-auto">
-                            <Star size={12} />
-                            {starBalance}
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2 ml-auto">
+                        <button
+                            onClick={handleLoadHistory}
+                            className="p-1.5 bg-white/5 hover:bg-white/10 rounded-full text-white/60 hover:text-white transition"
+                        >
+                            <History size={16} />
+                        </button>
+                        {starBalance !== null && (
+                            <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 rounded-full text-amber-400 text-xs font-bold">
+                                <Star size={12} />
+                                {starBalance}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <main className="max-w-md mx-auto p-6 space-y-8 relative z-10 pt-12">
@@ -802,6 +890,69 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                             </div>
                         )}
                     </div>
+
+                    {/* Match History Modal */}
+                    {showHistory && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
+                            <div className="bg-[#14141f] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl flex flex-col max-h-[85vh]">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-bold text-xl text-white">Match History</h3>
+                                    <button
+                                        onClick={() => setShowHistory(false)}
+                                        className="text-white/40 hover:text-white w-8 h-8 flex items-center justify-center rounded-full bg-white/5"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                                    {isLoadingHistory ? (
+                                        <div className="py-12 flex justify-center">
+                                            <Loader2 size={32} className="text-emerald-400 animate-spin opacity-50" />
+                                        </div>
+                                    ) : historyData.length === 0 ? (
+                                        <div className="text-center py-12 space-y-2">
+                                            <div className="text-4xl opacity-50">👻</div>
+                                            <p className="text-white/40 text-sm">No recent matches found</p>
+                                        </div>
+                                    ) : (
+                                        historyData.map((m) => (
+                                            <div key={m.match_id} className="bg-white/5 rounded-2xl p-4 flex items-center justify-between border border-white/5 hover:border-white/10 transition">
+                                                <div className="flex items-center gap-3">
+                                                    {m.opponent_avatar ? (
+                                                        <img src={m.opponent_avatar} alt="" className="w-10 h-10 rounded-full object-cover bg-white/10" />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg">
+                                                            {m.opponent_name.charAt(0).toUpperCase() || "?"}
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <p className="font-bold text-sm text-white">
+                                                            {m.opponent_name} {m.ai_player && <span className="text-xs text-white/40 font-normal ml-1">🤖</span>}
+                                                        </p>
+                                                        <p className="text-[10px] text-white/40 font-medium">
+                                                            {new Date(m.completed_at || "").toLocaleDateString()}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right flex flex-col items-end">
+                                                    <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider mb-1
+                                                        ${m.outcome === "won" ? "bg-emerald-500/20 text-emerald-400" 
+                                                        : m.outcome === "lost" ? "bg-red-500/20 text-red-400" 
+                                                        : "bg-white/10 text-white/50"}`}
+                                                    >
+                                                        {m.outcome.toUpperCase()}
+                                                    </div>
+                                                    <span className={`text-xs font-black ${m.xp_change > 0 ? "text-amber-400" : m.xp_change < 0 ? "text-red-400/80" : "text-white/30"}`}>
+                                                        {m.xp_change > 0 ? "+" : ""}{m.xp_change} ⭐
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Balance Gate Modal */}
                     {showBalanceGate && (
@@ -1049,6 +1200,9 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                                     }
                                 </span>
                             </div>
+                            {aiActive && (
+                                <p className="text-white/30 text-xs mt-1">🤖 AI was involved in this match</p>
+                            )}
                         </div>
 
                         {/* Round History */}
@@ -1111,23 +1265,40 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 {/* Waiting for opponent */}
                 {phase === "waiting" && (
                     <div className="flex flex-col items-center justify-center py-16 space-y-6 animate-in fade-in duration-300">
-                        {/* If opponent is gone (match converted to solo while we wait), show continue button */}
-                        {match?.mode === "solo" && mode === "solo" && (
-                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center space-y-3 w-full max-w-xs">
-                                <p className="text-amber-400 font-bold text-sm">🤖 Opponent left! AI took over.</p>
-                                <p className="text-white/50 text-xs">Your move has been submitted. The AI will respond now.</p>
+                        {/* Disconnect countdown bar */}
+                        {disconnectCountdown !== null && disconnectCountdown > 0 && (
+                            <div className="w-full max-w-xs space-y-2">
+                                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center space-y-3">
+                                    <p className="text-amber-400 font-bold text-sm">⚠️ Opponent disconnected</p>
+                                    <p className="text-white/50 text-xs">AI will take over in {disconnectCountdown}s…</p>
+                                    <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                                        <div
+                                            className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
+                                            style={{ width: `${(disconnectCountdown / 30) * 100}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {/* AI active notice */}
+                        {aiActive && (
+                            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-2xl p-4 text-center space-y-2 w-full max-w-xs">
+                                <p className="text-cyan-400 font-bold text-sm">🤖 AI is playing for your opponent</p>
+                                <p className="text-white/50 text-xs">Your move is submitted. AI will respond now.</p>
                             </div>
                         )}
                         <div className="relative">
                             <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
                                 <div className="text-5xl animate-bounce">{choiceEmoji(playerChoice)}</div>
                             </div>
-                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full animate-ping" />
+                            <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500/20 border border-emerald-500/30 rounded-full flex items-center justify-center">
+                                <span className="text-xs">🔒</span>
+                            </div>
                         </div>
                         <div className="text-center space-y-2">
-                            <h3 className="text-xl font-black text-emerald-400">Choice Locked!</h3>
+                            <h3 className="text-xl font-black text-emerald-400">Move Locked 🔒</h3>
                             <p className="text-white/40 text-sm font-bold uppercase tracking-widest">
-                                {mode === "solo" ? "Resolving..." : `Waiting for ${opponentLabel}...`}
+                                {aiActive ? "AI is thinking…" : mode === "solo" ? "Resolving..." : `${opponentLabel} is thinking…`}
                             </p>
                         </div>
                     </div>
@@ -1136,7 +1307,21 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 {/* Choice Buttons */}
                 {phase === "choosing" && !matchResult && (
                     <div className="space-y-6 py-4">
+                        {/* Disconnect warning during choosing */}
+                        {disconnectCountdown !== null && disconnectCountdown > 0 && (
+                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-center">
+                                <p className="text-amber-400 font-bold text-xs">⚠️ Opponent disconnected — AI takes over in {disconnectCountdown}s</p>
+                            </div>
+                        )}
                         <div className="text-center space-y-1">
+                            {/* Move deadline timer */}
+                            {moveTimeLeft !== null && moveTimeLeft > 0 && (
+                                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mb-2 ${
+                                    moveTimeLeft <= 10 ? 'bg-red-500/10 text-red-400 animate-pulse' : 'bg-white/5 text-white/40'
+                                }`}>
+                                    ⏱ {moveTimeLeft}s
+                                </div>
+                            )}
                             <p className="text-white/60 text-sm font-bold">Make your move!</p>
                             {mode === "friend" && opponentName && (
                                 <div className="flex items-center justify-center gap-2">
