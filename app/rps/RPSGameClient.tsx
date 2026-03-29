@@ -927,6 +927,42 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                         <Share2 size={18} />
                         Share Invite Link
                     </button>
+
+                    <div className="w-full max-w-xs space-y-3 pt-4 border-t border-white/5">
+                        <p className="text-white/30 text-xs uppercase tracking-wider font-bold">or</p>
+
+                        <button
+                            onClick={async () => {
+                                if (!matchId) return
+                                setIsLoading(true)
+                                try {
+                                    // Cancel the waiting friend match (refund) then start solo
+                                    const cancelResult = await cancelRPSMatch(matchId)
+                                    if (cancelResult.success) {
+                                        toast("Match cancelled — starting solo!", { icon: "🤖" })
+                                    }
+                                    resetToLobby()
+                                    await startMatch("solo", stakeAmount)
+                                } catch {
+                                    toast.error("Failed to switch to AI")
+                                } finally {
+                                    setIsLoading(false)
+                                }
+                            }}
+                            disabled={isLoading}
+                            className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Monitor size={18} />}
+                            Continue vs AI Instead
+                        </button>
+
+                        <button
+                            onClick={handleBack}
+                            className="w-full py-3 text-white/40 hover:text-white/60 font-bold text-sm transition"
+                        >
+                            Cancel Match
+                        </button>
+                    </div>
                 </main>
             </div>
         )
