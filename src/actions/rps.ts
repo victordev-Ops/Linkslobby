@@ -34,6 +34,12 @@ export type RPSMatch = {
     ai_player: 'a' | 'b' | null
     round_version: number
     move_deadline_at: string | null
+    // ─── Disconnect tracking ───
+    disconnected_player: string | null
+    disconnected_at: string | null
+    disconnect_count_a: number
+    disconnect_count_b: number
+    // ─── Timestamps ───
     created_at: string
     updated_at: string
     round_started_at: string | null
@@ -207,6 +213,30 @@ export async function triggerAITakeover(
     } catch (err: any) {
         console.error('triggerAITakeover error:', err)
         return { success: false, error: err.message || 'Failed to trigger AI takeover' }
+    }
+}
+
+// ─── Reconnect to match after disconnect ─────────────────────────
+// Called when a disconnected player returns. Clears disconnect state
+// and hands back control (after AI finishes any in-progress round).
+
+export async function reconnectToMatch(matchId: string): Promise<RPSActionResult> {
+    try {
+        const supabase = await createSupabaseServerClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { success: false, error: 'Not authenticated' }
+
+        const { data, error } = await supabase.rpc('rps_player_reconnect', {
+            p_match_id: matchId,
+        })
+        if (error) {
+            console.error('reconnectToMatch RPC error:', error)
+            return { success: false, error: error.message }
+        }
+        return data as RPSActionResult
+    } catch (err: any) {
+        console.error('reconnectToMatch error:', err)
+        return { success: false, error: err.message || 'Failed to reconnect' }
     }
 }
 

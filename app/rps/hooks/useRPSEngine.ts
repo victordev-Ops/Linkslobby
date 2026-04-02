@@ -10,6 +10,7 @@ import {
     getActiveRPSMatch,
     getRPSBalance,
     triggerAITakeover,
+    reconnectToMatch,
     getPlayerRPSHistory,
     type RPSMatch,
     type RPSMove,
@@ -25,6 +26,12 @@ export interface RoundHistory {
     opponentChoice: RPSMove
     result: "win" | "lose" | "tie"
 }
+
+// ═══════════════════════════════════════════════════════════════
+// DISCONNECT HANDLING CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const DISCONNECT_TIMEOUT_SECONDS = 15  // Seconds before AI takes over
+const MAX_DISCONNECTS_BEFORE_FORFEIT = 3  // Auto-forfeit threshold
 
 export function useRPSEngine(profile: { id: string; username: string; slug: string; is_pro: boolean }) {
     const router = useRouter()
@@ -88,7 +95,52 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
     useEffect(() => { modeRef.current = mode }, [mode])
     useEffect(() => { matchRef.current = match }, [match])
 
-    // ─── Subscribe to match updates via Postgres Changes & Presence ───
+
+    // ═══════════════════════════════════════════════════════════════
+    // DISCONNECT HANDLING — Presence-based detection
+    // ═══════════════════════════════════════════════════════════════
+
+    // Clear all disconnect timers (used on reconnect & cleanup)
+    const clearDisconnectTimers = useCallback(() => {
+        if (disconnectTimerRef.current) {
+            clearTimeout(disconnectTimerRef.current)
+            disconnectTimerRef.current = null
+        }
+        if (disconnectIntervalRef.current) {
+            clearInterval(disconnectIntervalRef.current)
+            disconnectIntervalRef.current = null
+        }
+        setDisconnectCountdown(null)
+    }, [])
+
+    // Trigger immediate AI takeover (exposed to UI for "Switch to AI now" button)
+    const triggerImmediateAI = useCallback(async () => {
+        const currentMatch = matchRef.current
+        if (!currentMatch) return
+        const leftUserId = currentMatch.player_a === profile.id
+            ? currentMatch.player_b
+            : currentMatch.player_a
+        if (!leftUserId || !currentMatch.id) return
+
+        clearDisconnectTimers()
+
+        const res = await triggerAITakeover(currentMatch.id, leftUserId)
+        if (res.success && (res.action === 'ai_takeover' || res.action === 'already_ai')) {
+            setAiActive(true)
+            toast.success("AI is stepping in 🤖", { id: "disconnect-toast", duration: 4000 })
+        } else if (res.action === 'auto_forfeit') {
+            // Opponent hit 3 disconnects — they auto-forfeit
+            toast.success("Opponent auto-forfeited! You win! 🏆", { id: "disconnect-toast", duration: 5000 })
+        } else {
+            toast.dismiss("disconnect-toast")
+        }
+    }, [profile.id, clearDisconnectTimers])
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // REALTIME SUBSCRIPTION — Postgres Changes + Presence
+    // ═══════════════════════════════════════════════════════════════
+
     const subscribeToMatch = useCallback((mId: string) => {
         if (channelRef.current) {
             supabase.removeChannel(channelRef.current)
@@ -106,64 +158,84 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
                 const updated = payload.new as RPSMatch
                 handleMatchUpdate(updated)
             })
+
+            // ─── DISCONNECT DETECTION (presence leave) ───
+            // When opponent disappears from presence, start a countdown.
+            // After DISCONNECT_TIMEOUT_SECONDS, trigger AI takeover.
             .on("presence", { event: "leave" }, () => {
                 if (modeRef.current === "friend") {
                     const state = channel.presenceState()
                     const stillPresent = Object.values(state).flat().some((p: any) => p.user_id !== profile.id)
                     
-                    if (!stillPresent) {
-                        if (!disconnectTimerRef.current) {
-                            let secondsLeft = 30
+                    if (!stillPresent && !disconnectTimerRef.current) {
+                        let secondsLeft = DISCONNECT_TIMEOUT_SECONDS
+                        setDisconnectCountdown(secondsLeft)
+                        toast(`Opponent lost connection… waiting ${DISCONNECT_TIMEOUT_SECONDS}s`, {
+                            icon: "⚠️", id: "disconnect-toast", duration: (DISCONNECT_TIMEOUT_SECONDS + 1) * 1000
+                        })
+                        
+                        disconnectIntervalRef.current = setInterval(() => {
+                            secondsLeft--
                             setDisconnectCountdown(secondsLeft)
-                            toast("Opponent lost connection… waiting 30s", { icon: "⚠️", id: "disconnect-toast", duration: 31000 })
-                            
-                            disconnectIntervalRef.current = setInterval(() => {
-                                secondsLeft--
-                                setDisconnectCountdown(secondsLeft)
-                                if (secondsLeft <= 0) {
-                                    if (disconnectIntervalRef.current) clearInterval(disconnectIntervalRef.current)
-                                }
-                            }, 1000)
+                            if (secondsLeft <= 0 && disconnectIntervalRef.current) {
+                                clearInterval(disconnectIntervalRef.current)
+                            }
+                        }, 1000)
 
-                            disconnectTimerRef.current = setTimeout(() => {
-                                const currentPresence = channel.presenceState()
-                                const isHereNow = Object.values(currentPresence).flat().some((p: any) => p.user_id !== profile.id)
-                                if (isHereNow) {
-                                    disconnectTimerRef.current = null
+                        disconnectTimerRef.current = setTimeout(() => {
+                            // Re-check presence one final time
+                            const currentPresence = channel.presenceState()
+                            const isHereNow = Object.values(currentPresence).flat().some((p: any) => p.user_id !== profile.id)
+                            if (isHereNow) {
+                                clearDisconnectTimers()
+                                return
+                            }
+                            
+                            // Trigger AI takeover via RPC
+                            const currentMatch = matchRef.current
+                            const leftUserId = currentMatch?.player_a === profile.id
+                                ? currentMatch?.player_b
+                                : currentMatch?.player_a
+                            if (leftUserId && currentMatch) {
+                                triggerAITakeover(mId, leftUserId).then(res => {
+                                    if (res.success && (res.action === 'ai_takeover' || res.action === 'already_ai')) {
+                                        setAiActive(true)
+                                        toast.success("AI is stepping in 🤖", { id: "disconnect-toast", duration: 4000 })
+                                    } else if (res.action === 'auto_forfeit') {
+                                        toast.success("Opponent auto-forfeited! You win! 🏆", { id: "disconnect-toast", duration: 5000 })
+                                    } else {
+                                        toast.dismiss("disconnect-toast")
+                                    }
                                     setDisconnectCountdown(null)
-                                    return
-                                }
-                                
-                                const currentMatch = matchRef.current
-                                const leftUserId = currentMatch?.player_a === profile.id ? currentMatch?.player_b : currentMatch?.player_a
-                                if (leftUserId) {
-                                    triggerAITakeover(mId, leftUserId).then(res => {
-                                        if (res.success && (res.action === 'ai_takeover' || res.action === 'already_ai')) {
-                                            setAiActive(true)
-                                            toast.success("AI is stepping in 🤖", { id: "disconnect-toast", duration: 4000 })
-                                        } else {
-                                            toast.dismiss("disconnect-toast")
-                                        }
-                                        setDisconnectCountdown(null)
-                                    })
-                                }
-                            }, 30000)
-                        }
+                                })
+                            }
+                        }, DISCONNECT_TIMEOUT_SECONDS * 1000)
                     }
                 }
             })
+
+            // ─── RECONNECTION DETECTION (presence join) ───
+            // When opponent comes back, clear timers and call reconnect RPC
+            // so AI hands back control (after finishing any in-progress round).
             .on("presence", { event: "join" }, ({ newPresences }) => {
                 if (newPresences.some((p: any) => p.user_id !== profile.id)) {
-                    if (disconnectTimerRef.current) {
-                        clearTimeout(disconnectTimerRef.current)
-                        disconnectTimerRef.current = null
+                    clearDisconnectTimers()
+
+                    // If AI was active, call reconnect RPC to hand control back
+                    const currentMatch = matchRef.current
+                    if (currentMatch && currentMatch.ai_player && currentMatch.disconnected_player) {
+                        reconnectToMatch(currentMatch.id).then(res => {
+                            if (res.success && res.action === 'reconnected') {
+                                setAiActive(false)
+                                toast.success("Opponent reconnected! Game continues. 🎉", { id: "disconnect-toast" })
+                            } else if (res.action === 'reconnected_round_in_progress') {
+                                // AI will finish the current round, then control returns
+                                toast.success("Opponent is back! AI finishing current round…", { id: "disconnect-toast" })
+                            }
+                        })
+                    } else {
+                        toast.success("Opponent reconnected!", { id: "disconnect-toast" })
                     }
-                    if (disconnectIntervalRef.current) {
-                        clearInterval(disconnectIntervalRef.current)
-                        disconnectIntervalRef.current = null
-                    }
-                    setDisconnectCountdown(null)
-                    toast.success("Opponent reconnected!", { id: "disconnect-toast" })
                 }
             })
 
@@ -175,7 +247,7 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
 
         channelRef.current = channel
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [supabase, profile.id])
+    }, [supabase, profile.id, clearDisconnectTimers])
 
     // Cleanup channel on unmount
     useEffect(() => {
@@ -184,7 +256,9 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
                 supabase.removeChannel(channelRef.current)
                 channelRef.current = null
             }
+            clearDisconnectTimers()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [supabase])
 
     const fetchOpponentName = async (userId: string) => {
@@ -196,21 +270,35 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         if (data?.username) setOpponentName(data.username)
     }
 
-    // ─── Handle incoming match state update ───
+
+    // ═══════════════════════════════════════════════════════════════
+    // MATCH STATE UPDATE HANDLER
+    // ═══════════════════════════════════════════════════════════════
+
     const handleMatchUpdate = useCallback((updated: RPSMatch) => {
         setMatch(updated)
         const amA = updated.player_a === profile.id
         setIsPlayerA(amA)
 
+        // ─── AI Takeover detection ───
         if (updated.ai_player && !aiActive) {
             setAiActive(true)
-            setMode("solo")
-            setOpponentName("AI 🤖")
-            toast("AI has taken over for your opponent!", { icon: "🤖" })
+            // Don't change mode — match stays 'friend' for reconnection
+            setOpponentName(prev => prev ? `${prev} (AI)` : "AI 🤖")
+            toast("AI has temporarily taken over for your opponent", { icon: "🤖" })
         }
 
+        // ─── AI cleared (opponent reconnected and round finished) ───
+        if (!updated.ai_player && aiActive && updated.disconnected_player === null) {
+            setAiActive(false)
+            // Restore original opponent name
+            setOpponentName(prev => prev.replace(" (AI)", ""))
+            toast.success("Opponent is back in control! 🎮")
+        }
+
+        // ─── Opponent joined (waiting → active) — fire toast ONCE ───
         if (updated.status === "active" && updated.player_b && updated.mode === "friend") {
-            if (!opponentName) {
+            if (!opponentName || opponentName === "AI 🤖") {
                 const otherId = amA ? updated.player_b : updated.player_a
                 if (otherId) fetchOpponentName(otherId)
             }
@@ -221,6 +309,9 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
             }
         }
 
+        // ─── DEFERRED SCORE UPDATE ───
+        // Only update scores if we've already revealed this round.
+        // New rounds go through countdown → reveal → score update.
         const resolvedRound = updated.current_round - 1
         if (resolvedRound <= lastRoundRef.current) {
             const myScore = amA ? updated.score_a : updated.score_b
@@ -229,14 +320,20 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
             setOpponentScore(oppScore)
         }
 
+        // ─── Match completed — set result (scores come after reveal) ───
         if (updated.status === "completed") {
             if (updated.winner_id === profile.id) setMatchResult("won")
             else setMatchResult("lost")
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [profile.id, opponentName])
+    }, [profile.id, opponentName, aiActive])
 
-    // ─── Recover active match on mount ───
+
+    // ═══════════════════════════════════════════════════════════════
+    // GAME STATE RECOVERY ON MOUNT
+    // Handles both fresh load AND reconnection after disconnect.
+    // ═══════════════════════════════════════════════════════════════
+
     useEffect(() => {
         let cancelled = false
         const recover = async () => {
@@ -278,7 +375,21 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
                         const otherId = m.player_a === profile.id ? m.player_b : m.player_a
                         if (otherId) fetchOpponentName(otherId)
                     }
-                    toast("Game restored from server", { icon: "🔄" })
+
+                    // ─── RECONNECTION: If I was the disconnected player, reclaim control ───
+                    if (m.disconnected_player === profile.id) {
+                        const reconnResult = await reconnectToMatch(m.id)
+                        if (reconnResult.success) {
+                            if (reconnResult.action === 'reconnected') {
+                                setAiActive(false)
+                                toast.success("Welcome back! You're in control again 🎮", { duration: 4000 })
+                            } else if (reconnResult.action === 'reconnected_round_in_progress') {
+                                toast("Welcome back! AI is finishing the current round…", { icon: "🤖", duration: 4000 })
+                            }
+                        }
+                    } else {
+                        toast("Game restored from server", { icon: "🔄" })
+                    }
                 }
             } catch (err) {
                 console.error("Recovery error:", err)
@@ -297,6 +408,11 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // MATCH CREATION & JOINING
+    // ═══════════════════════════════════════════════════════════════
 
     const startMatch = async (matchMode: "solo" | "friend", stake: number) => {
         setIsLoading(true)
@@ -411,6 +527,13 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         }
     }
 
+
+    // ═══════════════════════════════════════════════════════════════
+    // ROUND RESOLUTION — Deferred score/history updates
+    // Scores and round history ONLY update after the 3-second
+    // countdown completes, not when the server sends the data.
+    // ═══════════════════════════════════════════════════════════════
+
     const showRoundReveal = (myChoice: RPSMove, result: RPSActionResult) => {
         const roundNum = (result.current_round || 2) - 1
         if (roundNum <= lastRoundRef.current) return
@@ -429,6 +552,7 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         lastRoundRef.current = roundNum
         setLastResult(personalResult)
 
+        // Defer history update — store for after reveal
         setRoundHistory(prev => [...prev, {
             round: roundNum,
             playerChoice: myMove,
@@ -436,6 +560,7 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
             result: personalResult,
         }])
 
+        // Defer score update — stored in ref, applied during reveal phase
         const myScore = amA ? (result.score_a || 0) : (result.score_b || 0)
         const oppScore = amA ? (result.score_b || 0) : (result.score_a || 0)
         pendingScoresRef.current = { myScore, oppScore }
@@ -485,6 +610,7 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         }
     }
 
+    // ─── Handle realtime round resolution (when OTHER player triggered it) ───
     useEffect(() => {
         if (!match || phase === "matchEnd") return
 
@@ -529,6 +655,8 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [match?.current_round, match?.move_a, match?.move_b, match?.last_move_a, match?.last_move_b])
 
+    // ─── Countdown & Reveal timer ───
+    // Scores update ONLY when reveal phase starts (after 3s countdown).
     useEffect(() => {
         if (phase === "countdown") {
             if (countdown > 0) {
@@ -538,6 +666,7 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
                 setPhase("reveal")
             }
         } else if (phase === "reveal") {
+            // Apply pending scores NOW (after countdown completes)
             if (pendingScoresRef.current) {
                 setPlayerScore(pendingScoresRef.current.myScore)
                 setOpponentScore(pendingScoresRef.current.oppScore)
@@ -556,6 +685,7 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         }
     }, [phase, countdown, match?.status, matchResult])
 
+    // ─── Move deadline countdown (60s per round) ───
     useEffect(() => {
         if ((phase === "choosing" || phase === "waiting") && match?.move_deadline_at) {
             const deadline = new Date(match.move_deadline_at).getTime()
@@ -574,11 +704,17 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         }
     }, [phase, match?.move_deadline_at])
 
+
+    // ═══════════════════════════════════════════════════════════════
+    // RESET / CLEANUP / EXIT
+    // ═══════════════════════════════════════════════════════════════
+
     const resetToLobby = () => {
         if (channelRef.current) {
             supabase.removeChannel(channelRef.current)
             channelRef.current = null
         }
+        clearDisconnectTimers()
         setMatchId(null)
         setMatch(null)
         setMode(null)
@@ -595,17 +731,12 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         setOpponentName("")
         setIsPlayerA(true)
         setAiActive(false)
-        setDisconnectCountdown(null)
         setMoveTimeLeft(null)
         lastRoundRef.current = 0
         roundVersionRef.current = 0
         scoreHistoryRef.current = { 0: { myScore: 0, oppScore: 0 } }
         pendingScoresRef.current = null
         opponentJoinedRef.current = false
-        if (disconnectIntervalRef.current) {
-            clearInterval(disconnectIntervalRef.current)
-            disconnectIntervalRef.current = null
-        }
     }
 
     const handlePlayAgain = async () => {
@@ -624,13 +755,20 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         else router.push("/dashboard")
     }
 
+    // ─── VOLUNTARY EXIT — Stake forfeiture (irreversible) ───
+    // When a player explicitly chooses to leave an active match,
+    // their full stake is transferred to the opponent. This action
+    // is clearly communicated and cannot be undone.
     const confirmExit = async () => {
         setShowExitConfirm(false)
         if (matchId) {
             const result = await cancelRPSMatch(matchId)
             if (result.success) {
-                if (result.action === "refunded") toast("Match cancelled — escrow refunded ⭐", { icon: "↩️" })
-                else toast.error("You forfeited your escrow!")
+                if (result.action === "refunded") {
+                    toast("Match cancelled — escrow refunded ⭐", { icon: "↩️" })
+                } else {
+                    toast.error(`You forfeited ${stakeAmount} Stars! Stake transferred to opponent.`)
+                }
             }
         }
         resetToLobby()
@@ -655,6 +793,8 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         else toast.error("Failed to load match history")
     }
 
+    // ─── Switch to AI from waiting room ───
+    // Cancels the waiting friend match (refund) then starts a solo match.
     const switchToAI = async () => {
         if (!matchId) return
         setIsLoading(true)
@@ -681,6 +821,8 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         // Actions
         setJoinRoomId, setShowJoinInput, setShowHistory, setShowBalanceGate, setShowExitConfirm,
         
-        handleChoice, handleModeSelect, handleJoinRoom, handlePlayAgain, handleBack, confirmExit, handleShareRoom, handleLoadHistory, switchToAI, startMatch
+        handleChoice, handleModeSelect, handleJoinRoom, handlePlayAgain, handleBack, confirmExit, handleShareRoom, handleLoadHistory,
+        switchToAI, startMatch,
+        triggerImmediateAI,  // Exposed for "Switch to AI now" button in disconnect banner
     }
 }

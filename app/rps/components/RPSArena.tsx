@@ -1,5 +1,5 @@
 "use client"
-import { ArrowLeft, Loader2, RotateCcw, Star, Swords } from "lucide-react"
+import { ArrowLeft, AlertTriangle, Loader2, Monitor, RotateCcw, Star, Swords, Zap } from "lucide-react"
 import type { useRPSEngine } from "../hooks/useRPSEngine"
 import type { RPSMove } from "@/actions/rps"
 
@@ -8,6 +8,9 @@ const CHOICES: { id: RPSMove; emoji: string; label: string }[] = [
     { id: "paper", emoji: "✋", label: "Paper" },
     { id: "scissors", emoji: "✌️", label: "Scissors" },
 ]
+
+// 15s disconnect timer (must match DISCONNECT_TIMEOUT_SECONDS in hook)
+const DISCONNECT_TIMEOUT_SECONDS = 15
 
 export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }) {
     const choiceEmoji = (c: RPSMove | null) => CHOICES.find(x => x.id === c)?.emoji || "❓"
@@ -24,30 +27,84 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
         tie: "It's a Tie!"
     }
 
+    // ─── Shared Disconnect Banner Component ───
+    // Shows during both 'choosing' and 'waiting' phases
+    const DisconnectBanner = ({ compact = false }: { compact?: boolean }) => {
+        if (engine.disconnectCountdown === null || engine.disconnectCountdown <= 0) return null
+
+        return (
+            <div className={`w-full ${compact ? '' : 'max-w-xs'} space-y-2`}>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center space-y-3">
+                    <p className="text-amber-400 font-bold text-sm">⚠️ Opponent disconnected</p>
+                    <p className="text-white/50 text-xs">AI will take over in {engine.disconnectCountdown}s…</p>
+                    <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                        <div
+                            className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
+                            style={{ width: `${(engine.disconnectCountdown / DISCONNECT_TIMEOUT_SECONDS) * 100}%` }}
+                        />
+                    </div>
+                    {/* "Switch to AI now" — skip the wait */}
+                    <button
+                        onClick={engine.triggerImmediateAI}
+                        className="w-full mt-2 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                        <Zap size={14} />
+                        Switch to AI Now
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="min-h-screen bg-[#0a0a0f] text-white relative overflow-hidden pb-8">
-            {/* Exit Confirmation Modal */}
+
+            {/* ═══════════════════════════════════════════════════════
+                EXIT CONFIRMATION — Voluntary Exit / Stake Forfeiture
+                Two-step confirmation with clear, irreversible warning.
+                Waiting status = refund. Active status = forfeit.
+                ═══════════════════════════════════════════════════════ */}
             {engine.showExitConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-[#12121a] border border-red-500/30 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl shadow-red-500/10">
                         <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto">
-                            <ArrowLeft size={32} />
+                            <AlertTriangle size={32} />
                         </div>
-                        <div className="text-center space-y-2">
-                            <h3 className="text-2xl font-black text-white">Leave match?</h3>
-                            <p className="text-white/60 text-sm">
-                                {engine.match?.status === "waiting"
-                                    ? "Your escrow will be refunded."
-                                    : <>If you leave now, you will <span className="text-red-400 font-bold">forfeit {engine.stakeAmount} Stars</span>. Are you sure?</>
-                                }
-                            </p>
+                        <div className="text-center space-y-3">
+                            {engine.match?.status === "waiting" ? (
+                                <>
+                                    <h3 className="text-2xl font-black text-white">Cancel match?</h3>
+                                    <p className="text-white/60 text-sm">
+                                        Your <span className="text-amber-400 font-bold">{engine.stakeAmount} Stars</span> escrow will be refunded in full.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <h3 className="text-2xl font-black text-white">Forfeit match?</h3>
+                                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 space-y-1">
+                                        <p className="text-red-400 text-sm font-bold">
+                                            ⚠️ You will lose your full {engine.stakeAmount} Stars stake
+                                        </p>
+                                        <p className="text-white/40 text-xs">
+                                            Your stake will be transferred to your opponent.
+                                            This action is <span className="text-red-400 font-bold">irreversible</span>.
+                                        </p>
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={() => engine.setShowExitConfirm(false)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors">
-                                Cancel
+                            <button
+                                onClick={() => engine.setShowExitConfirm(false)}
+                                className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors"
+                            >
+                                Stay in Game
                             </button>
-                            <button onClick={engine.confirmExit} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors">
-                                {engine.match?.status === "waiting" ? "Cancel Match" : "Leave Game"}
+                            <button
+                                onClick={engine.confirmExit}
+                                className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors"
+                            >
+                                {engine.match?.status === "waiting" ? "Cancel & Refund" : "Forfeit"}
                             </button>
                         </div>
                     </div>
@@ -72,8 +129,10 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                 <div className="flex items-center gap-2">
                     {engine.mode === "friend" && (
                         <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[10px] font-bold text-emerald-400">vs {opponentLabel}</span>
+                            <div className={`w-1.5 h-1.5 rounded-full ${engine.aiActive ? 'bg-amber-500' : 'bg-emerald-500'} animate-pulse`} />
+                            <span className="text-[10px] font-bold text-emerald-400">
+                                vs {opponentLabel} {engine.aiActive && '🤖'}
+                            </span>
                         </div>
                     )}
                     <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Round {Math.min(engine.currentRound, 5)}/5</span>
@@ -81,7 +140,7 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
             </div>
 
             <main className="max-w-md mx-auto p-4 space-y-6 relative z-10">
-                {/* Scoreboard */}
+                {/* Scoreboard — scores update only AFTER 3-second countdown */}
                 {engine.phase !== "matchEnd" && (
                     <div className="flex items-center justify-center gap-4">
                         <div className="flex-1 text-center p-4 bg-white/5 border border-white/10 rounded-2xl">
@@ -181,23 +240,14 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                     </div>
                 )}
 
-                {/* Waiting for opponent */}
+                {/* ═══════════════════════════════════════════════════════
+                    WAITING — Move Locked, waiting for opponent
+                    Shows disconnect banner with "Switch to AI now" button
+                    ═══════════════════════════════════════════════════════ */}
                 {engine.phase === "waiting" && (
                     <div className="flex flex-col items-center justify-center py-16 space-y-6 animate-in fade-in duration-300">
-                        {engine.disconnectCountdown !== null && engine.disconnectCountdown > 0 && (
-                            <div className="w-full max-w-xs space-y-2">
-                                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center space-y-3">
-                                    <p className="text-amber-400 font-bold text-sm">⚠️ Opponent disconnected</p>
-                                    <p className="text-white/50 text-xs">AI will take over in {engine.disconnectCountdown}s…</p>
-                                    <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
-                                        <div
-                                            className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
-                                            style={{ width: `${(engine.disconnectCountdown / 30) * 100}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        <DisconnectBanner />
+
                         {engine.aiActive && (
                             <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-2xl p-4 text-center space-y-2 w-full max-w-xs">
                                 <p className="text-cyan-400 font-bold text-sm">🤖 AI is playing for your opponent</p>
@@ -221,14 +271,14 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                     </div>
                 )}
 
-                {/* Choice Buttons */}
+                {/* ═══════════════════════════════════════════════════════
+                    CHOOSING — Make your move
+                    Also shows disconnect banner if opponent dropped
+                    ═══════════════════════════════════════════════════════ */}
                 {engine.phase === "choosing" && !engine.matchResult && (
                     <div className="space-y-6 py-4">
-                        {engine.disconnectCountdown !== null && engine.disconnectCountdown > 0 && (
-                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-center">
-                                <p className="text-amber-400 font-bold text-xs">⚠️ Opponent disconnected — AI takes over in {engine.disconnectCountdown}s</p>
-                            </div>
-                        )}
+                        <DisconnectBanner compact />
+
                         <div className="text-center space-y-1">
                             {engine.moveTimeLeft !== null && engine.moveTimeLeft > 0 && (
                                 <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mb-2 ${
@@ -268,8 +318,8 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                     </div>
                 )}
 
-                {/* Round History (during game) */}
-                {engine.roundHistory.length > 0 && engine.phase !== "matchEnd" && (
+                {/* Round History (during game) — only shows after reveal completes */}
+                {engine.roundHistory.length > 0 && engine.phase !== "matchEnd" && engine.phase !== "countdown" && (
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
                         <p className="text-[10px] font-black text-white/30 uppercase tracking-wider">History</p>
                         {engine.roundHistory.map((r, i) => (
