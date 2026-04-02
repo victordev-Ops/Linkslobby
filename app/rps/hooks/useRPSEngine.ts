@@ -589,6 +589,9 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
 
             if (result.status === "stale_version") {
                 roundVersionRef.current = result.current_round_version || 0
+                setPhase("choosing")
+                setPlayerChoice(null)
+                toast.error("Race condition avoided! Please submit again.")
                 return
             }
 
@@ -646,6 +649,9 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
             const newOppScore = amA ? match.score_b : match.score_a
             pendingScoresRef.current = { myScore: newMyScore, oppScore: newOppScore }
             scoreHistoryRef.current[currentServerRound] = { myScore: newMyScore, oppScore: newOppScore }
+
+            // MUST update round version so subsequent moves don't get rejected as stale!
+            roundVersionRef.current = match.round_version
 
             setPhase("countdown")
             setCountdown(3)
