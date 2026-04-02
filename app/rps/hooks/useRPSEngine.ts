@@ -616,16 +616,14 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
 
         const currentServerRound = match.current_round - 1
         if (
-            phase === "waiting" &&
-            playerChoice &&
-            match.move_a === null &&
-            match.move_b === null &&
             currentServerRound > lastRoundRef.current &&
             match.last_move_a && match.last_move_b
         ) {
             const amA = isPlayerA
-            const myMove = playerChoice
+            const myMove = (amA ? match.last_move_a : match.last_move_b) as RPSMove
             const oppMove = (amA ? match.last_move_b : match.last_move_a) as RPSMove
+
+            setPlayerChoice(myMove)
 
             setOpponentChoice(oppMove)
 
