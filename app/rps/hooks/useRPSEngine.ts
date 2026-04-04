@@ -322,8 +322,21 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
 
         // ─── Match completed — set result (scores come after reveal) ───
         if (updated.status === "completed") {
-            if (updated.winner_id === profile.id) setMatchResult("won")
-            else setMatchResult("lost")
+            const hasWon = updated.winner_id === profile.id
+            setMatchResult(hasWon ? "won" : "lost")
+
+            // Detect abrupt forfeit (nobody reached the win target)
+            const targetWins = Math.ceil((updated.best_of || 5) / 2)
+            const myScore = amA ? updated.score_a : updated.score_b
+            const oppScore = amA ? updated.score_b : updated.score_a
+            
+            if (hasWon && myScore < targetWins) {
+                toast.success("Opponent forfeited! You win the full prize! 🏆", { duration: 5000 })
+                setPhase("matchEnd")
+            } else if (!hasWon && oppScore < targetWins) {
+                // If we lost and they didn't hit the target score, it was a forfeit on our end
+                setPhase("matchEnd")
+            }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profile.id, opponentName, aiActive])
