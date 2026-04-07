@@ -257,27 +257,25 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
           m.content === lobby.current_question
         );
 
-        // Check if there's already an answer for this question
         const hasAnswer = questionMsg && messages.some(m =>
           m.message_type === 'answer' &&
           m.question_ref === questionMsg.id
         );
 
-        // Only mark as answer if not already answered
-        if (!hasAnswer) {
+        // Target MUST explicitly reply (swipe) the question card to answer
+        if (!hasAnswer && questionMsg && replyingTo?.id === questionMsg.id) {
           messageType = 'answer';
-          questionRef = questionMsg?.id;
+          questionRef = questionMsg.id;
         }
       }
     }
 
-    // Add reply context to message if replying
+    // Add reply context to message if replying AND it's not being marked as an official game answer
     let finalContent = content;
-    if (replyingTo) {
+    if (replyingTo && messageType !== 'answer') {
       const replyUsername = replyingTo.profiles?.username || 'Someone';
 
       // If the message being replied to is already a reply, strip the grandparent context
-      // This ensures we only show the immediate parent message in the reply preview
       let contentToPreview = replyingTo.content;
       if (contentToPreview.startsWith('@') && contentToPreview.includes('\n\n')) {
         contentToPreview = contentToPreview.split('\n\n').slice(1).join('\n\n');
@@ -399,7 +397,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         return "Waiting for question...";
       }
       if (lobby?.current_question && isTarget) {
-        // Check if target already answered the LATEST question
         const currentQuestionMsg = [...messages].reverse().find(m =>
           (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
@@ -409,10 +406,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
           m.question_ref === currentQuestionMsg.id
         );
         if (hasAnswer) return "Chat with everyone...";
-        return "Type your answer...";
+        
+        if (replyingTo?.id === currentQuestionMsg?.id) {
+          return "Type your official answer...";
+        }
+        return "Swipe the question card to answer... or type to chat";
       }
       if (lobby?.current_question && !isTarget) {
-        // Check if answer has been given for the LATEST question
         const currentQuestionMsg = [...messages].reverse().find(m =>
           (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question

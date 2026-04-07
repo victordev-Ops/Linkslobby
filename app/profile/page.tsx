@@ -2,7 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import ProfileClient from "./ProfileClient"
 import { getProfile } from "@/actions/profile"
-import { getFriends, getPendingRequests, getSuggestedFriends } from "@/actions/friends"
+import { getFriends, getPendingRequests, getSuggestedFriends, getSentRequests } from "@/actions/friends"
 
 export const dynamic = 'force-dynamic'
 
@@ -14,11 +14,12 @@ export default async function ProfilePage() {
         redirect("/login")
     }
 
-    const [profile, friends, pendingRequests, suggestedFriends] = await Promise.all([
+    const [profile, friends, pendingRequests, suggestedFriends, sentRequests] = await Promise.all([
         getProfile(),
         getFriends(),
         getPendingRequests(),
         getSuggestedFriends(),
+        getSentRequests(),
     ])
 
     if (!profile) {
@@ -35,11 +36,13 @@ export default async function ProfilePage() {
                 email: profile.email || user.email, // Fallback to auth email
                 avatar_url: profile.avatar_url,
                 dms_disabled: profile.dms_disabled || false,
-                is_pro: profile.is_pro || false
+                is_pro: profile.is_pro || false,
+                bio: profile.bio || ''
             }}
             initialFriends={friends}
             initialPendingRequests={pendingRequests}
             initialSuggestedFriends={suggestedFriends}
+            initialSentRequests={sentRequests}
         />
     )
 }

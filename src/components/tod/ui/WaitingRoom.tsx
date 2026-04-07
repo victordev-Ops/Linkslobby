@@ -76,7 +76,8 @@ export const WaitingRoom = ({ isHost, playersCount, onStartGame }: WaitingRoomPr
           <div className="space-y-2">
             {[
               'Players take turns being asked truth or dare',
-              'Choose your challenge and answer honestly',
+              'Swipe the question card to reply with your answer',
+              'The answer will be directly linked to the question',
               'Have fun and keep it friendly! 🎉'
             ].map((step, idx) => (
               <div key={idx} className="flex items-start gap-3 text-sm">

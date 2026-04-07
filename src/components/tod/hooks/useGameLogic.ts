@@ -304,6 +304,9 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
     // Fire and forget - doesn't block game flow
     penalizeSkippedRound(lobbyId).catch(console.error);
 
+    // OPTIMISTIC UPDATE: Clear state immediately so UI doesn't get stuck waiting for realtime updates
+    setLobby(prev => prev ? { ...prev, selected_mode: undefined, current_question: undefined } : prev);
+
     // 1. First trigger the turn logic RPC
     const { error: rpcError } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
     if (rpcError) {

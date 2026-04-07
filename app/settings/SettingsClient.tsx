@@ -406,28 +406,41 @@ export default function SettingsClient({
                 </div>
 
                 {/* Watermark Toggle */}
-                <div className="mb-8 p-4 bg-orange-50/50 dark:bg-orange-500/5 rounded-2xl border border-orange-100 dark:border-orange-500/10 flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-sm text-gray-900 dark:text-white">Show Watermark</p>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Display "say-app.com" on shared stories</p>
+                <div className="mb-8 p-4 bg-orange-50/50 dark:bg-orange-500/5 rounded-2xl border border-orange-100 dark:border-orange-500/10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-sm text-gray-900 dark:text-white">Show Watermark</p>
+                        {!isPro && (
+                          <span className="text-[9px] font-black text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider">Pro</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">Display "say-app.com" on shared stories</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!isPro) return
+                        const next = !showWatermark
+                        setShowWatermark(next)
+                        setIsUpdatingWatermark(true)
+                        const res = await updateWatermarkSetting(next)
+                        if (!res.success) {
+                          toast.error("Failed to update setting")
+                          setShowWatermark(!next)
+                        }
+                        setIsUpdatingWatermark(false)
+                      }}
+                      disabled={isUpdatingWatermark || !isPro}
+                      className={`w-12 h-6 rounded-full transition-all relative ${!isPro ? 'bg-gray-200 dark:bg-white/10 opacity-50 cursor-not-allowed' : showWatermark ? 'bg-orange-500' : 'bg-gray-200 dark:bg-white/10'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${showWatermark ? 'left-7' : 'left-1'}`} />
+                    </button>
                   </div>
-                  <button
-                    onClick={async () => {
-                      const next = !showWatermark
-                      setShowWatermark(next)
-                      setIsUpdatingWatermark(true)
-                      const res = await updateWatermarkSetting(next)
-                      if (!res.success) {
-                        toast.error("Failed to update setting")
-                        setShowWatermark(!next)
-                      }
-                      setIsUpdatingWatermark(false)
-                    }}
-                    disabled={isUpdatingWatermark}
-                    className={`w-12 h-6 rounded-full transition-all relative ${showWatermark ? 'bg-orange-500' : 'bg-gray-200 dark:bg-white/10'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${showWatermark ? 'left-7' : 'left-1'}`} />
-                  </button>
+                  {!isPro && (
+                    <Link href="/upgrade" className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-blue-500 hover:text-blue-600 transition">
+                      <BadgeCheck size={13} /> Upgrade to Pro to toggle watermark off
+                    </Link>
+                  )}
                 </div>
 
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
