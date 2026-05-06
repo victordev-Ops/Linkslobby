@@ -56,26 +56,7 @@ const serwist = new Serwist({
         if (url.searchParams.has("_rsc") || request.headers.get("RSC") === "1") return false;
         return true;
       },
-      handler: async (args) => {
-        // Use NetworkOnly for notifications to avoid stale cache issues
-        if (args.url.pathname.startsWith("/notifications")) {
-          return new NetworkOnly().handle(args);
-        }
-        // Use StaleWhileRevalidate for other pages
-        return new StaleWhileRevalidate({
-          cacheName: "pages-cache-v1",
-          plugins: [
-            {
-              cacheWillUpdate: async ({ response }) => {
-                if (!response || response.status !== 200) return null;
-                const contentType = response.headers.get("content-type");
-                if (contentType?.includes("text/x-component")) return null;
-                return response;
-              },
-            },
-          ],
-        }).handle(args);
-      },
+      handler: new NetworkOnly(),
     },
     ...defaultCache,
   ],

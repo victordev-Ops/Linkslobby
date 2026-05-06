@@ -86,15 +86,20 @@ export async function unblockUser(targetId: string) {
 
 /** Check if senderId is blocked by recipientId - Uses admin client to bypass RLS */
 export async function isUserBlocked(recipientId: string, senderId: string): Promise<boolean> {
-    const adminSupabase = createSupabaseAdminClient()
-    const { data } = await adminSupabase
-        .from('blocked_users')
-        .select('id')
-        .eq('blocker_id', recipientId)
-        .eq('blocked_id', senderId)
-        .maybeSingle()
+    try {
+        const adminSupabase = createSupabaseAdminClient()
+        const { data } = await adminSupabase
+            .from('blocked_users')
+            .select('id')
+            .eq('blocker_id', recipientId)
+            .eq('blocked_id', senderId)
+            .maybeSingle()
 
-    return !!data
+        return !!data
+    } catch (error) {
+        console.warn('[BlockedUsers] Admin check failed. Missing SUPABASE_SERVICE_ROLE_KEY?', error)
+        return false // Fallback: allow if we can't check (prevent app crash)
+    }
 }
 
 // ─── Anonymous Sender Blocking (IP + UA) ───
@@ -197,13 +202,18 @@ export async function unblockAnonymous(id: string) {
 export async function isAnonymousBlocked(blockerId: string, ip: string): Promise<boolean> {
     if (!ip || ip === 'unknown') return false
 
-    const adminSupabase = createSupabaseAdminClient()
-    const { data } = await adminSupabase
-        .from('blocked_anonymous')
-        .select('id')
-        .eq('blocker_id', blockerId)
-        .eq('ip_address', ip)
-        .maybeSingle()
+    try {
+        const adminSupabase = createSupabaseAdminClient()
+        const { data } = await adminSupabase
+            .from('blocked_anonymous')
+            .select('id')
+            .eq('blocker_id', blockerId)
+            .eq('ip_address', ip)
+            .maybeSingle()
 
-    return !!data
+        return !!data
+    } catch (error) {
+        console.warn('[BlockedUsers] Anonymous block check failed. Missing SUPABASE_SERVICE_ROLE_KEY?', error)
+        return false // Fallback: allow if we can't check
+    }
 }
