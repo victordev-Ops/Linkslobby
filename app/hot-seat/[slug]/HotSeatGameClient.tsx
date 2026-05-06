@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Flame, Send, Loader2, Clock, Play, AlertCircle, MessageCircle, X, Users, Sparkles, MoreVertical, Share2, User, MessageSquare, Ban } from "lucide-react"
+import { ArrowLeft, Flame, Send, Loader2, Clock, Play, AlertCircle, MessageCircle, X, Users, Sparkles, MoreVertical, Share2, User, MessageSquare, Ban, UserPlus, Check, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { penalizeHotSeatTimeout } from "@/actions/hot-seat-xp"
 import { banParticipant } from "@/actions/hot-seat"
-import { sendFriendRequest } from "@/actions/friends"
+import { sendFriendRequest, getFriends, sendGameInvite } from "@/actions/friends"
+import type { FriendshipWithProfile } from "@/actions/friends"
 import { useScrollLock } from "@/hooks/useScrollLock"
 import VerifiedBadge from "@/components/VerifiedBadge"
 
@@ -44,13 +45,20 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     const [isSending, setIsSending] = useState(false)
     const [menuOpen, setMenuOpen] = useState<string | null>(null)
 
+    // Friends Invite State
+    const [showInviteFriends, setShowInviteFriends] = useState(false)
+    const [friendsList, setFriendsList] = useState<FriendshipWithProfile[]>([])
+    const [invitedFriendIds, setInvitedFriendIds] = useState<Set<string>>(new Set())
+    const [isLoadingFriends, setIsLoadingFriends] = useState(false)
+    const [invitingId, setInvitingId] = useState<string | null>(null)
+
     // Host State
     const [answer, setAnswer] = useState("")
     const [timer, setTimer] = useState(30)
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const [isAnswering, setIsAnswering] = useState(false)
 
-    useScrollLock(showParticipants)
+    useScrollLock(showParticipants || showInviteFriends)
 
     // Initial Data Fetch
     useEffect(() => {
@@ -253,6 +261,34 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
         }
     }
 
+    // Load friends list
+    useEffect(() => {
+        if (isHost) {
+            setIsLoadingFriends(true)
+            getFriends()
+                .then(setFriendsList)
+                .catch(console.error)
+                .finally(() => setIsLoadingFriends(false))
+        }
+    }, [isHost])
+
+    const handleInviteFriend = async (friendUserId: string) => {
+        if (invitedFriendIds.has(friendUserId)) return
+        setInvitingId(friendUserId)
+        try {
+            const gameUrl = window.location.href
+            const result = await sendGameInvite(friendUserId, 'hot_seat', gameUrl, session.name)
+            if (result.success) {
+                setInvitedFriendIds(prev => new Set(prev).add(friendUserId))
+                toast.success('Invite sent! 🔥')
+            } else {
+                toast.error(result.error || 'Failed to send invite')
+            }
+        } finally {
+            setInvitingId(null)
+        }
+    }
+
     // Participant Actions
     const sendQuestion = async () => {
         if (!newQuestion.trim()) return
@@ -304,10 +340,19 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                     </p>
                 </div>
                 <div className="flex items-center gap-1">
+                    {isHost && (
+                        <button
+                            onClick={() => setShowInviteFriends(true)}
+                            className="p-2 rounded-full hover:bg-white/5 text-white/60 hover:text-white transition"
+                            title="Invite Friends"
+                        >
+                            <UserPlus size={18} />
+                        </button>
+                    )}
                     <button
                         onClick={shareLink}
                         className="p-2 rounded-full hover:bg-white/5 text-white/60 hover:text-white transition"
-                        title="Invite Friends"
+                        title="Share Link"
                     >
                         <Share2 size={18} />
                     </button>
@@ -676,6 +721,109 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                             </AnimatePresence>
                                         </div>
                                     ))
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* Invite Friends Drawer */}
+            <AnimatePresence>
+                {showInviteFriends && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowInviteFriends(false)}
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40"
+                        />
+                        <motion.div
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed left-0 right-0 bottom-0 max-h-[70vh] bg-[#13131f] border-t border-white/10 z-50 rounded-t-3xl flex flex-col safe-area-bottom"
+                        >
+                            {/* Handle bar */}
+                            <div className="flex justify-center pt-3 pb-1">
+                                <div className="w-10 h-1 bg-white/20 rounded-full" />
+                            </div>
+
+                            <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
+                                <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                                    <UserPlus size={18} className="text-amber-500" />
+                                    Invite Friends
+                                </h3>
+                                <button
+                                    onClick={() => setShowInviteFriends(false)}
+                                    className="p-2 rounded-full hover:bg-white/5 transition"
+                                >
+                                    <X size={20} className="text-white/60" />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto px-4 py-3">
+                                {isLoadingFriends ? (
+                                    <div className="py-12 flex flex-col items-center gap-2">
+                                        <Loader2 size={24} className="animate-spin text-white/30" />
+                                        <p className="text-xs text-white/40">Loading friends...</p>
+                                    </div>
+                                ) : friendsList.length === 0 ? (
+                                    <div className="py-12 text-center">
+                                        <Users size={32} className="text-white/10 mx-auto mb-3" />
+                                        <p className="text-sm text-white/40 font-medium">No friends yet</p>
+                                        <p className="text-xs text-white/25 mt-1">Add friends to invite them!</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {friendsList.map((f) => {
+                                            const isInvited = invitedFriendIds.has(f.profile.id)
+                                            const isInvitingThis = invitingId === f.profile.id
+                                            return (
+                                                <div key={f.id} className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                                                            {f.profile.avatar_url ? (
+                                                                <img src={f.profile.avatar_url} alt={f.profile.username} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center font-bold text-white text-sm">
+                                                                    {f.profile.username?.[0]?.toUpperCase() || '?'}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-sm text-white font-medium truncate">
+                                                            {f.profile.username}
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleInviteFriend(f.profile.id)}
+                                                        disabled={isInvited || isInvitingThis}
+                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 flex-shrink-0 ${
+                                                            isInvited
+                                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                                                : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/30'
+                                                        } disabled:opacity-70 disabled:cursor-not-allowed`}
+                                                    >
+                                                        {isInvitingThis ? (
+                                                            <Loader2 size={12} className="animate-spin" />
+                                                        ) : isInvited ? (
+                                                            <>
+                                                                <Check size={12} />
+                                                                Sent
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <UserPlus size={12} />
+                                                                Invite
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
                                 )}
                             </div>
                         </motion.div>

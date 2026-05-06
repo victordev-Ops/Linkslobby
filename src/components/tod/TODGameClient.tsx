@@ -1,7 +1,7 @@
 // src/components/tod/TODGameClient.tsx
 "use client";
 
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, Users, Share2, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2, LayoutGrid, ChevronLeft, LogOut, MoreVertical } from "lucide-react";
@@ -16,6 +16,8 @@ import { NextRoundButton } from "./ui/NextRoundButton";
 import { GameStatus } from "./ui/GameStatus";
 import { motion, AnimatePresence } from "framer-motion";
 import { compressImage } from "@/lib/image-utils";
+import { getFriends, sendGameInvite } from "@/actions/friends";
+import type { FriendshipWithProfile } from "@/actions/friends";
 
 interface TODGameClientProps {
   lobbyId: string;
@@ -43,6 +45,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [replyingTo, setReplyingTo] = useState<typeof messages[0] | null>(null);
   const [hideFinishSummary, setHideFinishSummary] = useState(false);
+  const [friendsList, setFriendsList] = useState<FriendshipWithProfile[]>([]);
+  const [invitedFriendIds, setInvitedFriendIds] = useState<Set<string>>(new Set());
+  const [isLoadingFriends, setIsLoadingFriends] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const previousMessageCount = useRef(0);
@@ -166,6 +171,29 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       setHideFinishSummary(false);
     }
   }, [lobby?.status]);
+
+  // Fetch friends for the host in waiting state
+  useEffect(() => {
+    if (isHost && lobby?.status === 'waiting') {
+      setIsLoadingFriends(true);
+      getFriends()
+        .then(setFriendsList)
+        .catch(console.error)
+        .finally(() => setIsLoadingFriends(false));
+    }
+  }, [isHost, lobby?.status]);
+
+  const handleInviteFriend = useCallback(async (friendUserId: string) => {
+    if (!lobby) return;
+    const gameUrl = window.location.href;
+    const result = await sendGameInvite(friendUserId, 'tod', gameUrl, lobby.name);
+    if (result.success) {
+      setInvitedFriendIds(prev => new Set(prev).add(friendUserId));
+      toast.success('Invite sent! 🎉');
+    } else {
+      toast.error(result.error || 'Failed to send invite');
+    }
+  }, [lobby]);
 
   // Handle banned status - redirect immediately
   useEffect(() => {
@@ -364,8 +392,24 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     if (lobby?.status === 'active') {
       // Asker can ask question after mode is selected
       if (lobby?.selected_mode && !lobby?.current_question && isAsker) return true;
-      // Target can answer question
-      if (lobby?.current_question && isTarget) return true;
+
+      // Target: can only send if they are replying to the question card (swipe) or after answering
+      if (lobby?.current_question && isTarget) {
+        const currentQuestionMsg = [...messages].reverse().find(m =>
+          (m.message_type === 'truth' || m.message_type === 'dare') &&
+          m.content === lobby.current_question
+        );
+        const hasAnswer = currentQuestionMsg && messages.some(m =>
+          m.message_type === 'answer' &&
+          m.question_ref === currentQuestionMsg.id
+        );
+        // If already answered, everyone can chat
+        if (hasAnswer) return true;
+        // Target must swipe-reply to the question card — only allow if replying to that exact card
+        if (replyingTo?.id === currentQuestionMsg?.id) return true;
+        // Block regular typing — force the swipe
+        return false;
+      }
 
       // After target answers, everyone can chat until next round
       if (lobby?.current_question) {
@@ -410,7 +454,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         if (replyingTo?.id === currentQuestionMsg?.id) {
           return "Type your official answer...";
         }
-        return "Swipe the question card to answer... or type to chat";
+        return "👈 Swipe the question card to answer!";
       }
       if (lobby?.current_question && !isTarget) {
         const currentQuestionMsg = [...messages].reverse().find(m =>
@@ -673,20 +717,33 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   isHost={isHost}
                   playersCount={joinedParticipants.length}
                   onStartGame={handleStartGame}
+                  friends={friendsList}
+                  invitedFriendIds={invitedFriendIds}
+                  onInviteFriend={isHost ? handleInviteFriend : undefined}
+                  isLoadingFriends={isLoadingFriends}
                 />
               )}
 
               {/* Messages */}
-              {messagesWithAnswers.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  isOwn={msg.user_id === profile?.id}
-                  answerMessage={msg.answerMessage}
-                  onReply={handleReply}
-                  replyingTo={replyingTo}
-                />
-              ))}
+              {messagesWithAnswers.map((msg) => {
+                const isCurrentQuestionMsg = lobby.status === 'active' &&
+                                             lobby.current_question === msg.content &&
+                                             (msg.message_type === 'truth' || msg.message_type === 'dare');
+                const hasAnswer = isCurrentQuestionMsg && messages.some(m => m.message_type === 'answer' && m.question_ref === msg.id);
+                const isActiveQuestion = isCurrentQuestionMsg && !hasAnswer && isTarget;
+
+                return (
+                  <MessageBubble
+                    key={msg.id}
+                    message={msg}
+                    isOwn={msg.user_id === profile?.id}
+                    answerMessage={msg.answerMessage}
+                    onReply={handleReply}
+                    replyingTo={replyingTo}
+                    isActiveQuestion={isActiveQuestion}
+                  />
+                );
+              })}
 
               {/* Next Round Button - efficiently checks for answer via question_ref */}
               {lobby.status === 'active' && lobby.current_question && isHost && (

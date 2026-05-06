@@ -22,6 +22,7 @@ interface MessageBubbleProps {
   onMessageClick?: (messageId: string) => void;
   onReply?: (message: Message) => void;
   replyingTo?: Message | null;
+  isActiveQuestion?: boolean;
 }
 
 const parseReply = (content: string) => {
@@ -51,7 +52,7 @@ const ReplyPreview = ({ username, content, isOwn }: { username: string, content:
   </div>
 );
 
-export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, onReply, replyingTo }: MessageBubbleProps) => {
+export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, onReply, replyingTo, isActiveQuestion }: MessageBubbleProps) => {
   const [imageError, setImageError] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [swipeDistance, setSwipeDistance] = useState(0);
@@ -168,8 +169,22 @@ export const MessageBubble = ({ message, isOwn, answerMessage, onMessageClick, o
         )}
 
         {/* Question Card */}
-        <div className={`max-w-lg ${isOwn ? 'ml-auto' : 'mr-auto'} w-full`}>
-          <div className={`bg-gradient-to-br ${modeGradient} p-0.5 rounded-2xl shadow-lg`}>
+        <div className={`max-w-lg ${isOwn ? 'ml-auto' : 'mr-auto'} w-full relative`}>
+          {isActiveQuestion && (
+            <div className="absolute -inset-1 bg-gradient-to-r from-red-500 to-orange-500 rounded-3xl blur opacity-30 animate-pulse" />
+          )}
+          <div className={`bg-gradient-to-br ${modeGradient} p-0.5 rounded-2xl shadow-lg relative ${isActiveQuestion ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-slate-950 animate-pulse-subtle' : ''}`}>
+            
+            {/* Swipe Guide for Target */}
+            {isActiveQuestion && (
+               <div className={`absolute top-1/2 -translate-y-1/2 ${isOwn ? '-left-8' : '-right-8'} z-20 flex flex-col items-center animate-bounce-horizontal`}>
+                 <span className="text-3xl">👉</span>
+                 <span className="text-[10px] font-bold text-white whitespace-nowrap bg-red-500/80 px-2 py-0.5 rounded-full mt-1">
+                   Swipe to reply!
+                 </span>
+               </div>
+            )}
+
             <div className="bg-slate-900 rounded-2xl p-4">
               {/* Header */}
               <div className="flex items-center justify-between mb-3">

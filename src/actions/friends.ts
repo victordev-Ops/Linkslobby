@@ -357,3 +357,42 @@ export async function getSuggestedFriends(limit = 10): Promise<FriendProfile[]> 
 
     return suggestions || []
 }
+
+// ─── Send a game invite notification to a friend ───
+export async function sendGameInvite(
+    friendUserId: string,
+    gameType: 'tod' | 'hot_seat',
+    gameUrl: string,
+    gameName?: string
+): Promise<ActionResult> {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Not authenticated' }
+
+    try {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('id', user.id)
+            .single()
+
+        const username = profile?.username || 'Someone'
+
+        const gameLabel = gameType === 'tod' ? 'Truth or Dare' : 'Hot Seat'
+        const emoji = gameType === 'tod' ? '🎲' : '🔥'
+        const label = gameName ? `"${gameName}"` : gameLabel
+
+        await supabase.from('xp_transactions').insert({
+            user_id: friendUserId,
+            amount: 0,
+            type: 'earn',
+            reason: `${emoji} @${username} invited you to play ${label}! Join here: ${gameUrl}`,
+            is_read: false,
+        })
+
+        return { success: true }
+    } catch (err) {
+        console.error('Game invite error:', err)
+        return { success: false, error: 'Failed to send invite' }
+    }
+}

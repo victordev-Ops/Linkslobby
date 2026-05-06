@@ -32,11 +32,21 @@ module.exports = {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+        'bounce-horizontal': {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '50%': { transform: 'translateX(-8px)' },
+        },
+        'pulse-subtle': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(239,68,68,0.4)' },
+          '50%': { boxShadow: '0 0 0 6px rgba(239,68,68,0)' },
+        },
       },
       animation: {
         shake: 'shake 0.6s ease-in-out',
         'fade-in-up': 'fade-in-up 0.5s ease-out forwards',
         'fade-in': 'fade-in 0.3s ease-out forwards',
+        'bounce-horizontal': 'bounce-horizontal 1.2s ease-in-out infinite',
+        'pulse-subtle': 'pulse-subtle 2s ease-in-out infinite',
       },
     },
   },
