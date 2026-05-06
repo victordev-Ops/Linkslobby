@@ -13,6 +13,15 @@ export async function middleware(request: NextRequest) {
     request: { headers: request.headers },
   })
 
+  // Helper to ensure cookies are carried over during redirects
+  const redirectWithCookies = (url: string | URL) => {
+    const redirectResponse = NextResponse.redirect(url)
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value, cookie)
+    })
+    return redirectResponse
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -48,7 +57,7 @@ export async function middleware(request: NextRequest) {
   if (!user && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(loginUrl)
+    return redirectWithCookies(loginUrl)
   }
 
   // 4. For authenticated users — fetch profile ONCE and reuse
@@ -76,14 +85,14 @@ export async function middleware(request: NextRequest) {
           const setupUrl = new URL('/auth/setup', request.url)
           const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
           if (nextParam) setupUrl.searchParams.set('next', nextParam)
-          return NextResponse.redirect(setupUrl)
+          return redirectWithCookies(setupUrl)
         }
 
         const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
         if (nextParam) {
-          return NextResponse.redirect(new URL(nextParam, request.url))
+          return redirectWithCookies(new URL(nextParam, request.url))
         }
-        return NextResponse.redirect(new URL('/dashboard', request.url))
+        return redirectWithCookies(new URL('/dashboard', request.url))
       }
 
       // Authenticated user on protected route — check profile completion
@@ -92,7 +101,7 @@ export async function middleware(request: NextRequest) {
         const nextParam = request.nextUrl.searchParams.get('next') || request.nextUrl.searchParams.get('returnTo')
         if (nextParam) setupUrl.searchParams.set('next', nextParam)
         else setupUrl.searchParams.set('next', pathname)
-        return NextResponse.redirect(setupUrl)
+        return redirectWithCookies(setupUrl)
       }
     }
   }
