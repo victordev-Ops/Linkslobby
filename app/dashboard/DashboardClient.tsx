@@ -196,10 +196,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 {profile.username?.charAt(0).toUpperCase() || '?'}
               </div>
             )}
-            /*<h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
-              Hi, {profile.username?.split(' ')[0]} 
-              {profile.is_pro && <VerifiedBadge size={22} />}
-            </h1>*/
+            
             <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
   <span className="inline-flex items-center gap-1.5">
     <span>Hi, {profile.username?.split(' ')[0]}</span>
