@@ -93,7 +93,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
       setIsDykmModalOpen(false)
     } catch (err) {
       toast.error("Failed to save quiz")
-      console.error(err)
+      //console.error(err)
     } finally {
       setIsSavingDykm(false)
     }
@@ -173,7 +173,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-lg italic">S</span>
+              <span className="text-white font-black text-lg italic">SAY</span>
             </div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Say</h2>
           </div>
@@ -196,10 +196,16 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 {profile.username?.charAt(0).toUpperCase() || '?'}
               </div>
             )}
-            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
+            /*<h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
               Hi, {profile.username?.split(' ')[0]} 
               {profile.is_pro && <VerifiedBadge size={22} />}
-            </h1>
+            </h1>*/
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+  <span className="inline-flex items-center gap-1.5">
+    <span>Hi, {profile.username?.split(' ')[0]}</span>
+    {profile.is_pro && <VerifiedBadge size={22} />}
+  </span>
+</h1>
           </div>
           {!profile.is_pro && (
             <Link href="/upgrade" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-600 transition">
