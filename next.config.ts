@@ -4,13 +4,13 @@ import withSerwistInit from "@serwist/next";
 const withSerwist = withSerwistInit({
   swSrc: "src/sw.ts",
   swDest: "public/sw.js",
-  disable: process.env.NODE_ENV === "development",
+  disable: process.env.NODE_ENV !== "production",
 });
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Next.js 16 defaults work perfectly now
-  turbopack: {},
+  //turbopack: {},
 
   // Ensure service worker can properly intercept requests
   async headers() {
