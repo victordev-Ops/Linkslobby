@@ -1,113 +1,143 @@
-// app/confess/[slug]/page.tsx
-import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { headers } from 'next/headers'
-import { notFound } from 'next/navigation'
-import ConfessionForm from './ConfessionForm'
+// app/confess/[slug]/ConfessionForm.tsx
+'use client'
 
-export const dynamic = 'force-dynamic'
+import { useState, useTransition, useRef } from 'react'
+import Link from 'next/link'
+import { Lock } from 'lucide-react'
 
-interface PageProps {
-  params: Promise<{ slug?: string }>
+type ActionResponse = { error?: string; success?: boolean }
+
+interface ConfessionFormProps {
+  profileId: string
+  username?: string
+  isVerified?: boolean
+  isBlocked?: boolean
+  action: (profileId: string, formData: FormData) => Promise<ActionResponse>
 }
 
-/**
- * SERVER ACTION: Delivers the message
- */
-export async function sendConfessionAction(profileId: string, formData: FormData) {
-  'use server'
+export default function ConfessionForm({ profileId, username, isVerified = false, action, isBlocked = false }: ConfessionFormProps) {
+  const [isPending, startTransition] = useTransition()
+  const [feedback, setFeedback] = useState<ActionResponse | null>(null)
+  const [charCount, setCharCount] = useState(0)
+  const formRef = useRef<HTMLFormElement>(null)
 
-  const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  const message = (formData.get('message') as string)?.trim()
+  const handleSubmit = (formData: FormData) => {
+    setFeedback(null) // Reset errors
 
-  if (!message || message.length < 1 || message.length > 1000) {
-    return { error: 'Message must be between 1 and 1000 characters.' }
-  }
+    startTransition(async () => {
+      const result = await action(profileId, formData)
 
-  const headersList = await headers()
-  const ua = headersList.get('user-agent') || 'unknown'
-  const lang = headersList.get('accept-language') || 'unknown'
-  const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
-  const referrer = headersList.get('referer') || 'direct'
-
-  // Block Enforcement (System Level)
-  const { isAnonymousBlocked, isUserBlocked } = await import('@/actions/blocked-users')
-
-  // 1. IP Block check
-  const ipBlocked = await isAnonymousBlocked(profileId, ip)
-  if (ipBlocked) {
-    return { error: 'Unable to deliver your message.' }
-  }
-
-  // 2. User ID Block check (if authenticated)
-  if (user) {
-    const userBlocked = await isUserBlocked(profileId, user.id)
-    if (userBlocked) {
-      return { error: 'Unable to deliver your message.' }
-    }
-  }
-
-  const metadata = JSON.stringify({ ua, lang, ip, t: Date.now(), ref: referrer })
-  const messageWithMeta = `${message}\n\n[META:${metadata}]`
-
-  const { error: insertError } = await supabase
-    .from('confessions')
-    .insert({
-      profile_id: profileId,
-      sender_id: user?.id || null,
-      message: messageWithMeta,
-      message_type: 'confession'
+      if (result.success) {
+        setFeedback({ success: true })
+        formRef.current?.reset()
+        setCharCount(0)
+      } else {
+        setFeedback({ error: result.error })
+      }
     })
-
-  if (insertError) {
-    console.error('Submission error:', insertError)
-    return { error: 'Failed to deliver. Please try again.' }
   }
 
-  return { success: true }
-}
+  // If success, show success view with a "Send Another" button and CTA
+  if (feedback?.success) {
+    return (
+      <div className="text-center animate-fade-in-up">
+        <div className="mb-4 text-5xl">✨</div>
+        <h3 className="text-xl font-medium text-white mb-2">Sent Successfully!</h3>
+        <p className="text-neutral-400 mb-8">Your secret is safe with us.</p>
 
-export default async function ConfessPage({ params }: PageProps) {
-  const { slug: rawSlug } = await params
-  const slug = rawSlug?.trim().toLowerCase()
+        <div className="space-y-3">
+          <button
+            onClick={() => setFeedback(null)}
+            className="w-full py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-all duration-200 text-sm font-medium"
+          >
+            Send Another
+          </button>
 
-  if (!slug) notFound()
-
-  const supabase = await createSupabaseServerClient()
-
-  // Fetch the profile (include is_verified if your table has it)
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, username, slug, is_verified')
-    .eq('slug', slug)
-    .single()
-
-  if (profileError || !profile) notFound()
-
-  // Block Check for UI
-  const headersList = await headers()
-  const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
-  const { data: { user } } = await supabase.auth.getUser()
-  const { isAnonymousBlocked, isUserBlocked } = await import('@/actions/blocked-users')
-
-  let isBlocked = await isAnonymousBlocked(profile.id, ip)
-  if (!isBlocked && user) {
-    isBlocked = await isUserBlocked(profile.id, user.id)
+          <div className="pt-2">
+            <Link
+              href="/signup"
+              className="flex items-center gap-4 p-4 rounded-2xl bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/30 transition-all group overflow-hidden [...]"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 opacity-0 group-hover:opacity-100 group-hover:translate-x-[100%] transition-all [...]">
+              <div className="w-12 h-12 shrink-0 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                <Lock size={22} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-white text-sm group-hover:text-purple-300 transition-colors">Create your own Link</h3>
+                <p className="text-purple-400/80 text-xs line-clamp-1 mt-0.5">Receive anonymous confessions</p>
+              </div>
+              <div className="text-purple-500/50 group-hover:text-purple-400 group-hover:translate-x-1 transition-all">
+                ✨
+              </div>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-purple-600 flex flex-col items-center justify-center p-6">
-      <ConfessionForm
-        profileId={profile.id}
-        username={profile.username}
-        isVerified={profile.is_verified ?? false}
-        isBlocked={isBlocked}
-        action={sendConfessionAction}
-      />
+    <form
+      ref={formRef}
+      action={handleSubmit}
+      className="space-y-4"
+    >
+      {/* Error Message */}
+      {feedback?.error && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm text-center">
+          {feedback.error}
+        </div>
+      )}
 
-      <p className="mt-8 text-white/60 text-xs font-medium uppercase tracking-widest">
-        Powered by Say App
+      {/* Text Area Container */}
+      <div className="relative group">
+        <textarea
+          name="message"
+          rows={5}
+          placeholder="Type your confession here..."
+          className="w-full bg-neutral-900/50 text-neutral-200 placeholder-neutral-600 rounded-2xl p-4 border border-white/5 focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 outlin[...]"
+          required
+          minLength={1}
+          maxLength={1000}
+          disabled={isPending}
+          onChange={(e) => setCharCount(e.target.value.length)}
+        />
+
+        {/* Character Count */}
+        <div className="absolute bottom-3 right-4 text-xs font-mono transition-colors duration-200">
+          <span className={charCount > 900 ? 'text-red-400' : 'text-neutral-600'}>
+            {charCount}
+          </span>
+          <span className="text-neutral-700">/1000</span>
+        </div>
+      </div>
+
+      {/* Submit Button */}
+      <button
+        type="submit"
+        disabled={isPending || charCount === 0 || isBlocked}
+        className={`relative w-full py-4 rounded-xl font-medium shadow-lg transition-all duration-300 overflow-hidden ${isBlocked
+          ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/5 shadow-none'
+          : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/20 hover:shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50'
+          }`}
+      >
+        <span className={`flex items-center justify-center gap-2 ${isPending ? 'opacity-0' : 'opacity-100'}`}>
+          {isBlocked ? 'You have been blocked' : 'Send anonymously'}
+        </span>
+
+        {/* Loading Spinner overlay */}
+        {isPending && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          </div>
+        )}
+      </button>
+
+      <p className="text-center text-xs text-neutral-600 pt-2 pb-2">
+        IP addresses are never stored.
       </p>
-    </div>
+
+
+    </form>
   )
 }
