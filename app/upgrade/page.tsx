@@ -222,7 +222,7 @@ function UpgradeContent() {
             </div>
 
             <div className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/15 border border-blue-400/20">
-              <Crown size={12} className="text-blue-400" />
+              
               <span className="text-[11px] font-black text-blue-400">PRO</span>
             </div>
           </div>
