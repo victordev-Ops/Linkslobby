@@ -197,20 +197,10 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
               </div>
             )}
 
-            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-  <span className="flex items-center gap-2 leading-none">
-    <span className="flex items-center">
-      Hi, {profile.username?.split(' ')[0]}
-    </span>
-
-    {profile.is_pro && (
-      <span className="flex items-center">
-        <VerifiedBadge size={22} />
-      </span>
-    )}
-  </span>
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2 leading-none">
+  Hi, {profile.username?.split(' ')[0]}
+  {profile.is_pro && <VerifiedBadge size={22} />}
 </h1>
-            
         
 
           
