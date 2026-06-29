@@ -10,6 +10,7 @@ import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
 import { ModeSelector } from "./ui/ModeSelector";
 import { MessageBubble } from "./ui/MessageBubble";
+import { LobbyCloseToggle } from './ui/LobbyCloseToggle';
 import { ChatInput } from "./ui/ChatInput";
 import { WaitingRoom } from "./ui/WaitingRoom";
 import { NextRoundButton } from "./ui/NextRoundButton";
