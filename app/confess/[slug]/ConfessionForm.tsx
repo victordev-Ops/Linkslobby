@@ -3,7 +3,7 @@
 
 import { useState, useTransition, useRef } from 'react'
 import Link from 'next/link'
-import { Lock} from 'lucide-react'
+import { Lock, CheckCircle } from 'lucide-react'
 import VerifiedBadge from '@/components/VerifiedBadge'
 
 type ActionResponse = { error?: string; success?: boolean }
@@ -46,7 +46,9 @@ export default function ConfessionForm({
     return (
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden">
         <div className="p-8 text-center">
-          <div className="mb-4 text-5xl">✨</div>
+          <div className="mb-4 flex justify-center">
+  <CheckCircle size={52} className="text-purple-600" strokeWidth={1.5} />
+</div>
           <h3 className="text-xl font-semibold text-slate-900 mb-2">Sent Successfully!</h3>
           <p className="text-slate-500 text-sm mb-8">Your secret is safe with us.</p>
 
