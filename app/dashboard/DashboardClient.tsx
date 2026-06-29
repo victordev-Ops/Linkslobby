@@ -173,7 +173,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-lg italic">SAY</span>
+              <span className="text-white font-black text-lg italic">S</span>
             </div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Say</h2>
           </div>
@@ -211,12 +211,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   </span>
 </h1>
             
-         <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-  <span className="inline-flex items-center gap-1.5 ">
-    <span>Hi, {profile.username?.split(' ')[0]}</span>
-    {profile.is_pro && <VerifiedBadge size={22} />}
-  </span>
-</h1> 
+        
 
           
             
