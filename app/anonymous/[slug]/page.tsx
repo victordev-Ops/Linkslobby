@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import AnonymousForm from './AnonymousForm'
-
+import VerifiedBadge from '@/components/VerifiedBadge' 
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
@@ -107,20 +107,15 @@ export default async function AnonymousPage({ params }: PageProps) {
                 </div>
               )}
             </div>
-
-            {/* Username + badge */}
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <h1 className="text-lg font-black text-gray-900">
-                @{profile.username}
-              </h1>
-              {profile.is_pro && (
-                // Inline VerifiedBadge equivalent — indigo tint to match accent
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                  <circle cx="12" cy="12" r="12" fill="#4F46E5" />
-                  <path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </div>
+{/* Username + badge */}
+<div className="flex items-center justify-center gap-1.5 mb-1">
+  <h1 className="text-lg font-black text-gray-900">
+    @{profile.username}
+  </h1>
+  {profile.is_pro && (
+    <VerifiedBadge size={18} />
+  )}
+</div>
             <p className="text-gray-400 text-sm font-medium">
               Send an anonymous message
             </p>
