@@ -736,7 +736,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                     <div className="bg-slate-950 border border-slate-800 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90dvh] flex flex-col">
                         <div className="p-5 sm:p-8 border-b border-slate-900 flex items-center justify-between shrink-0">
                             <div>
-                                <h3 className="text-2xl font-black text-white italic tracking-tight">NEW PARTY</h3>
+                                <h3 className="text-2xl font-black text-white italic tracking-tight">NEW LOBBY</h3>
                                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Configure your game</p>
                             </div>
                             <button
@@ -799,7 +799,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                 </div>
                                 {!isPro && (
                                     <p className="text-[10px] text-slate-600 mt-3 font-medium italic ml-1">
-                                        Private games require host approval for players to join.
+                                        Private lobbies require host approval for players to join.
                                     </p>
                                 )}
                             </div>
