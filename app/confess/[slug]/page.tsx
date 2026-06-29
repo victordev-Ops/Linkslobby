@@ -10,9 +10,6 @@ interface PageProps {
   params: Promise<{ slug?: string }>
 }
 
-/**
- * SERVER ACTION: Delivers the message
- */
 export async function sendConfessionAction(profileId: string, formData: FormData) {
   'use server'
 
@@ -30,21 +27,14 @@ export async function sendConfessionAction(profileId: string, formData: FormData
   const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
   const referrer = headersList.get('referer') || 'direct'
 
-  // Block Enforcement (System Level)
   const { isAnonymousBlocked, isUserBlocked } = await import('@/actions/blocked-users')
 
-  // 1. IP Block check
   const ipBlocked = await isAnonymousBlocked(profileId, ip)
-  if (ipBlocked) {
-    return { error: 'Unable to deliver your message.' }
-  }
+  if (ipBlocked) return { error: 'Unable to deliver your message.' }
 
-  // 2. User ID Block check (if authenticated)
   if (user) {
     const userBlocked = await isUserBlocked(profileId, user.id)
-    if (userBlocked) {
-      return { error: 'Unable to deliver your message.' }
-    }
+    if (userBlocked) return { error: 'Unable to deliver your message.' }
   }
 
   const metadata = JSON.stringify({ ua, lang, ip, t: Date.now(), ref: referrer })
@@ -75,16 +65,15 @@ export default async function ConfessPage({ params }: PageProps) {
 
   const supabase = await createSupabaseServerClient()
 
-  // Fetch the profile (include is_verified if your table has it)
+  // is_verified does not exist in the schema — select only real columns
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, username, slug, is_verified')
+    .select('id, username, slug, is_pro')
     .eq('slug', slug)
     .single()
 
   if (profileError || !profile) notFound()
 
-  // Block Check for UI
   const headersList = await headers()
   const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
   const { data: { user } } = await supabase.auth.getUser()
@@ -99,8 +88,8 @@ export default async function ConfessPage({ params }: PageProps) {
     <div className="min-h-screen bg-purple-600 flex flex-col items-center justify-center p-6">
       <ConfessionForm
         profileId={profile.id}
-        username={profile.username}
-        isVerified={profile.is_verified ?? false}
+        username={profile.username ?? slug}
+        isPro={profile.is_pro ?? false}
         isBlocked={isBlocked}
         action={sendConfessionAction}
       />
