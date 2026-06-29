@@ -110,7 +110,7 @@ export default async function AnonymousPage({ params }: PageProps) {
 {/* Username + badge */}
 <div className="flex items-center justify-center gap-1.5 mb-1">
   <h1 className="text-lg font-black text-gray-900">
-    @{profile.username}
+    {profile.username}
   </h1>
   {profile.is_pro && (
     <VerifiedBadge size={18} />
