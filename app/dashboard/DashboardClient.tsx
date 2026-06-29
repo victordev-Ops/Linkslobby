@@ -196,32 +196,29 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 {profile.username?.charAt(0).toUpperCase() || '?'}
               </div>
             )}
-            
-      /*      <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-  <span className="inline-flex items-center gap-1.5 leading-none">
-    <span>Hi, {profile.username?.split(' ')[0]}</span>
-    {profile.is_pro && <VerifiedBadge size={22} />}
-  </span>
-</h1> */
 
             <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-  <span className="flex items-center gap-3 flex-wrap">
-    
-    {/* Username pill */}
-    <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-2xl font-bold leading-none">
+  <span className="flex items-center gap-2 leading-none">
+    <span className="flex items-center">
       Hi, {profile.username?.split(' ')[0]}
     </span>
 
-    {/* Badge chip */}
     {profile.is_pro && (
-      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs font-bold shadow-sm">
-        <VerifiedBadge size={16} />
-        Pro
+      <span className="flex items-center">
+        <VerifiedBadge size={22} />
       </span>
     )}
-
   </span>
 </h1>
+            
+         <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+  <span className="inline-flex items-center gap-1.5 ">
+    <span>Hi, {profile.username?.split(' ')[0]}</span>
+    {profile.is_pro && <VerifiedBadge size={22} />}
+  </span>
+</h1> 
+
+          
             
           </div>
           {!profile.is_pro && (
