@@ -199,13 +199,13 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
             <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2 leading-none">
   Hi, {profile.username?.split(' ')[0]}
-  {!profile.is_pro && (
-            <Link href="/upgrade" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-600 transition">
-              <BadgeCheck size={14} /> Get Verified
-            </Link>
-          )}
+  {profile.is_pro
+    ? <VerifiedBadge size={22} />
+    : <Link href="/upgrade" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-600 transition">
+        <VerifiedBadge size={22} /> Get Verified
+      </Link>
+  }
 </h1>
-        
 
           
             
