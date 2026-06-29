@@ -406,7 +406,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
             if (joinError) throw joinError;
 
-            toast.success('Lobby created! 🎉');
+            toast.success('Lobby created!');
             setShowCreateModal(false);
             router.push(`/tod/${lobby.slug || lobby.id}`);
         } catch (error: any) {
@@ -623,7 +623,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                 <div className="flex items-center justify-between mb-4 px-1">
                                     <h2 className="text-base font-black text-white flex items-center gap-2.5 uppercase tracking-widest">
                                         <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)] animate-pulse" />
-                                        My Games
+                                        My Lobbies 
                                     </h2>
                                     <span className="text-[10px] font-black text-green-500 uppercase tracking-widest bg-green-500/5 px-3 py-1.5 rounded-full border border-green-500/20">
                                         {sortedJoined.length} Active
@@ -640,7 +640,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             <div className="flex items-center justify-between mb-4 px-1">
                                 <h2 className="text-base font-black text-white flex items-center gap-2.5 uppercase tracking-widest">
                                     <Lock size={16} className="text-amber-500" />
-                                    Private
+                                    Private Lobbies 
                                 </h2>
                                 <button
                                     onClick={() => fetchLobbies('private')}
@@ -676,7 +676,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             <div className="flex items-center justify-between mb-4 px-1">
                                 <h2 className="text-base font-black text-white flex items-center gap-2.5 uppercase tracking-widest">
                                     <Play size={16} className="text-red-500" />
-                                    Public
+                                    Public Lobbies 
                                 </h2>
                                 <button
                                     onClick={() => {
