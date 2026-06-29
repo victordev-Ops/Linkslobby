@@ -3,7 +3,7 @@
 
 import { useState, useTransition, useRef } from 'react'
 import Link from 'next/link'
-import { Lock, Send } from 'lucide-react'
+import { Lock, Send, CheckCircle } from 'lucide-react'
 
 type ActionResponse = { error?: string; success?: boolean }
 
@@ -36,7 +36,10 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
   if (feedback?.success) {
     return (
       <div className="text-center py-4">
-        <div className="mb-4 text-5xl">✨</div>
+      </div>
+        <div className="mb-4 flex justify-center">
+  <CheckCircle size={52} className="text-indigo-600" strokeWidth={1.5} />
+</div>
         <h3 className="text-xl font-black text-gray-900 mb-1">Sent!</h3>
         <p className="text-gray-400 text-sm mb-8">Your identity stays hidden.</p>
 
