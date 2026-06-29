@@ -25,9 +25,12 @@ export function LobbyCloseToggle({
   const handleToggle = async () => {
     setIsLoading(true);
     try {
-      const result = isClosed
-        ? await openLobbyAction(lobbyId)
-        : await closeLobbyAction(lobbyId);
+      let result;
+      if (isClosed) {
+        result = await openLobbyAction(lobbyId);
+      } else {
+        result = await closeLobbyAction(lobbyId);
+      }
 
       if (!result.success) {
         toast.error(result.message ?? "Failed to update lobby");
