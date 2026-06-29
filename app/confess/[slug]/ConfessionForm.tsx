@@ -3,7 +3,8 @@
 
 import { useState, useTransition, useRef } from 'react'
 import Link from 'next/link'
-import { Lock, BadgeCheck } from 'lucide-react'
+import { Lock} from 'lucide-react'
+import VerifiedBadge from '@/components/VerifiedBadge'
 
 type ActionResponse = { error?: string; success?: boolean }
 
@@ -90,9 +91,9 @@ export default function ConfessionForm({
 
         <div className="mt-1 inline-flex items-center gap-1.5 justify-center">
           <span className="text-xl font-bold text-purple-600">@{username}</span>
-          {isPro && (
-            <BadgeCheck size={18} className="text-purple-500 shrink-0" aria-label="Pro" />
-          )}
+            {isPro && (
+    <VerifiedBadge size={18} />
+  )}
         </div>
 
         <p className="mt-3 text-sm text-slate-400 leading-relaxed">
