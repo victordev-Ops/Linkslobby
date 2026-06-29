@@ -9,7 +9,7 @@ export default function InboxError({ reset }: { reset: () => void }) {
                 <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
                     <AlertCircle className="w-8 h-8 text-red-500 dark:text-red-400" />
                 </div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Failed to load inbox</h2>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Failed to load inbox</h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">Something went wrong loading your messages.</p>
                 <button
                     onClick={reset}
