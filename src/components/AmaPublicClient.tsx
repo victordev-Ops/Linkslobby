@@ -1,20 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { Send, Loader2, CheckCircle2, MessageCircleQuestion } from 'lucide-react'
+import { Send, Loader2, MessageCircleQuestion } from 'lucide-react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { sendAmaQuestion } from '@/actions/confessions'
+import VerifiedBadge from '@/components/VerifiedBadge'
+import { CheckCircle } from 'lucide-react'
 
-const MAX_CHARS = 100 // Limit for AMA questions
+const MAX_CHARS = 100
 
 export default function AmaPublicClient({
   profileId,
   username,
+  isPro = false,
   isBlocked = false
 }: {
-  profileId: string,
-  username: string,
+  profileId: string
+  username: string
+  isPro?: boolean
   isBlocked?: boolean
 }) {
   const [message, setMessage] = useState('')
@@ -53,9 +57,12 @@ export default function AmaPublicClient({
               <span className="text-2xl">📝</span>
             </div>
 
-            <h1 className="text-xl font-black text-gray-800 text-center mb-1">
-              Ask @{username}
-            </h1>
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <h1 className="text-xl font-black text-gray-800 text-center">
+                Ask @{username}
+              </h1>
+              {isPro && <VerifiedBadge size={18} className="text-orange-500" />}
+            </div>
             <p className="text-sm text-gray-400 mb-6 font-medium">Anonymous Question</p>
 
             <div className="w-full relative">
@@ -90,8 +97,8 @@ export default function AmaPublicClient({
             animate={{ opacity: 1, y: 0 }}
             className="p-12 flex flex-col items-center text-center"
           >
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6">
-              <CheckCircle2 size={40} className="text-green-500" />
+            <div className="mb-6 flex justify-center">
+              <CheckCircle size={52} className="text-orange-500" strokeWidth={1.5} />
             </div>
             <h2 className="text-2xl font-black text-gray-800 mb-2">Sent!</h2>
             <p className="text-gray-500 font-medium mb-8">
@@ -118,9 +125,7 @@ export default function AmaPublicClient({
                     <h3 className="font-bold text-gray-800 text-sm group-hover:text-orange-600 transition-colors">Create your own Link</h3>
                     <p className="text-gray-500 text-xs line-clamp-1 mt-0.5">Receive anonymous questions</p>
                   </div>
-                  <div className="text-orange-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all">
-                    ✨
-                  </div>
+                  <div className="text-orange-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all">✨</div>
                 </Link>
               </div>
             </div>
@@ -129,5 +134,4 @@ export default function AmaPublicClient({
       </AnimatePresence>
     </motion.div>
   )
-}
-
+      }
