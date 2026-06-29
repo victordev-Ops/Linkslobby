@@ -10,7 +10,7 @@ interface PageProps {
 }
 
 export default async function PublicAmaPage({ params }: PageProps) {
-  const { slug } = await params // ✅ FIX: Await the params
+  const { slug } = await params // FIX: Await the params
 
   const supabase = await createSupabaseServerClient()
 
