@@ -336,12 +336,12 @@ export default function SettingsClient({
               href="/upgrade"
               className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] font-black"
             >
-              <Crown size={11} /> Get Pro
+              <VerifiedBadge size={16} /> Get verified 
             </Link>
           )}
           {isPro && (
             <div className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20">
-              <span className="text-[11px] font-black text-blue-500 dark:text-blue-400">PRO</span>
+              <span className="text-[11px] font-black text-blue-500 dark:text-blue-400">Get Verified</span>
             </div>
           )}
         </div>
