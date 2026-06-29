@@ -56,9 +56,9 @@ export default function ConfessionForm({ profileId, username, isVerified = false
           <div className="pt-2">
             <Link
               href="/signup"
-              className="flex items-center gap-4 p-4 rounded-2xl bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/30 transition-all group overflow-hidden [...]"
+              className="flex items-center gap-4 p-4 rounded-2xl bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/30 transition-all group overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 opacity-0 group-hover:opacity-100 group-hover:translate-x-[100%] transition-all [...]">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 opacity-0 group-hover:opacity-100 group-hover:translate-x-[100%] transition-all" />
               <div className="w-12 h-12 shrink-0 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
                 <Lock size={22} />
               </div>
@@ -95,7 +95,7 @@ export default function ConfessionForm({ profileId, username, isVerified = false
           name="message"
           rows={5}
           placeholder="Type your confession here..."
-          className="w-full bg-neutral-900/50 text-neutral-200 placeholder-neutral-600 rounded-2xl p-4 border border-white/5 focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 outlin[...]"
+          className="w-full bg-neutral-900/50 text-neutral-200 placeholder-neutral-600 rounded-2xl p-4 border border-white/5 focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all resize-none text-sm leading-relaxed"
           required
           minLength={1}
           maxLength={1000}
