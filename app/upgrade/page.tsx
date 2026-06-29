@@ -4,7 +4,7 @@ import { useState, useTransition, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Check, Zap, Shield, Palette, Users, Star,
-  ArrowLeft, Loader2, BadgeCheck, Eye, MessageCircle, Crown
+  ArrowLeft, Loader2, BadgeCheck, Eye, MessageCircle, 
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -195,7 +195,7 @@ function UpgradeContent() {
           className="mt-2 mb-8 p-5 rounded-3xl bg-white/[0.04] border border-white/10 backdrop-blur-sm"
         >
           {/* label */}
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/30 mb-4">Your profile with Pro</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/30 mb-4">Your profile</p>
 
           <div className="flex items-center gap-3">
             {/* Avatar */}
