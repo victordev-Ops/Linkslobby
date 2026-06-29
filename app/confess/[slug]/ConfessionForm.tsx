@@ -90,7 +90,7 @@ export default function ConfessionForm({
         </h1>
 
         <div className="mt-1 inline-flex items-center gap-1.5 justify-center">
-          <span className="text-xl font-bold text-purple-600">@{username}</span>
+          <span className="text-xl font-bold text-purple-600">{username}</span>
             {isPro && (
     <VerifiedBadge size={18} />
   )}
