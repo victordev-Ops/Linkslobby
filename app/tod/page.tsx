@@ -18,7 +18,7 @@ export default async function TODLobbyList() {
         created_at,
         profiles:host_id (username)
       `)
-      .neq('status', 'finished')
+      .not('status', 'in', '("finished","closed")')
       .order('category', { ascending: true })
       .order('created_at', { ascending: false })
       .limit(4),
