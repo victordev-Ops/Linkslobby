@@ -1,4 +1,3 @@
-//app/ama/[slug]/page.tsx
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import AmaPublicClient from '@/components/AmaPublicClient'
@@ -10,14 +9,13 @@ interface PageProps {
 }
 
 export default async function PublicAmaPage({ params }: PageProps) {
-  const { slug } = await params // FIX: Await the params
+  const { slug } = await params
 
   const supabase = await createSupabaseServerClient()
 
-  // Fetch profile by slug
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('id, username, slug')
+    .select('id, username, slug, is_pro')
     .eq('slug', slug)
     .single()
 
@@ -25,7 +23,6 @@ export default async function PublicAmaPage({ params }: PageProps) {
     notFound()
   }
 
-  // Block Check for UI
   const { headers } = await import('next/headers')
   const headersList = await headers()
   const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown'
@@ -42,6 +39,7 @@ export default async function PublicAmaPage({ params }: PageProps) {
       <AmaPublicClient
         profileId={profile.id}
         username={profile.username}
+        isPro={profile.is_pro}
         isBlocked={isBlocked}
       />
 
@@ -50,4 +48,4 @@ export default async function PublicAmaPage({ params }: PageProps) {
       </p>
     </div>
   )
-}
+      }
