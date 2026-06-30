@@ -152,7 +152,6 @@ export default function ProfileClient({
             if (result.error) throw new Error(result.error)
 
             setAvatarUrl(publicUrl)
-            toast.success("Profile picture updated!")
             router.refresh()
         } catch (error: any) {
             console.error("Avatar upload error:", error)
@@ -219,7 +218,7 @@ export default function ProfileClient({
 
         const result = await sendFriendRequest(targetProfile.id)
         if (result.success) {
-            toast.success('Friend request sent!')
+        
             router.refresh() // To get real ID instead of temp
         } else {
             // Revert
@@ -239,7 +238,7 @@ export default function ProfileClient({
 
         const result = await acceptFriendRequest(request.id)
         if (result.success) {
-            toast.success('Friend request accepted!')
+            
         } else {
             // Revert
             setFriends(prev => prev.filter(f => f.id !== request.id))
