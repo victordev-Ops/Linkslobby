@@ -35,6 +35,7 @@ interface PlayersSidebarProps {
   onlineUsers?: Set<string>;
   currentAskerId?: string;
   lobbyName?: string;
+  currentUserId?: string;
 }
 
 export const PlayersSidebar = ({
@@ -54,10 +55,16 @@ export const PlayersSidebar = ({
   isHost = false,
   onlineUsers = new Set(),
   currentAskerId,
-  lobbyName
+  lobbyName,
+  currentUserId
 }: PlayersSidebarProps) => {
   const router = useRouter();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Defensive filter: only ever show participants who are actually 'joined'.
+  // Pending/rejected/banned participants have their own dedicated sections
+  // (or shouldn't be shown at all) and must never appear in the main list.
+  const joinedParticipants = participants.filter(p => p.status === 'joined');
 
   // Filter for game events: truth/dare questions, system messages (start/end)
   const gameEvents = messages.filter(m =>
@@ -162,17 +169,18 @@ export const PlayersSidebar = ({
         <div className="flex items-center gap-2 mb-4">
           <Users size={18} className="text-red-400" />
           <h3 className="text-white font-bold text-sm uppercase tracking-wide">
-            Players ({participants.length})
+            Players ({joinedParticipants.length})
           </h3>
         </div>
 
         <div className="space-y-2">
-          {participants.map((participant) => {
+          {joinedParticipants.map((participant) => {
             const isParticipantHost = participant.user_id === hostId;
             const isTarget = participant.user_id === currentTargetId;
             const isAsker = participant.user_id === currentAskerId;
             const isOnline = onlineUsers.has(participant.user_id);
             const hasTurn = participant.has_gone_this_round;
+            const isSelf = currentUserId != null && participant.user_id === currentUserId;
 
             return (
               <div
@@ -213,7 +221,7 @@ export const PlayersSidebar = ({
                   <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-1 min-w-0">
                       <p className={`text-sm font-semibold truncate ${isTarget ? 'text-white' : isAsker ? 'text-blue-100' : 'text-slate-300'}`}>
-                        {participant.profiles?.username || 'Unknown'}
+                        {isSelf ? 'You' : (participant.profiles?.username || 'Unknown')}
                       </p>
                       {participant.profiles?.is_pro && <VerifiedBadge size={14} />}
                     </div>
@@ -243,7 +251,7 @@ export const PlayersSidebar = ({
                   )}
                   {/* Player Actions Menu */}
                   <div className="relative">
-                    {(participant.user_id !== (participants.find(p => p.user_id === hostId)?.user_id) || isHost) && ( // Show for everyone except maybe self? Logic: everyone can DM everyone
+                    {!isSelf && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -272,13 +280,13 @@ export const PlayersSidebar = ({
                               onClick={() => {
                                 // Default to ID if username is missing, but prefer username
                                 const identifier = participant.profiles?.username || participant.user_id;
-                                router.push(`/messages/${identifier}`);
+                                router.push(`/profile/${identifier}`);
                                 setActiveMenuId(null);
                               }}
                               className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
                             >
-                              <MessageCircle size={14} className="text-blue-400" />
-                              Message
+                              <Users size={14} className="text-blue-400" />
+                              Profile
                             </button>
 
                             <button
@@ -409,7 +417,7 @@ export const PlayersSidebar = ({
                             <span className="text-[10px] text-slate-500">
                               by {event.profiles?.username}
                             </span>
-                          </div>
+                            </div>
                           <p className="text-xs text-slate-300 leading-relaxed break-words line-clamp-2">
                             {event.content}
                           </p>
@@ -445,7 +453,7 @@ export const PlayersSidebar = ({
         <div className="grid grid-cols-2 gap-3">
           <div className="text-center">
             <p className="text-2xl font-black text-white">
-              {participants.length}
+              {joinedParticipants.length}
             </p>
             <p className="text-xs text-slate-500 uppercase tracking-wide">Players</p>
           </div>
