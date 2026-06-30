@@ -102,7 +102,7 @@ export default function AmaPublicClient({
             </div>
             <h2 className="text-2xl font-black text-gray-800 mb-2">Sent!</h2>
             <p className="text-gray-500 font-medium mb-8">
-              Your anonymous question is waiting for <b>{username}</b>
+              Your anonymous question is waiting for <b className="text-black-600 ">{username}</b>
             </p>
             <div className="w-full space-y-3">
               <button
