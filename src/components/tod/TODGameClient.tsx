@@ -511,7 +511,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
 
   return (
-    <div className="flex h-[100dvh] items-center justify-center bg-slate-950 overflow-hidden relative font-sans selection:bg-red-500/30 overscroll-behavior-none">
+  <div className="fixed inset-0 flex items-center justify-center bg-slate-950 overflow-hidden font-sans selection:bg-red-500/30 overscroll-behavior-none touch-none">
       {/* Decorative Background */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-20 left-10 w-72 h-72 bg-red-500 rounded-full blur-[120px]" />
@@ -815,7 +815,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
             {/* Mode Selector - Shows when target needs to select - STICKY */}
             {lobby.status === 'active' && !lobby.selected_mode && isTarget && (
-              <div className="sticky bottom-0 z-20 flex-shrink-0 px-4 py-4 border-t border-slate-800/50 backdrop-blur-xl bg-slate-900/50">
+               <div className="relative z-20 flex-shrink-0 px-4 py-4 border-t border-slate-800/50 backdrop-blur-xl bg-slate-900/50">
                 <ModeSelector
                   isTarget={isTarget}
                   targetUsername={targetUser?.profiles?.username}
@@ -826,7 +826,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             )}
 
             {/* Chat Input - STICKY AT BOTTOM */}
-            <div className="sticky bottom-0 z-10 flex-shrink-0">
+            <div className="relative z-10 flex-shrink-0">
               {/* Typing Indicator */}
               <AnimatePresence>
                 {Object.keys(typingUsers).length > 0 && (
