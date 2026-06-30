@@ -61,24 +61,99 @@ export default async function NotificationsPage() {
         .order("created_at", { ascending: false })
         .limit(20)
 
-    // Fetch my read statuses for shared notifications
+    // Fetch lobby turn events for the user
+    const turnEventsPromise = supabase
+        .from("tod_turn_events")
+        .select("*, lobby:tod_lobbies(name, slug)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50)
+
+    // Fetch incoming pending friend requests
+    const friendRequestsPromise = supabase
+        .from("friendships")
+        .select("*, profile:profiles!friendships_requester_id_fkey(username, slug, avatar_url)")
+        .eq("addressee_id", user.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+
+    // Fetch friend requests I sent that were accepted
+    const friendResponsesPromise = supabase
+        .from("friendships")
+        .select("*, profile:profiles!friendships_addressee_id_fkey(username, slug, avatar_url)")
+        .eq("requester_id", user.id)
+        .eq("status", "accepted")
+        .order("created_at", { ascending: false })
+
+    // Fetch lobby join requests of mine that were rejected/banned
+    const lobbyJoinResponsesPromise = supabase
+        .from("tod_participants")
+        .select("*, lobby:tod_lobbies(name, slug)")
+        .eq("user_id", user.id)
+        .in("status", ["rejected", "banned"])
+        .order("created_at", { ascending: false })
+
+    // Fetch my Hot Seat questions that were resolved (answered/skipped/timed_out)
+    const hotSeatAnswersPromise = supabase
+        .from("hot_seat_questions")
+        .select("*, session:hot_seat_sessions(name, slug)")
+        .eq("asker_id", user.id)
+        .in("status", ["answered", "skipped", "timed_out"])
+        .order("created_at", { ascending: false })
+        .limit(50)
+
+    // Fetch my read statuses for notification_reads-backed notification types
     const readStatusPromise = supabase
         .from("notification_reads")
-        .select("notification_id")
+        .select("notification_id, notification_type")
         .eq("user_id", user.id)
-        .eq("notification_type", "lobby_event")
+        .in("notification_type", [
+            "lobby_event",
+            "tod_turn",
+            "friend_request",
+            "friend_request_response",
+            "lobby_join_response",
+            "hot_seat_answer"
+        ])
 
-    const [confessionsRes, dykmRes, lobbiesRes, profileRes, xpRes, hotSeatRes, readStatusRes] = await Promise.all([
+    const [
+        confessionsRes,
+        dykmRes,
+        lobbiesRes,
+        profileRes,
+        xpRes,
+        hotSeatRes,
+        turnEventsRes,
+        friendRequestsRes,
+        friendResponsesRes,
+        lobbyJoinResponsesRes,
+        hotSeatAnswersRes,
+        readStatusRes
+    ] = await Promise.all([
         confessionsPromise,
         dykmScoresPromise,
         lobbiesPromise,
         supabase.from("profiles").select("is_pro, username").eq("id", user.id).single(),
         xpPromise,
         hotSeatPromise,
+        turnEventsPromise,
+        friendRequestsPromise,
+        friendResponsesPromise,
+        lobbyJoinResponsesPromise,
+        hotSeatAnswersPromise,
         readStatusPromise
     ])
 
-    const readLobbyIds = new Set((readStatusRes.data || []).map(r => r.notification_id))
+    const readLobbyIds = new Set(
+        (readStatusRes.data || [])
+            .filter(r => r.notification_type === "lobby_event")
+            .map(r => r.notification_id)
+    )
+
+    // Pre-computed "${notification_type}:${notification_id}" keys for notification_reads-backed types
+    const initialReadIds = (readStatusRes.data || []).map(
+        r => `${r.notification_type}:${r.notification_id}`
+    )
 
     let lobbyEvents: any[] = []
     if (lobbiesRes.data && lobbiesRes.data.length > 0) {
@@ -103,19 +178,12 @@ export default async function NotificationsPage() {
     const filteredLobbyEvents = lobbyEvents.filter(e => !hiddenIds.has(e.id))
     const xpTransactions = (xpRes.data || []).filter(x => !hiddenIds.has(x.id))
     const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id))
-
-    console.log('--- Debug Notifications Server ---')
-    console.log('User ID:', user.id)
-    console.log('Hidden IDs found:', hiddenIds.size, Array.from(hiddenIds))
-    console.log('Confessions (raw/filtered):', (confessionsRes.data || []).length, confessions.length)
-    if (hiddenIds.size > 0 && (confessionsRes.data || []).length > 0) {
-        console.log('First Raw Confession ID:', confessionsRes.data?.[0].id)
-        console.log('Is it in hiddenIds?:', hiddenIds.has(confessionsRes.data?.[0].id))
-    }
-    console.log('Lobby Events (raw/filtered):', lobbyEvents.length, filteredLobbyEvents.length)
-    console.log('XP Transactions (raw/filtered):', (xpRes.data || []).length, xpTransactions.length)
-    console.log('Hot Seat Questions (raw/filtered):', (hotSeatRes.data || []).length, hotSeatQuestions.length)
-    console.log('---------------------------')
+    const turnEvents = (turnEventsRes.data || []).filter(t => !hiddenIds.has(t.id))
+    // friend_request, friend_request_response, lobby_join_response, hot_seat_answer are not hideable
+    const friendRequests = friendRequestsRes.data || []
+    const friendResponses = friendResponsesRes.data || []
+    const lobbyJoinResponses = lobbyJoinResponsesRes.data || []
+    const hotSeatAnswers = hotSeatAnswersRes.data || []
 
     return (
         <NotificationsClient
@@ -124,9 +192,15 @@ export default async function NotificationsPage() {
             initialLobbyEvents={filteredLobbyEvents}
             initialXpTransactions={xpTransactions}
             initialHotSeatQuestions={hotSeatQuestions}
+            initialTurnEvents={turnEvents}
+            initialFriendRequests={friendRequests}
+            initialFriendResponses={friendResponses}
+            initialLobbyJoinResponses={lobbyJoinResponses}
+            initialHotSeatAnswers={hotSeatAnswers}
+            initialReadIds={initialReadIds}
             isPro={profileRes.data?.is_pro || false}
             username={profileRes.data?.username || ""}
             profileId={user.id}
         />
     )
-}
+            }
