@@ -32,6 +32,8 @@ export interface RoundHistory {
 // ═══════════════════════════════════════════════════════════════
 const DISCONNECT_TIMEOUT_SECONDS = 15  // Seconds before AI takes over
 const MAX_DISCONNECTS_BEFORE_FORFEIT = 3  // Auto-forfeit threshold
+const MIN_STAKE = 50
+const MAX_STAKE = 10000
 
 export function useRPSEngine(profile: { id: string; username: string; slug: string; is_pro: boolean }) {
     const router = useRouter()
@@ -67,6 +69,7 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
     const [isRecovering, setIsRecovering] = useState(true)
     const [pendingMode, setPendingMode] = useState<"solo" | "friend" | null>(null)
     const [stakeAmount, setStakeAmount] = useState(100)
+    const [showStakeSelector, setShowStakeSelector] = useState(false)
     const [disconnectCountdown, setDisconnectCountdown] = useState<number | null>(null)
     const [moveTimeLeft, setMoveTimeLeft] = useState<number | null>(null)
     const [aiActive, setAiActive] = useState(false)
@@ -310,10 +313,11 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         }
 
         // ─── DEFERRED SCORE UPDATE ───
-        // Only update scores if we've already revealed this round.
-        // New rounds go through countdown → reveal → score update.
+        // ONLY update scores if we're NOT in a countdown or reveal phase.
+        // Scores MUST only be applied after the 3-second countdown completes.
+        // If we're currently in countdown/reveal, defer via pendingScoresRef instead.
         const resolvedRound = updated.current_round - 1
-        if (resolvedRound <= lastRoundRef.current) {
+        if (resolvedRound <= lastRoundRef.current && phaseRef.current !== "countdown" && phaseRef.current !== "reveal") {
             const myScore = amA ? updated.score_a : updated.score_b
             const oppScore = amA ? updated.score_b : updated.score_a
             setPlayerScore(myScore)
@@ -479,13 +483,10 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
             const balance = result.success ? result.balance : 0
             setStarBalance(balance)
 
-            if (balance >= 100) {
-                if (selectedMode === "solo") await startMatch("solo", 100)
-                else await startMatch("friend", 100)
-            } else if (balance > 0 && selectedMode === "solo") {
+            if (balance >= MIN_STAKE) {
                 setPendingMode(selectedMode)
-                setStakeAmount(balance)
-                setShowBalanceGate(true)
+                setStakeAmount(Math.min(100, balance))
+                setShowStakeSelector(true)
             } else {
                 setPendingMode(selectedMode)
                 setShowBalanceGate(true)
@@ -495,6 +496,19 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         } finally {
             setIsLoading(false)
         }
+    }
+
+    const handleStakeConfirm = async (stake: number) => {
+        if (!pendingMode) return
+        
+        // Validate stake
+        if (stake < MIN_STAKE || stake > MAX_STAKE || stake > (starBalance || 0)) {
+            toast.error(`Enter a valid amount (${MIN_STAKE}-${MAX_STAKE} Stars)`)
+            return
+        }
+        
+        setShowStakeSelector(false)
+        await startMatch(pendingMode, stake)
     }
 
     const handleJoinRoom = async (code: string) => {
@@ -760,7 +774,11 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         const prevMode = mode
         const prevStake = stakeAmount
         resetToLobby()
-        if (prevMode) await startMatch(prevMode, prevStake)
+        if (prevMode) {
+            setPendingMode(prevMode)
+            setStakeAmount(prevStake)
+            setShowStakeSelector(true)
+        }
     }
 
     const handleBack = () => {
@@ -819,7 +837,8 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
             const cancelResult = await cancelRPSMatch(matchId)
             if (cancelResult.success) toast("Match cancelled — starting solo!", { icon: "🤖" })
             resetToLobby()
-            await startMatch("solo", stakeAmount)
+            setPendingMode("solo")
+            setShowStakeSelector(true)
         } catch {
             toast.error("Failed to switch to AI")
         } finally {
@@ -834,12 +853,13 @@ export function useRPSEngine(profile: { id: string; username: string; slug: stri
         phase, playerChoice, opponentChoice, playerScore, opponentScore, roundHistory, countdown, matchResult, lastResult, opponentName,
         showExitConfirm, showJoinInput, joinRoomId, starBalance, showBalanceGate, isLoading, isSubmitting, isRecovering, pendingMode, stakeAmount, disconnectCountdown, moveTimeLeft, aiActive,
         showHistory, historyData, isLoadingHistory, currentRound: roundHistory.length + 1,
+        showStakeSelector,
 
         // Actions
-        setJoinRoomId, setShowJoinInput, setShowHistory, setShowBalanceGate, setShowExitConfirm,
+        setJoinRoomId, setShowJoinInput, setShowHistory, setShowBalanceGate, setShowExitConfirm, setShowStakeSelector, setStakeAmount,
         
         handleChoice, handleModeSelect, handleJoinRoom, handlePlayAgain, handleBack, confirmExit, handleShareRoom, handleLoadHistory,
-        switchToAI, startMatch,
+        switchToAI, startMatch, handleStakeConfirm,
         triggerImmediateAI,  // Exposed for "Switch to AI now" button in disconnect banner
     }
 }
