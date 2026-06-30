@@ -217,14 +217,22 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
   const selectMode = useCallback(async (mode: 'truth' | 'dare') => {
     if (!lobby || !userId) return;
 
-    // Update lobby with selected mode
-    const { error } = await supabase
-      .from('tod_lobbies')
-      .update({ selected_mode: mode })
-      .eq('id', lobbyId);
+    // Atomic, guarded write: only the FIRST caller to reach this (the user's
+    // manual click or the host's timeout auto-pick, whichever wins the race)
+    // actually sets selected_mode. Prevents the system timeout from
+    // overwriting a selection the user already made.
+    const { data: won, error } = await supabase.rpc('select_tod_mode', {
+      lobby_uuid: lobbyId,
+      mode,
+    });
 
     if (error) {
       toast.error('Failed to select mode');
+      return;
+    }
+
+    if (!won) {
+      // Someone else's selection (or the timeout) already landed first.
       return;
     }
 
@@ -307,30 +315,21 @@ if ((messageType === 'truth' || messageType === 'dare') && userId === lobby.curr
     // Fire and forget - doesn't block game flow
     penalizeSkippedRound(lobbyId).catch(console.error);
 
-    // OPTIMISTIC UPDATE: Clear state immediately so UI doesn't get stuck waiting for realtime updates
-    setLobby(prev => prev ? { ...prev, selected_mode: undefined, current_question: undefined } : prev);
-
-    // 1. First trigger the turn logic RPC
+    // No optimistic local clearing here. next_tod_turn sets status,
+    // current_asker_id, current_target_id, selected_mode, current_question,
+    // and turn_started_at together in one atomic transaction. Clearing
+    // selected_mode/current_question locally before it runs left
+    // current_target_id/current_asker_id pointing at the OLD round for a
+    // moment, which is what caused the flash of the wrong user's turn.
     const { error: rpcError } = await supabase.rpc('next_tod_turn', { lobby_uuid: lobbyId });
     if (rpcError) {
       toast.error("Failed to start next round");
       console.error(rpcError);
       return;
     }
-
-    // 2. Explicitly clear question and mode to ensure fresh state for the new round
-    // This fixes the bug where subsequent rounds might stay in "chat mode" or match old questions
-    const { error: updateError } = await supabase
-      .from('tod_lobbies')
-      .update({
-        current_question: null,
-        selected_mode: null
-      })
-      .eq('id', lobbyId);
-
-    if (updateError) {
-      console.error("Error clearing round state:", updateError);
-    }
+    // No follow-up update needed — the RPC already cleared current_question
+    // and selected_mode as part of the same transaction. The realtime
+    // postgres_changes subscription will deliver the new lobby state.
   };
 
   const startGame = async () => {
