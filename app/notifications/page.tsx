@@ -53,7 +53,7 @@ export default async function NotificationsPage() {
         .eq("user_id", user.id)
         .eq("status", "joined")
 
-    // Fetch Hot Seat Questions for sessions hosted by user
+    // Fetch Hot Seat Questions for sessions hosted by user (host view — new questions)
     const hotSeatPromise = supabase
         .from("hot_seat_questions")
         .select("*, session:hot_seat_sessions!inner(host_id, name, slug)")
@@ -61,7 +61,7 @@ export default async function NotificationsPage() {
         .order("created_at", { ascending: false })
         .limit(20)
 
-    // Fetch lobby turn events for the user
+    // NEW: Lobby turn events (own is_read column, no notification_reads needed)
     const turnEventsPromise = supabase
         .from("tod_turn_events")
         .select("*, lobby:tod_lobbies(name, slug)")
@@ -69,31 +69,34 @@ export default async function NotificationsPage() {
         .order("created_at", { ascending: false })
         .limit(50)
 
-    // Fetch incoming pending friend requests
+    // NEW: Incoming friend requests (pending)
     const friendRequestsPromise = supabase
         .from("friendships")
         .select("*, profile:profiles!friendships_requester_id_fkey(username, slug, avatar_url)")
         .eq("addressee_id", user.id)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
+        .limit(50)
 
-    // Fetch friend requests I sent that were accepted
+    // NEW: Friend request responses (I'm requester, accepted — declines are deleted, unobservable)
     const friendResponsesPromise = supabase
         .from("friendships")
         .select("*, profile:profiles!friendships_addressee_id_fkey(username, slug, avatar_url)")
         .eq("requester_id", user.id)
         .eq("status", "accepted")
-        .order("created_at", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(50)
 
-    // Fetch lobby join requests of mine that were rejected/banned
+    // NEW: Lobby join responses (my participant status rejected/banned)
     const lobbyJoinResponsesPromise = supabase
         .from("tod_participants")
         .select("*, lobby:tod_lobbies(name, slug)")
         .eq("user_id", user.id)
         .in("status", ["rejected", "banned"])
-        .order("created_at", { ascending: false })
+        .order("joined_at", { ascending: false })
+        .limit(50)
 
-    // Fetch my Hot Seat questions that were resolved (answered/skipped/timed_out)
+    // NEW: Hot Seat answers (I'm asker, my question got resolved)
     const hotSeatAnswersPromise = supabase
         .from("hot_seat_questions")
         .select("*, session:hot_seat_sessions(name, slug)")
@@ -102,33 +105,15 @@ export default async function NotificationsPage() {
         .order("created_at", { ascending: false })
         .limit(50)
 
-    // Fetch my read statuses for notification_reads-backed notification types
+    // Fetch my read statuses for ALL notification_reads-backed types (was lobby_event-only)
     const readStatusPromise = supabase
         .from("notification_reads")
         .select("notification_id, notification_type")
         .eq("user_id", user.id)
-        .in("notification_type", [
-            "lobby_event",
-            "tod_turn",
-            "friend_request",
-            "friend_request_response",
-            "lobby_join_response",
-            "hot_seat_answer"
-        ])
 
     const [
-        confessionsRes,
-        dykmRes,
-        lobbiesRes,
-        profileRes,
-        xpRes,
-        hotSeatRes,
-        turnEventsRes,
-        friendRequestsRes,
-        friendResponsesRes,
-        lobbyJoinResponsesRes,
-        hotSeatAnswersRes,
-        readStatusRes
+        confessionsRes, dykmRes, lobbiesRes, profileRes, xpRes, hotSeatRes, readStatusRes,
+        turnEventsRes, friendRequestsRes, friendResponsesRes, lobbyJoinResponsesRes, hotSeatAnswersRes
     ] = await Promise.all([
         confessionsPromise,
         dykmScoresPromise,
@@ -136,23 +121,22 @@ export default async function NotificationsPage() {
         supabase.from("profiles").select("is_pro, username").eq("id", user.id).single(),
         xpPromise,
         hotSeatPromise,
+        readStatusPromise,
         turnEventsPromise,
         friendRequestsPromise,
         friendResponsesPromise,
         lobbyJoinResponsesPromise,
         hotSeatAnswersPromise,
-        readStatusPromise
     ])
 
+    // Build the full "${type}:${id}" read-key set once, used by:
+    // (a) the legacy lobby_event read-filtering below, and
+    // (b) initialReadIds passed straight to the client for the 4 new notification_reads types.
+    const allReadKeys = (readStatusRes.data || []).map(r => `${r.notification_type}:${r.notification_id}`)
     const readLobbyIds = new Set(
         (readStatusRes.data || [])
-            .filter(r => r.notification_type === "lobby_event")
+            .filter(r => r.notification_type === "lobby_event" || r.notification_type === "lobby")
             .map(r => r.notification_id)
-    )
-
-    // Pre-computed "${notification_type}:${notification_id}" keys for notification_reads-backed types
-    const initialReadIds = (readStatusRes.data || []).map(
-        r => `${r.notification_type}:${r.notification_id}`
     )
 
     let lobbyEvents: any[] = []
@@ -172,18 +156,15 @@ export default async function NotificationsPage() {
         }))
     }
 
-    // Filter out hidden notifications
+    // Filter out hidden notifications (only applies to hideable types — the 4 new
+    // notification_reads types were never added to hidden_notifications, see isHideable()
+    // in the client, so no filtering needed for them here)
     const confessions = (confessionsRes.data || []).filter(c => !hiddenIds.has(c.id))
     const dykmScores = (dykmRes.data || []).filter(s => !hiddenIds.has(s.id))
     const filteredLobbyEvents = lobbyEvents.filter(e => !hiddenIds.has(e.id))
     const xpTransactions = (xpRes.data || []).filter(x => !hiddenIds.has(x.id))
     const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id))
     const turnEvents = (turnEventsRes.data || []).filter(t => !hiddenIds.has(t.id))
-    // friend_request, friend_request_response, lobby_join_response, hot_seat_answer are not hideable
-    const friendRequests = friendRequestsRes.data || []
-    const friendResponses = friendResponsesRes.data || []
-    const lobbyJoinResponses = lobbyJoinResponsesRes.data || []
-    const hotSeatAnswers = hotSeatAnswersRes.data || []
 
     return (
         <NotificationsClient
@@ -193,14 +174,14 @@ export default async function NotificationsPage() {
             initialXpTransactions={xpTransactions}
             initialHotSeatQuestions={hotSeatQuestions}
             initialTurnEvents={turnEvents}
-            initialFriendRequests={friendRequests}
-            initialFriendResponses={friendResponses}
-            initialLobbyJoinResponses={lobbyJoinResponses}
-            initialHotSeatAnswers={hotSeatAnswers}
-            initialReadIds={initialReadIds}
+            initialFriendRequests={friendRequestsRes.data || []}
+            initialFriendResponses={friendResponsesRes.data || []}
+            initialLobbyJoinResponses={lobbyJoinResponsesRes.data || []}
+            initialHotSeatAnswers={hotSeatAnswersRes.data || []}
+            initialReadIds={allReadKeys}
             isPro={profileRes.data?.is_pro || false}
             username={profileRes.data?.username || ""}
             profileId={user.id}
         />
     )
-            }
+               }
