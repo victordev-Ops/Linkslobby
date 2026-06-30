@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import {
     Bell, MessageSquare, Brain, Users, Lock,
     ArrowLeft, ChevronRight, Trophy, Sparkles,
-    Eye, EyeOff, Loader2, X, Trash2, Flame, BadgeCheck
+    Eye, EyeOff, Loader2, X, Trash2, Flame, BadgeCheck, Ban
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
@@ -24,11 +24,20 @@ interface NotificationsClientProps {
     initialConfessions: any[]
     initialDykmScores: any[]
     initialLobbyEvents: any[]
+    initialXpTransactions: any[]
+    initialHotSeatQuestions: any[]
+    initialTurnEvents: any[]
+    initialFriendRequests: any[]
+    initialFriendResponses: any[]
+    initialLobbyJoinResponses: any[]
+    initialHotSeatAnswers: any[]
+    initialReadIds: string[] // pre-computed "${notification_type}:${notification_id}" keys, from server
     isPro: boolean
     username: string
+    profileId: string
 }
 
-type Tab = "All" | "Messages" | "Games" | "Lobbies" | "XP" | "Hot Seat"
+type Tab = "All" | "Messages" | "Games" | "Lobbies" | "XP" | "Hot Seat" | "Friends"
 
 function stripMetadata(message: string): string {
     return message.replace(/\n\n\[META:.*\]$/s, '').trim()
@@ -40,20 +49,28 @@ export default function NotificationsClient({
     initialLobbyEvents,
     initialXpTransactions,
     initialHotSeatQuestions,
+    initialTurnEvents,
+    initialFriendRequests,
+    initialFriendResponses,
+    initialLobbyJoinResponses,
+    initialHotSeatAnswers,
+    initialReadIds,
     isPro,
     username,
     profileId
-}: NotificationsClientProps & {
-    initialXpTransactions: any[],
-    initialHotSeatQuestions: any[],
-    profileId: string
-}) {
+}: NotificationsClientProps) {
     const { refreshUnreadCount, setUnreadCount } = useNotifications()
     const [confessions, setConfessions] = useState(initialConfessions)
     const [dykmScores, setDykmScores] = useState(initialDykmScores)
     const [lobbyEvents, setLobbyEvents] = useState(initialLobbyEvents)
     const [xpTransactions, setXpTransactions] = useState(initialXpTransactions)
     const [hotSeatQuestions, setHotSeatQuestions] = useState(initialHotSeatQuestions)
+    const [turnEvents, setTurnEvents] = useState(initialTurnEvents)
+    const [friendRequests, setFriendRequests] = useState(initialFriendRequests)
+    const [friendResponses, setFriendResponses] = useState(initialFriendResponses)
+    const [lobbyJoinResponses, setLobbyJoinResponses] = useState(initialLobbyJoinResponses)
+    const [hotSeatAnswers, setHotSeatAnswers] = useState(initialHotSeatAnswers)
+    const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set(initialReadIds))
     const [activeTab, setActiveTab] = useState<Tab>("All")
     // Pre-populate revealed state from server data
     const [revealedScores, setRevealedScores] = useState<Record<string, boolean>>(() => {
@@ -75,17 +92,20 @@ export default function NotificationsClient({
 
         const syncDexie = async () => {
             // 1. Mark existing cached notifications as hidden if they aren't in the server props
-            // This handles cases where a notification was hidden elsewhere or server cache was cleared
             const allInitialIds = new Set([
                 ...initialConfessions.map(c => c.id),
                 ...initialDykmScores.map(s => s.id),
                 ...initialLobbyEvents.map(e => e.id),
                 ...initialXpTransactions.map(x => x.id),
                 ...initialHotSeatQuestions.map(q => q.id),
+                ...initialTurnEvents.map(t => t.id),
+                ...initialFriendRequests.map(f => f.id),
+                ...initialFriendResponses.map(f => f.id),
+                ...initialLobbyJoinResponses.map(p => p.id),
+                ...initialHotSeatAnswers.map(q => q.id),
             ])
 
             try {
-                // Get all cached notifications that are NOT currently hidden in Dexie
                 const cachedVisible = await db.notifications.where('is_hidden').equals(0).toArray()
                 const toHide = cachedVisible.filter(c => !allInitialIds.has(c.id)).map(c => c.id)
 
@@ -98,19 +118,16 @@ export default function NotificationsClient({
             }
 
             // 2. Cache/Update fresh data
-            // Cache confessions
             if (initialConfessions.length > 0) {
                 db.confessions.bulkPut(
                     initialConfessions.map((c: any) => ({ ...c, cached_at: now }))
                 ).catch(() => { })
             }
-            // Cache xp transactions
             if (initialXpTransactions.length > 0) {
                 db.xpTransactions.bulkPut(
                     initialXpTransactions.map((x: any) => ({ ...x, cached_at: now }))
                 ).catch(() => { })
             }
-            // Cache notifications as generic
             const allItems = [
                 ...initialConfessions.map((c: any) => ({ id: c.id, type: 'confession' as const, data: c, created_at: c.created_at, is_hidden: false, cached_at: now })),
                 ...initialDykmScores.map((s: any) => ({ id: s.id, type: 'dykm_score' as const, data: s, created_at: s.created_at, is_hidden: false, cached_at: now })),
@@ -187,24 +204,128 @@ export default function NotificationsClient({
                 }
                 refreshUnreadCount()
             })
-            // Hot Seat Questions
+            // Hot Seat Questions (host view — new question + asker view — answer resolved)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
                 table: 'hot_seat_questions'
             }, async (payload) => {
                 const q = payload.new
-                // If it's a new question we host, fetch and add it
+                // New question we host
                 if (payload.eventType === 'INSERT' && hotSeatSessionIds.includes(q.session_id)) {
                     const { data } = await supabase
                         .from('hot_seat_questions')
                         .select('*, session:hot_seat_sessions(name, slug)')
                         .eq('id', q.id)
                         .single()
-
+                    if (data) setHotSeatQuestions(prev => [data, ...prev])
+                }
+                // My question got resolved
+                if (
+                    payload.eventType === 'UPDATE' &&
+                    q.asker_id === profileId &&
+                    ['answered', 'skipped', 'timed_out'].includes(q.status)
+                ) {
+                    const { data } = await supabase
+                        .from('hot_seat_questions')
+                        .select('*, session:hot_seat_sessions(name, slug)')
+                        .eq('id', q.id)
+                        .single()
                     if (data) {
-                        setHotSeatQuestions(prev => [data, ...prev])
+                        setHotSeatAnswers(prev =>
+                            prev.some(a => a.id === data.id) ? prev.map(a => a.id === data.id ? data : a) : [data, ...prev]
+                        )
                     }
+                }
+                refreshUnreadCount()
+            })
+            // Lobby turn events
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'tod_turn_events',
+                filter: `user_id=eq.${profileId}`
+            }, async (payload) => {
+                const { data } = await supabase
+                    .from('tod_turn_events')
+                    .select('*, lobby:tod_lobbies(name, slug)')
+                    .eq('id', payload.new.id)
+                    .single()
+                if (data) setTurnEvents(prev => [data, ...prev])
+                refreshUnreadCount()
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'tod_turn_events',
+                filter: `user_id=eq.${profileId}`
+            }, (payload) => {
+                setTurnEvents(prev => prev.map(t => t.id === payload.new.id ? payload.new : t))
+                refreshUnreadCount()
+            })
+            // Lobby join responses (rejected/banned)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'tod_participants',
+                filter: `user_id=eq.${profileId}`
+            }, async (payload) => {
+                if (!['rejected', 'banned'].includes(payload.new.status)) return
+                const { data } = await supabase
+                    .from('tod_participants')
+                    .select('*, lobby:tod_lobbies(name, slug)')
+                    .eq('id', payload.new.id)
+                    .single()
+                if (data) {
+                    setLobbyJoinResponses(prev =>
+                        prev.some(p => p.id === data.id) ? prev.map(p => p.id === data.id ? data : p) : [data, ...prev]
+                    )
+                }
+                refreshUnreadCount()
+            })
+            // Friend requests (incoming)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'friendships',
+                filter: `addressee_id=eq.${profileId}`
+            }, async (payload) => {
+                if (payload.eventType === 'DELETE') {
+                    setFriendRequests(prev => prev.filter(f => f.id !== payload.old.id))
+                    return
+                }
+                if (payload.new.status !== 'pending') {
+                    setFriendRequests(prev => prev.filter(f => f.id !== payload.new.id))
+                    refreshUnreadCount()
+                    return
+                }
+                const { data } = await supabase
+                    .from('friendships')
+                    .select('*, profile:profiles!friendships_requester_id_fkey(username, slug, avatar_url)')
+                    .eq('id', payload.new.id)
+                    .single()
+                if (data) {
+                    setFriendRequests(prev =>
+                        prev.some(f => f.id === data.id) ? prev.map(f => f.id === data.id ? data : f) : [data, ...prev]
+                    )
+                }
+                refreshUnreadCount()
+            })
+            // Friend request responses (I'm requester, accepted)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'friendships',
+                filter: `requester_id=eq.${profileId}`
+            }, async (payload) => {
+                if (payload.new.status !== 'accepted') return
+                const { data } = await supabase
+                    .from('friendships')
+                    .select('*, profile:profiles!friendships_addressee_id_fkey(username, slug, avatar_url)')
+                    .eq('id', payload.new.id)
+                    .single()
+                if (data) {
+                    setFriendResponses(prev => prev.some(f => f.id === data.id) ? prev : [data, ...prev])
                 }
                 refreshUnreadCount()
             })
@@ -224,6 +345,11 @@ export default function NotificationsClient({
             else if (item.type === 'xp') setXpTransactions(prev => prev.map(x => x.id === item.id ? { ...x, is_read: true } : x))
             else if (item.type === 'hot_seat') setHotSeatQuestions(prev => prev.map(q => q.id === item.id ? { ...q, is_read: true } : q))
             else if (item.type === 'lobby') setLobbyEvents(prev => prev.map(l => l.id === item.id ? { ...l, is_read: true } : l))
+            else if (item.type === 'tod_turn') setTurnEvents(prev => prev.map(t => t.id === item.id ? { ...t, is_read: true } : t))
+            else {
+                // notification_reads-backed types: track read state in the Set
+                setReadNotificationIds(prev => new Set(prev).add(`${item.type}:${item.id}`))
+            }
 
             await markNotificationAsRead(item.id, item.type as any)
             await refreshUnreadCount()
@@ -231,14 +357,11 @@ export default function NotificationsClient({
 
         if (item.type === 'message') {
             if (item.is_dm) {
-                // Try to extract username from message metdata [DM:uuid:username]
                 const match = item.message.match(/^\[DM:[a-f0-9-]+:?([^\]]*)\]/)
                 const senderUsername = match ? match[1] : null
-
                 if (senderUsername) {
                     router.push(`/messages/${senderUsername}`)
                 } else {
-                    // Fallback to inbox if no username found
                     router.push(`/inbox/${item.id}`)
                 }
             } else {
@@ -252,6 +375,12 @@ export default function NotificationsClient({
             router.push('/tod')
         } else if (item.type === 'dykm') {
             router.push(`/dykm/results/${item.id}`)
+        } else if (item.type === 'tod_turn' || item.type === 'lobby_join_response') {
+            router.push(`/tod/${item.lobby?.slug || ''}`)
+        } else if (item.type === 'friend_request' || item.type === 'friend_request_response') {
+            router.push(item.profile?.slug ? `/u/${item.profile.slug}` : '/notifications')
+        } else if (item.type === 'hot_seat_answer') {
+            router.push(`/hot-seat/${item.session?.slug || ''}`)
         }
     }
 
@@ -262,6 +391,15 @@ export default function NotificationsClient({
         setXpTransactions(prev => prev.map(x => ({ ...x, is_read: true })))
         setHotSeatQuestions(prev => prev.map(q => ({ ...q, is_read: true })))
         setLobbyEvents(prev => prev.map(l => ({ ...l, is_read: true })))
+        setTurnEvents(prev => prev.map(t => ({ ...t, is_read: true })))
+        setReadNotificationIds(prev => {
+            const next = new Set(prev)
+            friendRequests.forEach(f => next.add(`friend_request:${f.id}`))
+            friendResponses.forEach(f => next.add(`friend_request_response:${f.id}`))
+            lobbyJoinResponses.forEach(p => next.add(`lobby_join_response:${p.id}`))
+            hotSeatAnswers.forEach(q => next.add(`hot_seat_answer:${q.id}`))
+            return next
+        })
         setUnreadCount(0)
 
         const result = await markAllNotificationsAsRead()
@@ -274,7 +412,7 @@ export default function NotificationsClient({
     }
 
     const handleHide = async (e: React.MouseEvent, item: any) => {
-        e.stopPropagation() // Prevent triggering card click if we add one later
+        e.stopPropagation()
         console.log('handleHide triggered for:', { id: item.id, type: item.type })
 
         // Optimistic update
@@ -283,6 +421,7 @@ export default function NotificationsClient({
         const originalLobbyEvents = [...lobbyEvents]
         const originalXp = [...xpTransactions]
         const originalHotSeat = [...hotSeatQuestions]
+        const originalTurnEvents = [...turnEvents]
 
         if (item.type === 'message') {
             setConfessions(prev => prev.filter(c => c.id !== item.id))
@@ -294,34 +433,36 @@ export default function NotificationsClient({
             setXpTransactions(prev => prev.filter(x => x.id !== item.id))
         } else if (item.type === 'hot_seat') {
             setHotSeatQuestions(prev => prev.filter(q => q.id !== item.id))
+        } else if (item.type === 'tod_turn') {
+            setTurnEvents(prev => prev.filter(t => t.id !== item.id))
+        }
+        // Note: friend_request / friend_request_response / lobby_join_response / hot_seat_answer
+        // are not hideable — they're not in hidden_notifications' CHECK constraint, and conceptually
+        // they resolve themselves (request gets answered, status changes) rather than needing a
+        // manual dismiss. Hide button is conditionally hidden for these types below.
+
+        if (db?.notifications) {
+            db.notifications.update(item.id, { is_hidden: true }).catch(() => { })
         }
 
-        toast.success("Notification hidden")
-
-        // Update Dexie locally
-        db.notifications.update(item.id, { is_hidden: true }).catch((err) => {
-            console.error('Dexie update failed:', err)
-        })
-
-        // Strategy: Only call server hide if supported.
-        if (['message', 'dykm', 'lobby', 'xp', 'hot_seat'].includes(item.type)) {
+        try {
             const result = await hideNotification(item.id, item.type as any)
             if (result.success) {
-                // Refresh unread counts to update badge
                 refreshUnreadCount().catch(console.error)
             } else {
                 console.error('Server hide failed:', result)
-                // Revert local state
                 if (item.type === 'message') setConfessions(originalConfessions)
                 else if (item.type === 'dykm') setDykmScores(originalDykmScores)
                 else if (item.type === 'lobby') setLobbyEvents(originalLobbyEvents)
                 else if (item.type === 'xp') setXpTransactions(originalXp)
                 else if (item.type === 'hot_seat') setHotSeatQuestions(originalHotSeat)
+                else if (item.type === 'tod_turn') setTurnEvents(originalTurnEvents)
 
-                // Revert Dexie
                 db.notifications.update(item.id, { is_hidden: false }).catch(() => { })
                 toast.error("Failed to hide notification")
             }
+        } catch {
+            toast.error("Failed to hide notification")
         }
     }
 
@@ -336,7 +477,32 @@ export default function NotificationsClient({
         ...dykmScores.map(s => ({ ...s, type: 'dykm', category: 'Games' })),
         ...lobbyEvents.map(e => ({ ...e, type: 'lobby', category: 'Lobbies' })),
         ...xpTransactions.map(x => ({ ...x, type: 'xp', category: 'XP' })),
-        ...hotSeatQuestions.map(q => ({ ...q, type: 'hot_seat', category: 'Hot Seat' }))
+        ...hotSeatQuestions.map(q => ({ ...q, type: 'hot_seat', category: 'Hot Seat' })),
+        ...turnEvents.map(t => ({ ...t, type: 'tod_turn', category: 'Lobbies' })),
+        ...friendRequests.map(f => ({
+            ...f,
+            type: 'friend_request',
+            category: 'Friends',
+            is_read: readNotificationIds.has(`friend_request:${f.id}`)
+        })),
+        ...friendResponses.map(f => ({
+            ...f,
+            type: 'friend_request_response',
+            category: 'Friends',
+            is_read: readNotificationIds.has(`friend_request_response:${f.id}`)
+        })),
+        ...lobbyJoinResponses.map(p => ({
+            ...p,
+            type: 'lobby_join_response',
+            category: 'Lobbies',
+            is_read: readNotificationIds.has(`lobby_join_response:${p.id}`)
+        })),
+        ...hotSeatAnswers.map(q => ({
+            ...q,
+            type: 'hot_seat_answer',
+            category: 'Hot Seat',
+            is_read: readNotificationIds.has(`hot_seat_answer:${q.id}`)
+        })),
     ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     const filteredNotifications = allNotifications.filter(n =>
@@ -376,6 +542,18 @@ export default function NotificationsClient({
                 return <Sparkles className="text-amber-500" size={18} />
             case 'hot_seat':
                 return <Flame className="text-red-500" size={18} />
+            case 'tod_turn':
+                return <Users className="text-green-500" size={18} />
+            case 'lobby_join_response':
+                return item.status === 'banned'
+                    ? <Ban className="text-red-500" size={18} />
+                    : <X className="text-orange-500" size={18} />
+            case 'friend_request':
+                return <Users className="text-blue-500" size={18} />
+            case 'friend_request_response':
+                return <Users className="text-emerald-500" size={18} />
+            case 'hot_seat_answer':
+                return <Flame className="text-orange-500" size={18} />
             default:
                 return <Bell className="text-gray-500" size={18} />
         }
@@ -390,7 +568,7 @@ export default function NotificationsClient({
                 return "New Confession"
             case 'dykm':
                 return `Quiz: ${item.responder_name} scored ${item.score}/${item.total_questions}`
-            case 'lobby':
+            case 'lobby': {
                 const lobbyName = item.tod_lobbies?.name ? ` in ${item.tod_lobbies.name}` : ''
                 const content = (item.content || '').toLowerCase()
                 if (content.includes('joined')) return `🎉 Someone joined${lobbyName}`
@@ -398,16 +576,38 @@ export default function NotificationsClient({
                 if (content.includes('your turn') && content.includes('ask')) return `🎲 It's your turn to ask${lobbyName}!`
                 if (content.includes('your turn')) return `🎯 It's your turn${lobbyName}!`
                 return item.content + (lobbyName ? ` ${lobbyName}` : '')
+            }
             case 'xp': {
                 const sign = item.type === 'spend' ? '-' : '+'
                 return `${sign}${Math.abs(item.amount)} Stars — ${item.reason}`
             }
             case 'hot_seat':
                 return `Hot Seat: New Question! 🔥`
+            case 'tod_turn': {
+                const lobbyName = item.lobby?.name ? ` in ${item.lobby.name}` : ''
+                return item.role === 'target'
+                    ? `🎯 It's your turn as target${lobbyName}!`
+                    : `🎲 It's your turn to ask${lobbyName}!`
+            }
+            case 'lobby_join_response':
+                return item.status === 'banned'
+                    ? `🚫 Banned from ${item.lobby?.name || 'a lobby'}`
+                    : `Request to join ${item.lobby?.name || 'a lobby'} declined`
+            case 'friend_request':
+                return `👋 @${item.profile?.username || 'Someone'} sent you a friend request`
+            case 'friend_request_response':
+                return `🤝 @${item.profile?.username || 'Someone'} accepted your friend request`
+            case 'hot_seat_answer': {
+                const labels: Record<string, string> = { answered: 'answered', skipped: 'skipped', timed_out: 'timed out' }
+                return `🔥 Your question was ${labels[item.status] || 'resolved'}`
+            }
             default:
                 return "Notification"
         }
     }
+
+    const isHideable = (type: string) =>
+        !['friend_request', 'friend_request_response', 'lobby_join_response', 'hot_seat_answer'].includes(type)
 
     return (
         <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24">
@@ -428,7 +628,7 @@ export default function NotificationsClient({
             <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
                 {/* Tabs */}
                 <div className="flex bg-white dark:bg-[#1a1429] p-1 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm overflow-x-auto no-scrollbar">
-                    {(["All", "Messages", "Games", "Lobbies", "XP", "Hot Seat"] as Tab[]).map((tab) => (
+                    {(["All", "Messages", "Games", "Lobbies", "XP", "Hot Seat", "Friends"] as Tab[]).map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -448,7 +648,7 @@ export default function NotificationsClient({
                         {filteredNotifications.length > 0 ? (
                             filteredNotifications.map((item) => (
                                 <motion.div
-                                    key={item.id}
+                                    key={`${item.type}-${item.id}`}
                                     layout
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -462,18 +662,20 @@ export default function NotificationsClient({
                                     {!item.is_read && (
                                         <div className="absolute top-4 left-2 w-1.5 h-1.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
                                     )}
-                                    <button
-                                        onClick={(e) => handleHide(e, item)}
-                                        className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 z-10"
-                                        title="Hide notification"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
+                                    {isHideable(item.type) && (
+                                        <button
+                                            onClick={(e) => handleHide(e, item)}
+                                            className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 z-10"
+                                            title="Hide notification"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
 
                                     <div className="flex gap-4 pr-6">
                                         <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center border ${item.type === 'dykm'
                                             ? 'bg-blue-100 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/30'
-                                            : ['xp', 'hot_seat'].includes(item.type) ? 'bg-amber-500/10 border-slate-100 dark:border-white/5' : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/5'
+                                            : ['xp', 'hot_seat', 'hot_seat_answer'].includes(item.type) ? 'bg-amber-500/10 border-slate-100 dark:border-white/5' : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/5'
                                             }`}>
                                             {getIcon(item)}
                                         </div>
@@ -494,6 +696,12 @@ export default function NotificationsClient({
                                             )}
 
                                             {item.type === 'hot_seat' && (
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                    In session: <span className="text-amber-500 font-bold">{item.session?.name}</span>
+                                                </p>
+                                            )}
+
+                                            {item.type === 'hot_seat_answer' && (
                                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                                                     In session: <span className="text-amber-500 font-bold">{item.session?.name}</span>
                                                 </p>
@@ -533,7 +741,7 @@ export default function NotificationsClient({
                                                 </div>
                                             )}
 
-                                            {(item.type === 'message' || item.type === 'hot_seat') && (
+                                            {(item.type === 'message' || item.type === 'hot_seat' || item.type === 'hot_seat_answer') && (
                                                 <span
                                                     className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-purple-600 dark:text-purple-400"
                                                 >
@@ -545,9 +753,14 @@ export default function NotificationsClient({
                                                     View Stars <ChevronRight size={12} />
                                                 </span>
                                             )}
-                                            {item.type === 'lobby' && (
+                                            {(item.type === 'lobby' || item.type === 'tod_turn' || item.type === 'lobby_join_response') && (
                                                 <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-green-600 dark:text-green-400">
                                                     View Lobbies <ChevronRight size={12} />
+                                                </span>
+                                            )}
+                                            {(item.type === 'friend_request' || item.type === 'friend_request_response') && (
+                                                <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                                                    View Profile <ChevronRight size={12} />
                                                 </span>
                                             )}
                                         </div>
@@ -595,4 +808,5 @@ export default function NotificationsClient({
             )}
         </div>
     )
-}
+                                              }
+                
