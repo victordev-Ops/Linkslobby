@@ -1,4 +1,5 @@
 "use client"
+import React, { useEffect, useRef } from "react"
 import { ArrowLeft, AlertTriangle, Loader2, Monitor, RotateCcw, Star, Swords, Zap } from "lucide-react"
 import type { useRPSEngine } from "../hooks/useRPSEngine"
 import type { RPSMove } from "@/actions/rps"
@@ -26,6 +27,109 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
         lose: "You Lose!",
         tie: "It's a Tie!"
     }
+
+    // Lightweight confetti implementation (no external deps) -----------------
+    const confettiTimeoutRef = useRef<number | null>(null)
+
+    const runConfetti = () => {
+        // prevent multiple canvases running at once
+        if (confettiTimeoutRef.current) return
+
+        const duration = 1800
+        const end = Date.now() + duration
+
+        const colors = ["#4ade80", "#34d399", "#60a5fa", "#f97316", "#f43f5e"]
+
+        const canvas = document.createElement('canvas')
+        canvas.style.position = 'fixed'
+        canvas.style.top = '0'
+        canvas.style.left = '0'
+        canvas.style.width = '100%'
+        canvas.style.height = '100%'
+        canvas.style.pointerEvents = 'none'
+        canvas.style.zIndex = '9999'
+        document.body.appendChild(canvas)
+
+        const ctx = canvas.getContext('2d')!
+
+        const resize = () => {
+            canvas.width = window.innerWidth
+            canvas.height = window.innerHeight
+        }
+        resize()
+        window.addEventListener('resize', resize)
+
+        type Particle = {
+            x: number
+            y: number
+            vx: number
+            vy: number
+            size: number
+            color: string
+            rotation: number
+            vr: number
+        }
+
+        const particles: Particle[] = []
+        const count = Math.floor((window.innerWidth / 80)) // scale with screen width
+
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: -20 - Math.random() * 200,
+                vx: (Math.random() - 0.5) * 6,
+                vy: 2 + Math.random() * 6,
+                size: 6 + Math.random() * 10,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                rotation: Math.random() * Math.PI * 2,
+                vr: (Math.random() - 0.5) * 0.2,
+            })
+        }
+
+        const gravity = 0.12
+
+        const frame = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            const now = Date.now()
+
+            for (let p of particles) {
+                p.vy += gravity
+                p.x += p.vx
+                p.y += p.vy
+                p.rotation += p.vr
+
+                ctx.save()
+                ctx.translate(p.x, p.y)
+                ctx.rotate(p.rotation)
+                ctx.fillStyle = p.color
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6)
+                ctx.restore()
+            }
+
+            // keep rendering until time's up or all particles are off-screen
+            if (now < end) {
+                requestAnimationFrame(frame)
+            } else {
+                // let remaining particles fall for a bit then cleanup
+                confettiTimeoutRef.current = window.setTimeout(() => {
+                    window.removeEventListener('resize', resize)
+                    if (canvas.parentNode) canvas.parentNode.removeChild(canvas)
+                    confettiTimeoutRef.current = null
+                }, 400)
+            }
+        }
+
+        frame()
+    }
+
+    useEffect(() => {
+        if (engine.matchResult === 'won') {
+            // small delay so the match end UI can render first
+            const id = window.setTimeout(runConfetti, 150)
+            return () => window.clearTimeout(id)
+        }
+        return
+    }, [engine.matchResult])
 
     // ─── Shared Disconnect Banner Component ───
     // Shows during both 'choosing' and 'waiting' phases
@@ -200,7 +304,7 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                         <button
                             onClick={engine.handlePlayAgain}
                             disabled={engine.isLoading}
-                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 text-sm disabled:opacity-60"
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-2xl"
                         >
                             {engine.isLoading ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
                             Play Again
@@ -308,7 +412,7 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                                     key={choice.id}
                                     onClick={() => engine.handleChoice(choice.id)}
                                     disabled={engine.isSubmitting}
-                                    className="group flex flex-col items-center gap-2 p-6 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all active:scale-90 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="group flex flex-col items-center gap-2 p-6 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all"
                                 >
                                     <span className="text-5xl group-hover:scale-110 transition-transform">{choice.emoji}</span>
                                     <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider group-hover:text-emerald-400 transition-colors">{choice.label}</span>
