@@ -4,6 +4,9 @@ import { ArrowLeft, AlertTriangle, Loader2, Monitor, RotateCcw, Star, Swords, Za
 import confetti from 'canvas-confetti'
 import type { useRPSEngine } from "../hooks/useRPSEngine"
 import type { RPSMove } from "@/actions/rps"
+import { RPSCountdownHands } from "./RPSCountdownHands"
+
+const WINS_NEEDED = 3
 
 const CHOICES: { id: RPSMove; emoji: string; label: string }[] = [
     { id: "rock", emoji: "✊", label: "Rock" },
@@ -92,6 +95,20 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
     useEffect(() => {
         return () => stopConfetti()
     }, [])
+
+    // ─── Win Pips — "first to 3" race tracker ───
+    const WinPips = ({ score, color }: { score: number; color: string }) => (
+        <div className="flex items-center justify-center gap-1.5">
+            {Array.from({ length: WINS_NEEDED }).map((_, i) => (
+                <div
+                    key={i}
+                    className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                        i < score ? `${color} scale-110` : "bg-white/10"
+                    }`}
+                />
+            ))}
+        </div>
+    )
 
     // ─── Shared Disconnect Banner Component ───
     // Shows during both 'choosing' and 'waiting' phases
@@ -190,7 +207,7 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                         <ArrowLeft size={20} />
                     </button>
                     <Swords size={18} className="text-emerald-500" />
-                    <h2 className="font-bold text-sm">Best of 5</h2>
+                    <h2 className="font-black text-sm uppercase tracking-wide">First to {WINS_NEEDED}</h2>
                 </div>
                 <div className="flex items-center gap-2">
                     {engine.mode === "friend" && (
@@ -201,22 +218,28 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                             </span>
                         </div>
                     )}
-                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Round {Math.min(engine.currentRound, 5)}/5</span>
+                    <span className="text-[10px] font-black text-white/40 uppercase tracking-wider px-2 py-1 bg-white/5 rounded-full border border-white/10">Round {engine.currentRound}</span>
                 </div>
             </div>
 
             <main className="max-w-md mx-auto p-4 space-y-6 relative z-10">
-                {/* Scoreboard — scores update only AFTER 3-second countdown */}
+                {/* Scoreboard — scores update only AFTER the countdown lands on GO */}
                 {engine.phase !== "matchEnd" && (
                     <div className="flex items-center justify-center gap-4">
-                        <div className="flex-1 text-center p-4 bg-white/5 border border-white/10 rounded-2xl">
+                        <div className={`flex-1 text-center p-4 bg-white/5 border rounded-2xl transition-all ${
+                            engine.playerScore > engine.opponentScore ? "border-emerald-500/40 shadow-lg shadow-emerald-500/10" : "border-white/10"
+                        }`}>
                             <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">You</p>
-                            <p className="text-4xl font-black text-emerald-400">{engine.playerScore}</p>
+                            <p className="text-4xl font-black text-emerald-400 tabular-nums">{engine.playerScore}</p>
+                            <div className="mt-2"><WinPips score={engine.playerScore} color="bg-emerald-400" /></div>
                         </div>
                         <div className="text-white/20 font-black text-2xl">:</div>
-                        <div className="flex-1 text-center p-4 bg-white/5 border border-white/10 rounded-2xl">
+                        <div className={`flex-1 text-center p-4 bg-white/5 border rounded-2xl transition-all ${
+                            engine.opponentScore > engine.playerScore ? "border-red-500/40 shadow-lg shadow-red-500/10" : "border-white/10"
+                        }`}>
                             <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">{opponentLabel}</p>
-                            <p className="text-4xl font-black text-red-400">{engine.opponentScore}</p>
+                            <p className="text-4xl font-black text-red-400 tabular-nums">{engine.opponentScore}</p>
+                            <div className="mt-2"><WinPips score={engine.opponentScore} color="bg-red-400" /></div>
                         </div>
                     </div>
                 )}
@@ -233,6 +256,7 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                             )}
                         </div>
                         <div className="space-y-2 relative">
+                            <p className="text-white/30 text-[10px] font-bold uppercase tracking-[0.2em]">First to {WINS_NEEDED} wins</p>
                             <h2 className={`text-3xl font-black ${engine.matchResult === "won" ? "text-emerald-400" : "text-red-400"}`}>
                                 {engine.matchResult === "won" ? "You Won the Match!" : "You Lost the Match"}
                             </h2>
@@ -274,14 +298,9 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                     </div>
                 )}
 
-                {/* Countdown */}
+                {/* Countdown — emoji fists cycle rock → paper → scissors in time with the clock, landing on GO */}
                 {engine.phase === "countdown" && (
-                    <div className="flex flex-col items-center justify-center py-16 space-y-6">
-                        <div className="text-8xl font-black text-emerald-400 animate-pulse tabular-nums">
-                            {engine.countdown > 0 ? engine.countdown : "GO!"}
-                        </div>
-                        <p className="text-white/40 text-sm font-bold uppercase tracking-widest">Get ready...</p>
-                    </div>
+                    <RPSCountdownHands countdown={engine.countdown} />
                 )}
 
                 {/* Reveal */}
@@ -289,12 +308,97 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                     <div className="flex flex-col items-center py-8 space-y-6">
                         <div className="flex items-center gap-8">
                             <div className="text-center space-y-2">
-                                <div className="text-7xl animate-in zoom-in-50 duration-500">{choiceEmoji(engine.playerChoice)}</div>
+                                <div
+                                    className="text-7xl animate-in zoom-in-50 duration-500"
+                                    style={engine.lastResult === "win" ? { filter: "drop-shadow(0 0 18px rgba(52,211,153,0.65))" } : undefined}
+                                >
+                                    {choiceEmoji(engine.playerChoice)}
+                                </div>
                                 <p className="text-xs font-bold text-white/40 uppercase">You</p>
                             </div>
                             <div className="text-white/20 font-black text-3xl">vs</div>
                             <div className="text-center space-y-2">
-                                <div className="text-7xl animate-in zoom-in-50 duration-500 delay-200">{choiceEmoji(engine.opponentChoice)}</div>
+                                <div
+                                    className="text-7xl animate-in zoom-in-50 duration-500 delay-200"
+                                    style={engine.lastResult === "lose" ? { filter: "drop-shadow(0 0 18px rgba(248,113,113,0.65))" } : undefined}
+                                >
+                                    {choiceEmoji(engine.opponentChoice)}
+                                </div>
+                                <p className="text-xs font-bold text-white/40 uppercase">{opponentLabel}</p>
+                            </div>
+                        </div>
+                        {engine.lastResult && (
+                            <div className={`text-2xl font-black animate-in zoom-in-75 duration-300 ${resultColors[engine.lastResult]}`}>
+                                {resultText[engine.lastResult]}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ═══════════════════════════════════════════════════════
+                    WAITING — Move Locked, waiting for opponent
+                    Shows disconnect banner with "Switch to AI now" button
+                    ═══════════════════════════════════════════════════════ */}
+                {engine.phase === "waiting" && (
+                    <div className="flex flex-col items-center justify-center py-16 space-y-6 animate-in fade-in duration-300">
+                        <DisconnectBanner />
+
+                        {engine.aiActive && (
+                            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-2xl p-4 text-center space-y-2 w-full max-w-xs">
+                                <p className="text-cyan-400 font-bold text-sm">🤖 AI is playing for your opponent</p> }
+                         </div>
+
+                        {/* Round History Summary */}
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2 text-left">
+                            <p className="text-[10px] font-black text-white/30 uppercase tracking-wider">Match Summary</p>
+                            {engine.roundHistory.map((r, i) => (
+                                <div key={i} className="flex items-center gap-3 py-1.5 border-b border-white/5 last:border-0">
+                                    <span className="text-[10px] font-mono text-white/20 w-6">R{r.round}</span>
+                                    <span className="text-lg">{choiceEmoji(r.playerChoice)}</span>
+                                    <span className="text-white/20 text-xs">vs</span>
+                                    <span className="text-lg">{choiceEmoji(r.opponentChoice)}</span>
+                                    <span className={`text-xs font-bold ml-auto uppercase ${resultColors[r.result]}`}>{r.result}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={() => { stopConfetti(); engine.handlePlayAgain() }}
+                            disabled={engine.isLoading}
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-2xl"
+                        >
+                            {engine.isLoading ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
+                            Play Again
+                        </button>
+                    </div>
+                )}
+
+                {/* Countdown — emoji fists cycle rock → paper → scissors in time with the clock, landing on GO */}
+                {engine.phase === "countdown" && (
+                    <RPSCountdownHands countdown={engine.countdown} />
+                )}
+
+                {/* Reveal */}
+                {engine.phase === "reveal" && (
+                    <div className="flex flex-col items-center py-8 space-y-6">
+                        <div className="flex items-center gap-8">
+                            <div className="text-center space-y-2">
+                                <div
+                                    className="text-7xl animate-in zoom-in-50 duration-500"
+                                    style={engine.lastResult === "win" ? { filter: "drop-shadow(0 0 18px rgba(52,211,153,0.65))" } : undefined}
+                                >
+                                    {choiceEmoji(engine.playerChoice)}
+                                </div>
+                                <p className="text-xs font-bold text-white/40 uppercase">You</p>
+                            </div>
+                            <div className="text-white/20 font-black text-3xl">vs</div>
+                            <div className="text-center space-y-2">
+                                <div
+                                    className="text-7xl animate-in zoom-in-50 duration-500 delay-200"
+                                    style={engine.lastResult === "lose" ? { filter: "drop-shadow(0 0 18px rgba(248,113,113,0.65))" } : undefined}
+                                >
+                                    {choiceEmoji(engine.opponentChoice)}
+                                </div>
                                 <p className="text-xs font-bold text-white/40 uppercase">{opponentLabel}</p>
                             </div>
                         </div>
@@ -374,9 +478,9 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                                     key={choice.id}
                                     onClick={() => engine.handleChoice(choice.id)}
                                     disabled={engine.isSubmitting}
-                                    className="group flex flex-col items-center gap-2 p-6 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all"
+                                    className="group flex flex-col items-center gap-2 p-6 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 rounded-2xl transition-all active:scale-90 active:bg-emerald-500/15 shadow-lg shadow-black/20 hover:shadow-emerald-500/10"
                                 >
-                                    <span className="text-5xl group-hover:scale-110 transition-transform">{choice.emoji}</span>
+                                    <span className="text-5xl group-hover:scale-110 group-active:scale-95 transition-transform">{choice.emoji}</span>
                                     <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider group-hover:text-emerald-400 transition-colors">{choice.label}</span>
                                 </button>
                             ))}
@@ -402,4 +506,4 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
             </main>
         </div>
     )
-}
+                                    }
