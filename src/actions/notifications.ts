@@ -3,7 +3,18 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function hideNotification(id: string, type: 'message' | 'dykm' | 'lobby' | 'xp' | 'hot_seat') {
+export type NotificationType = 
+  | 'message' 
+  | 'dykm' 
+  | 'lobby' 
+  | 'xp' 
+  | 'hot_seat'
+  | 'friend_request'
+  | 'friend_request_response'
+  | 'lobby_join_response'
+  | 'hot_seat_event'
+
+export async function hideNotification(id: string, type: NotificationType) {
     const supabase = await createSupabaseServerClient()
 
     try {
@@ -28,12 +39,22 @@ export async function hideNotification(id: string, type: 'message' | 'dykm' | 'l
             case 'hot_seat':
                 notificationType = 'hot_seat_question'
                 break
+            case 'friend_request':
+                notificationType = 'friend_request'
+                break
+            case 'friend_request_response':
+                notificationType = 'friend_request_response'
+                break
+            case 'lobby_join_response':
+                notificationType = 'lobby_join_response'
+                break
+            case 'hot_seat_event':
+                notificationType = 'hot_seat_event'
+                break
         }
 
         if (!notificationType) throw new Error('Invalid notification type')
 
-        // Verify the notification belongs to the user (if applicable) or just hide it for them
-        // Hidden notifications are stored per user, so this is generally safe.
         const { error } = await supabase
             .from('hidden_notifications')
             .upsert({
@@ -54,7 +75,7 @@ export async function hideNotification(id: string, type: 'message' | 'dykm' | 'l
     }
 }
 
-export async function markNotificationAsRead(id: string, type: 'message' | 'dykm' | 'xp' | 'hot_seat' | 'lobby') {
+export async function markNotificationAsRead(id: string, type: NotificationType) {
     const supabase = await createSupabaseServerClient()
 
     try {
@@ -84,21 +105,30 @@ export async function markNotificationAsRead(id: string, type: 'message' | 'dykm
                     .eq('user_id', user.id)
                 break
             case 'hot_seat':
-                // For Hot Seat, usually it's the host who gets the notification for new questions
                 await supabase
                     .from('hot_seat_questions')
                     .update({ is_read: true })
                     .eq('id', id)
-                // Note: We might want to verify host_id via join if we want strict security here
                 break
             case 'lobby':
-                // Lobby events are shared, so we track per-user read in a separate table
                 await supabase
                     .from('notification_reads')
                     .upsert({
                         user_id: user.id,
                         notification_id: id,
                         notification_type: 'lobby_event'
+                    }, { onConflict: 'user_id, notification_id, notification_type' })
+                break
+            case 'friend_request':
+            case 'friend_request_response':
+            case 'lobby_join_response':
+            case 'hot_seat_event':
+                await supabase
+                    .from('notification_reads')
+                    .upsert({
+                        user_id: user.id,
+                        notification_id: id,
+                        notification_type: type
                     }, { onConflict: 'user_id, notification_id, notification_type' })
                 break
         }
@@ -155,8 +185,7 @@ export async function markAllNotificationsAsRead() {
                 .eq('is_read', false)
         }
 
-        // 5. Mark lobby events as read 
-        // We need to find unread lobby events and insert them into notification_reads
+        // 5. Mark lobby turn notifications as read
         const { data: lobbies } = await supabase
             .from('tod_participants')
             .select('lobby_id')
@@ -170,7 +199,7 @@ export async function markAllNotificationsAsRead() {
                 .select('id')
                 .in('lobby_id', lobbyIds)
                 .eq('message_type', 'system')
-                .limit(100) // Don't overdo it
+                .limit(100)
 
             if (events && events.length > 0) {
                 const readInserts = events.map(e => ({
@@ -183,6 +212,25 @@ export async function markAllNotificationsAsRead() {
                     .from('notification_reads')
                     .upsert(readInserts, { onConflict: 'user_id, notification_id, notification_type' })
             }
+        }
+
+        // 6. Mark all friend request notifications as read
+        const { data: friendRequests } = await supabase
+            .from('friendships')
+            .select('id')
+            .eq('addressee_id', user.id)
+            .eq('status', 'pending')
+
+        if (friendRequests && friendRequests.length > 0) {
+            const readInserts = friendRequests.map(fr => ({
+                user_id: user.id,
+                notification_id: fr.id,
+                notification_type: 'friend_request'
+            }))
+
+            await supabase
+                .from('notification_reads')
+                .upsert(readInserts, { onConflict: 'user_id, notification_id, notification_type' })
         }
 
         revalidatePath('/notifications')
