@@ -1,6 +1,7 @@
 "use client"
 import React, { useEffect, useRef } from "react"
 import { ArrowLeft, AlertTriangle, Loader2, Monitor, RotateCcw, Star, Swords, Zap } from "lucide-react"
+import confetti from 'canvas-confetti'
 import type { useRPSEngine } from "../hooks/useRPSEngine"
 import type { RPSMove } from "@/actions/rps"
 
@@ -28,108 +29,69 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
         tie: "It's a Tie!"
     }
 
-    // Lightweight confetti implementation (no external deps) -----------------
-    const confettiTimeoutRef = useRef<number | null>(null)
+    // Use canvas-confetti for a richer experience and keep it running until user clicks Play Again
+    const confettiInstanceRef = useRef<any | null>(null)
+    const confettiIntervalRef = useRef<number | null>(null)
 
-    const runConfetti = () => {
-        // prevent multiple canvases running at once
-        if (confettiTimeoutRef.current) return
+    const startConfetti = () => {
+        if (confettiIntervalRef.current) return
 
-        const duration = 1800
-        const end = Date.now() + duration
+        // create a reusable confetti launcher that uses a worker when possible
+        const myConfetti = confetti.create(undefined, { resize: true, useWorker: true })
+        confettiInstanceRef.current = myConfetti
 
-        const colors = ["#4ade80", "#34d399", "#60a5fa", "#f97316", "#f43f5e"]
-
-        const canvas = document.createElement('canvas')
-        canvas.style.position = 'fixed'
-        canvas.style.top = '0'
-        canvas.style.left = '0'
-        canvas.style.width = '100%'
-        canvas.style.height = '100%'
-        canvas.style.pointerEvents = 'none'
-        canvas.style.zIndex = '9999'
-        document.body.appendChild(canvas)
-
-        const ctx = canvas.getContext('2d')!
-
-        const resize = () => {
-            canvas.width = window.innerWidth
-            canvas.height = window.innerHeight
-        }
-        resize()
-        window.addEventListener('resize', resize)
-
-        type Particle = {
-            x: number
-            y: number
-            vx: number
-            vy: number
-            size: number
-            color: string
-            rotation: number
-            vr: number
-        }
-
-        const particles: Particle[] = []
-        const count = Math.floor((window.innerWidth / 80)) // scale with screen width
-
-        for (let i = 0; i < count; i++) {
-            particles.push({
-                x: Math.random() * canvas.width,
-                y: -20 - Math.random() * 200,
-                vx: (Math.random() - 0.5) * 6,
-                vy: 2 + Math.random() * 6,
-                size: 6 + Math.random() * 10,
-                color: colors[Math.floor(Math.random() * colors.length)],
-                rotation: Math.random() * Math.PI * 2,
-                vr: (Math.random() - 0.5) * 0.2,
+        // burst every 350ms until stopped
+        confettiIntervalRef.current = window.setInterval(() => {
+            const x = Math.random()
+            myConfetti({
+                particleCount: 40,
+                startVelocity: 30,
+                spread: 160,
+                ticks: 500,
+                origin: { x, y: Math.random() * 0.4 },
+                colors: ['#4ade80', '#34d399', '#60a5fa', '#f97316', '#f43f5e'],
             })
-        }
 
-        const gravity = 0.12
-
-        const frame = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height)
-            const now = Date.now()
-
-            for (let p of particles) {
-                p.vy += gravity
-                p.x += p.vx
-                p.y += p.vy
-                p.rotation += p.vr
-
-                ctx.save()
-                ctx.translate(p.x, p.y)
-                ctx.rotate(p.rotation)
-                ctx.fillStyle = p.color
-                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6)
-                ctx.restore()
+            // occasional larger burst
+            if (Math.random() < 0.3) {
+                myConfetti({
+                    particleCount: 80,
+                    spread: 220,
+                    startVelocity: 40,
+                    origin: { x: Math.random(), y: Math.random() * 0.3 },
+                    colors: ['#4ade80', '#34d399', '#60a5fa'],
+                })
             }
+        }, 350)
+    }
 
-            // keep rendering until time's up or all particles are off-screen
-            if (now < end) {
-                requestAnimationFrame(frame)
-            } else {
-                // let remaining particles fall for a bit then cleanup
-                confettiTimeoutRef.current = window.setTimeout(() => {
-                    window.removeEventListener('resize', resize)
-                    if (canvas.parentNode) canvas.parentNode.removeChild(canvas)
-                    confettiTimeoutRef.current = null
-                }, 400)
-            }
+    const stopConfetti = () => {
+        if (confettiIntervalRef.current) {
+            window.clearInterval(confettiIntervalRef.current)
+            confettiIntervalRef.current = null
         }
-
-        frame()
+        // final small cleanup burst and clear reference
+        if (confettiInstanceRef.current) {
+            try { confettiInstanceRef.current({ particleCount: 0 }) } catch {}
+        }
+        confettiInstanceRef.current = null
     }
 
     useEffect(() => {
         if (engine.matchResult === 'won') {
-            // small delay so the match end UI can render first
-            const id = window.setTimeout(runConfetti, 150)
+            // start after a short delay so UI settles
+            const id = window.setTimeout(startConfetti, 150)
             return () => window.clearTimeout(id)
         }
+        // if matchResult changed away from 'won', ensure confetti is stopped
+        stopConfetti()
         return
     }, [engine.matchResult])
+
+    // stop confetti on unmount
+    useEffect(() => {
+        return () => stopConfetti()
+    }, [])
 
     // ─── Shared Disconnect Banner Component ───
     // Shows during both 'choosing' and 'waiting' phases
@@ -302,7 +264,7 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                         </div>
 
                         <button
-                            onClick={engine.handlePlayAgain}
+                            onClick={() => { stopConfetti(); engine.handlePlayAgain() }}
                             disabled={engine.isLoading}
                             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-2xl"
                         >
