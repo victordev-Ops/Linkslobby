@@ -32,9 +32,9 @@ const slugify = (text: string) => {
         .toString()
         .toLowerCase()
         .trim()
-        .replace(/\s+/g, '-')     // Replace spaces with -
-        .replace(/[^\w-]+/g, '')   // Remove all non-word chars
-        .replace(/--+/g, '-');      // Replace multiple - with single -
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]+/g, '')
+        .replace(/--+/g, '-');
 };
 
 interface LobbyListClientProps {
@@ -46,7 +46,6 @@ interface LobbyListClientProps {
 const CATEGORIES = ["Casual", "Deep", "Spicy", "Extreme"];
 
 export default function LobbyListClient({ initialLobbies, currentUserId, isPro }: LobbyListClientProps) {
-    // Seed state with initialLobbies to avoid flash of empty
     const initialJoined = initialLobbies.filter(l => l.user_status === 'joined' || l.user_status === 'pending');
     const initialPublic = initialLobbies.filter(
         l => !l.is_private && l.status !== 'closed' && !initialJoined.some(j => j.id === l.id)
@@ -56,36 +55,34 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
     );
 
     const [joinedLobbies, setJoinedLobbies] = useState<Lobby[]>(initialJoined);
-    // base = first page (or realtime-refreshed). extra = load-more pages,
-    // kept separate so they render after the base cards with a visual divider.
     const [publicLobbies, setPublicLobbies] = useState<Lobby[]>(initialPublic);
     const [extraPublicLobbies, setExtraPublicLobbies] = useState<Lobby[]>([]);
     const [privateLobbies, setPrivateLobbies] = useState<Lobby[]>(initialPrivate);
     const [extraPrivateLobbies, setExtraPrivateLobbies] = useState<Lobby[]>([]);
 
-    const [isLoading, setIsLoading] = useState(false); // Start false because we have initial data
+    const [isLoading, setIsLoading] = useState(false);
     const [hasMorePublic, setHasMorePublic] = useState(initialPublic.length === 4);
     const [hasMorePrivate, setHasMorePrivate] = useState(initialPrivate.length === 4);
+    
     const [isLoadingMorePublic, setIsLoadingMorePublic] = useState(false);
     const [isLoadingMorePrivate, setIsLoadingMorePrivate] = useState(false);
+    
+    // Stable refs to prevent intersection observer from re-triggering infinitely
+    const isLoadingMorePublicRef = useRef(false);
+    const isLoadingMorePrivateRef = useRef(false);
+
     const PAGE_SIZE = 4;
 
     const [isCreating, setIsCreating] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [joiningLobbyId, setJoiningLobbyId] = useState<string | null>(null);
 
-    // Filter/Search states
     const [searchQuery, setSearchQuery] = useState("");
-
-    // Creation Form State
     const [lobbyName, setLobbyName] = useState("");
     const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
     const [isPrivateMode, setIsPrivateMode] = useState(false);
-
-    // Tag filter state
     const [selectedTag, setSelectedTag] = useState<string>('All');
 
-    // Lobby limit management
     const [showLimitModal, setShowLimitModal] = useState(false);
     const [userLobbies, setUserLobbies] = useState<any[]>([]);
     const [isDeletingLobby, setIsDeletingLobby] = useState<string | null>(null);
@@ -94,21 +91,16 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
     const { profile } = useAuth();
     const router = useRouter();
-    // Stable supabase ref — createClient() must NOT be called on every render
-    // because a new instance breaks the useCallback/useEffect dep chain and
-    // causes the realtime subscription to teardown/resubscribe on every fetch,
-    // dropping change events (the root cause of the list not updating after leave).
     const supabaseRef = useRef(createClient());
     const supabase = supabaseRef.current;
     const effectiveUserId = currentUserId || profile?.id;
 
-    // Stable refs so fetchLobbies doesn't re-create on every state change.
-    // Sizes count base + extra so load-more pagination is correct.
     const publicLobbiesLenRef = useRef(publicLobbies.length);
     const privateLobbiesLenRef = useRef(privateLobbies.length);
     const extraPublicLenRef = useRef(0);
     const extraPrivateLenRef = useRef(0);
     const joinedLobbiesRef = useRef(joinedLobbies);
+
     useEffect(() => { publicLobbiesLenRef.current = publicLobbies.length; }, [publicLobbies.length]);
     useEffect(() => { privateLobbiesLenRef.current = privateLobbies.length; }, [privateLobbies.length]);
     useEffect(() => { extraPublicLenRef.current = extraPublicLobbies.length; }, [extraPublicLobbies.length]);
@@ -117,16 +109,10 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
     useScrollLock(showCreateModal);
 
-    // Auto-load-more sentinels: replace the manual "Load More" button with
-    // a loader that triggers fetching the next page itself once it scrolls
-    // into view, then appends results right where it was sitting.
     const publicSentinelRef = useRef<HTMLDivElement | null>(null);
     const privateSentinelRef = useRef<HTMLDivElement | null>(null);
-    const publicIntersectingRef = useRef(false);
-    const privateIntersectingRef = useRef(false);
 
     const fetchLobbies = useCallback(async (targetGroup?: 'public' | 'private' | 'joined', loadMore = false) => {
-        // Pagination offset = base + extra already loaded
         let currentSize = 0;
         if (targetGroup === 'public') currentSize = publicLobbiesLenRef.current + extraPublicLenRef.current;
         else if (targetGroup === 'private') currentSize = privateLobbiesLenRef.current + extraPrivateLenRef.current;
@@ -135,17 +121,15 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         const to = from + PAGE_SIZE - 1;
 
         if (loadMore) {
-            if (targetGroup === 'public') setIsLoadingMorePublic(true);
-            else if (targetGroup === 'private') setIsLoadingMorePrivate(true);
+            if (targetGroup === 'public') { setIsLoadingMorePublic(true); isLoadingMorePublicRef.current = true; }
+            else if (targetGroup === 'private') { setIsLoadingMorePrivate(true); isLoadingMorePrivateRef.current = true; }
         } else {
-            // Full refresh — clear both base and extra
             if (targetGroup === 'public') { setPublicLobbies([]); setExtraPublicLobbies([]); }
             if (targetGroup === 'private') { setPrivateLobbies([]); setExtraPrivateLobbies([]); }
             if (!targetGroup) { setIsLoading(true); setExtraPublicLobbies([]); setExtraPrivateLobbies([]); }
         }
 
         try {
-            // 1. Fetch Joined Lobbies first to get IDs for exclusion
             let freshJoinedIds: string[] = [];
             if (!targetGroup || targetGroup === 'joined') {
                 if (effectiveUserId) {
@@ -158,23 +142,22 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                         `)
                         .eq('user_id', effectiveUserId)
                         .in('status', ['joined', 'pending']);
-
+                    
                     if (joinedData) {
                         const hostIds = joinedData.map(d => (d.tod_lobbies as any)?.host_id).filter(Boolean);
                         const { data: hostProfiles } = await supabase
                             .from('profiles')
                             .select('id, username')
                             .in('id', hostIds);
-
+                        
                         const lobbyIds = joinedData.map(d => (d.tod_lobbies as any)?.id).filter(Boolean);
                         let participantCounts: Record<string, number> = {};
-
                         if (lobbyIds.length > 0) {
                             const { data: participantData } = await supabase
                                 .from('tod_participants')
                                 .select('lobby_id')
                                 .in('lobby_id', lobbyIds);
-
+                            
                             participantCounts = (participantData || []).reduce((acc, p) => {
                                 acc[p.lobby_id] = (acc[p.lobby_id] || 0) + 1;
                                 return acc;
@@ -193,7 +176,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                 participant_count: participantCounts[lobby.id] || 0
                             };
                         }).filter(Boolean) as Lobby[];
-
+                        
                         setJoinedLobbies(formattedJoined);
                         freshJoinedIds = formattedJoined.map(l => l.id);
                     }
@@ -201,11 +184,9 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                     setJoinedLobbies([]);
                 }
             } else {
-                // Read from ref — no stale closure
                 freshJoinedIds = joinedLobbiesRef.current.map(l => l.id);
             }
 
-            // 2. Fetch Public/Private lobbies
             const fetchPublic = !targetGroup || targetGroup === 'public';
             const fetchPrivate = !targetGroup || targetGroup === 'private';
 
@@ -228,7 +209,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 const { data, error } = await query;
                 if (error) throw error;
 
-                // Fetch participant counts for all lobbies
                 const lobbyIds = data?.map(l => l.id) || [];
                 let participantCounts: Record<string, number> = {};
 
@@ -237,8 +217,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                         .from('tod_participants')
                         .select('lobby_id')
                         .in('lobby_id', lobbyIds);
-
-                    // Count participants per lobby
+                    
                     participantCounts = (participantData || []).reduce((acc, p) => {
                         acc[p.lobby_id] = (acc[p.lobby_id] || 0) + 1;
                         return acc;
@@ -256,8 +235,10 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             if (fetchPublic) {
                 const results = await fetchShared(false);
                 if (loadMore) {
-                    // Append to extra so fresh results stay visually separate
-                    setExtraPublicLobbies(prev => [...prev, ...results]);
+                    setExtraPublicLobbies(prev => {
+                        const existingIds = new Set([...(publicLobbiesLenRef.current ? publicLobbies : []), ...prev].map(l => l.id));
+                        return [...prev, ...results.filter(r => !existingIds.has(r.id))];
+                    });
                 } else {
                     setPublicLobbies(results);
                 }
@@ -267,7 +248,10 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             if (fetchPrivate) {
                 const results = await fetchShared(true);
                 if (loadMore) {
-                    setExtraPrivateLobbies(prev => [...prev, ...results]);
+                    setExtraPrivateLobbies(prev => {
+                        const existingIds = new Set([...(privateLobbiesLenRef.current ? privateLobbies : []), ...prev].map(l => l.id));
+                        return [...prev, ...results.filter(r => !existingIds.has(r.id))];
+                    });
                 } else {
                     setPrivateLobbies(results);
                 }
@@ -280,47 +264,40 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             setIsLoading(false);
             setIsLoadingMorePublic(false);
             setIsLoadingMorePrivate(false);
+            isLoadingMorePublicRef.current = false;
+            isLoadingMorePrivateRef.current = false;
         }
-    }, [effectiveUserId, supabase]); // ← only truly stable deps; refs handle sizes
+    }, [effectiveUserId, supabase]);
 
     useEffect(() => {
         const node = publicSentinelRef.current;
         if (!node || !hasMorePublic) return;
         const observer = new IntersectionObserver(([entry]) => {
-            if (entry.isIntersecting && !publicIntersectingRef.current && !isLoadingMorePublic) {
-                publicIntersectingRef.current = true;
+            // Check ref directly to avoid dependency loops causing endless triggers
+            if (entry.isIntersecting && !isLoadingMorePublicRef.current) {
                 fetchLobbies('public', true);
-            } else if (!entry.isIntersecting) {
-                publicIntersectingRef.current = false;
             }
-        }, { threshold: 0.3 });
+        }, { threshold: 0.1 });
         observer.observe(node);
         return () => observer.disconnect();
-    }, [hasMorePublic, isLoadingMorePublic, fetchLobbies]);
+    }, [hasMorePublic, fetchLobbies]);
 
     useEffect(() => {
         const node = privateSentinelRef.current;
         if (!node || !hasMorePrivate) return;
         const observer = new IntersectionObserver(([entry]) => {
-            if (entry.isIntersecting && !privateIntersectingRef.current && !isLoadingMorePrivate) {
-                privateIntersectingRef.current = true;
+            if (entry.isIntersecting && !isLoadingMorePrivateRef.current) {
                 fetchLobbies('private', true);
-            } else if (!entry.isIntersecting) {
-                privateIntersectingRef.current = false;
             }
-        }, { threshold: 0.3 });
+        }, { threshold: 0.1 });
         observer.observe(node);
         return () => observer.disconnect();
-    }, [hasMorePrivate, isLoadingMorePrivate, fetchLobbies]);
+    }, [hasMorePrivate, fetchLobbies]);
 
-    // Keep a stable ref to fetchLobbies so the realtime subscription effect
-    // never needs fetchLobbies as a dep — avoids the teardown/resubscribe cycle
-    // that causes missed change events after leave/delete.
     const fetchLobbiesRef = useRef(fetchLobbies);
     useEffect(() => { fetchLobbiesRef.current = fetchLobbies; }, [fetchLobbies]);
 
     useEffect(() => {
-        // Load cached lobbies from Dexie on mount for instant display
         db.todLobbies
             .where('status')
             .anyOf('waiting', 'active')
@@ -341,15 +318,12 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 }
             })
             .catch(() => { });
-
+            
         fetchLobbies();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveUserId]);
 
     useEffect(() => {
-        // Subscribe once — call via fetchLobbiesRef so fetchLobbies is never
-        // a dep here. Adding fetchLobbies as a dep causes teardown/resubscribe
-        // on every fetch, dropping the very events we are listening for.
         const lobbyChannel = supabase
             .channel('lobbies_list_realtime')
             .on('postgres_changes', {
@@ -371,7 +345,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             })
             .subscribe();
 
-        // Subscribe to participant changes to update counts in real-time
         const participantChannel = supabase
             .channel('participants_list_realtime')
             .on('postgres_changes', {
@@ -379,10 +352,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 schema: 'public',
                 table: 'tod_participants'
             }, (payload) => {
-                // If this change is about the current user leaving / being
-                // removed / rejected / banned, strip the lobby out of
-                // "My Lobbies" immediately so it can never linger there —
-                // don't wait on the full refetch below to catch up.
                 const oldRow = payload.old as { lobby_id?: string; user_id?: string } | null;
                 const newRow = payload.new as { lobby_id?: string; user_id?: string; status?: string } | null;
                 const uid = effectiveUserId;
@@ -417,7 +386,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             supabase.removeChannel(participantChannel);
             document.removeEventListener('visibilitychange', handleVisibility);
         };
-    }, [supabase]); // supabase is now a stable ref — this effect runs exactly once
+    }, [supabase]); 
 
     const sortGroup = (list: Lobby[]) => {
         return [...list].sort((a, b) => {
@@ -441,17 +410,18 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
         if (selectedTag === 'All') return sorted;
         return sorted.filter(l => (l.category || 'Casual') === selectedTag);
     }, [publicLobbies, selectedTag]);
-    // Extra (load-more) lobbies are NOT re-sorted — they stay in fetch order
-    // and render after the base list so users can clearly see what's new.
+
     const sortedExtraPublic = useMemo(() => {
         if (selectedTag === 'All') return extraPublicLobbies;
         return extraPublicLobbies.filter(l => (l.category || 'Casual') === selectedTag);
     }, [extraPublicLobbies, selectedTag]);
+
     const sortedPrivate = useMemo(() => {
         const sorted = sortGroup(privateLobbies);
         if (selectedTag === 'All') return sorted;
         return sorted.filter(l => (l.category || 'Casual') === selectedTag);
     }, [privateLobbies, selectedTag]);
+
     const sortedExtraPrivate = useMemo(() => {
         if (selectedTag === 'All') return extraPrivateLobbies;
         return extraPrivateLobbies.filter(l => (l.category || 'Casual') === selectedTag);
@@ -466,17 +436,14 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
 
         setIsCreating(true);
         try {
-            // Check lobby creation limit
             const maxLobbies = isPro ? 5 : 3;
             const { count, error: countError } = await supabase
                 .from('tod_lobbies')
                 .select('id', { count: 'exact', head: true })
                 .eq('host_id', profile.id);
-
             if (countError) throw countError;
 
             if ((count ?? 0) >= maxLobbies) {
-                // Show lobby management modal instead of blocking
                 const { getUserLobbies } = await import('@/actions/tod-xp');
                 const lobbies = await getUserLobbies();
                 setUserLobbies(lobbies);
@@ -498,7 +465,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 })
                 .select()
                 .single();
-
             if (lobbyError) throw lobbyError;
 
             const { error: joinError } = await supabase
@@ -508,7 +474,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                     user_id: profile.id,
                     status: 'joined'
                 });
-
             if (joinError) throw joinError;
 
             toast.success('Lobby created!');
@@ -535,8 +500,8 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             return;
         }
         setJoiningLobbyId(lobby.id);
+        
         try {
-            // Use server action for secure joining and host rewards
             const { joinLobbyAction } = await import('@/actions/tod-xp');
             const result = await joinLobbyAction(lobby.id, lobby.is_private || false);
 
@@ -547,16 +512,11 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             }
 
             const status = result.status;
-
             if (status === 'joined') {
-                // If it was public, the server action already awarded XP to the host
-                if (lobby.is_private) {
-                    // Should not happen if logic is correct, but just in case
-                }
                 router.push(`/tod/${lobby.slug || lobby.id}`);
             } else if (status === 'pending') {
                 toast.success('Request sent! Waiting for host approval ⏳');
-                fetchLobbies(); // Refresh to show pending status
+                fetchLobbies(); 
                 setJoiningLobbyId(null);
             } else if (status === 'rejected') {
                 toast.error('Your request to join this lobby was rejected 😔');
@@ -565,7 +525,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                 toast.error('You have been banned from this lobby 🚫');
                 setJoiningLobbyId(null);
             } else {
-                // Fallback
                 toast.error('Unknown status');
                 setJoiningLobbyId(null);
             }
@@ -613,7 +572,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             : isPrivateCard
                 ? 'border-amber-500/20 hover:border-amber-500/50 bg-slate-900/40'
                 : 'border-slate-800/80 hover:border-red-500/40 bg-slate-900/60';
-
+                
         return (
             <div
                 key={lobby.id}
@@ -734,7 +693,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                     </div>
 
                     <div className="space-y-10">
-                        {/* 1. My Lobbies — Horizontal Scroll */}
+                        {/* 1. My Lobbies */}
                         {sortedJoined.length > 0 && (
                             <section>
                                 <div className="flex items-center justify-between mb-4 px-1">
@@ -752,7 +711,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             </section>
                         )}
 
-                        {/* 2. Private Lobbies — Horizontal Scroll */}
+                        {/* 2. Private Lobbies */}
                         <section>
                             <div className="flex items-center justify-between mb-4 px-1">
                                 <h2 className="text-base font-black text-white flex items-center gap-2.5 uppercase tracking-widest">
@@ -770,10 +729,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             {sortedPrivate.length > 0 ? (
                                 <div className="flex overflow-x-auto pb-3 gap-3 snap-x snap-mandatory no-scrollbar -mx-4 px-4">
                                     {sortedPrivate.map(lobby => renderLobbyCard(lobby, 'private'))}
-
-                                    {/* Freshly-loaded lobbies append directly after the existing
-                                        list — the first new card lands where the button was,
-                                        the rest peek off the edge to hint there's more to scroll. */}
                                     {sortedExtraPrivate.map(lobby => renderLobbyCard(lobby, 'private'))}
 
                                     {hasMorePrivate && (
@@ -782,7 +737,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                             className="snap-center shrink-0 w-[90px] h-[160px] flex items-center justify-center text-amber-500/60"
                                             aria-label="Loading more private lobbies"
                                         >
-                                            <Loader2 size={22} className="animate-spin" />
+                                            {isLoadingMorePrivateRef.current ? <Loader2 size={22} className="animate-spin" /> : <div className="w-4 h-4 rounded-full bg-amber-500/20" />}
                                         </div>
                                     )}
                                 </div>
@@ -793,7 +748,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             )}
                         </section>
 
-                        {/* 3. Public Lobbies — Horizontal Scroll */}
+                        {/* 3. Public Lobbies */}
                         <section>
                             <div className="flex items-center justify-between mb-4 px-1">
                                 <h2 className="text-base font-black text-white flex items-center gap-2.5 uppercase tracking-widest">
@@ -814,10 +769,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                             {sortedPublic.length > 0 ? (
                                 <div className="flex overflow-x-auto pb-3 gap-3 snap-x snap-mandatory no-scrollbar -mx-4 px-4">
                                     {sortedPublic.map(lobby => renderLobbyCard(lobby, 'default'))}
-
-                                    {/* Freshly-loaded lobbies append directly after the existing
-                                        list — the first new card lands where the button was,
-                                        the rest peek off the edge to hint there's more to scroll. */}
                                     {sortedExtraPublic.map(lobby => renderLobbyCard(lobby, 'default'))}
 
                                     {hasMorePublic && (
@@ -826,7 +777,7 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                             className="snap-center shrink-0 w-[90px] h-[160px] flex items-center justify-center text-slate-500"
                                             aria-label="Loading more public lobbies"
                                         >
-                                            <Loader2 size={22} className="animate-spin" />
+                                            {isLoadingMorePublicRef.current ? <Loader2 size={22} className="animate-spin" /> : <div className="w-4 h-4 rounded-full bg-slate-500/20" />}
                                         </div>
                                     )}
                                 </div>
@@ -974,7 +925,6 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
                                             if (result.success) {
                                                 setUserLobbies(prev => prev.filter(l => l.id !== lobby.id));
                                                 toast.success('Lobby deleted');
-                                                // Auto-open create modal after deletion
                                                 if (pendingCreateAfterDelete) {
                                                     setShowLimitModal(false);
                                                     setPendingCreateAfterDelete(false);
@@ -1090,4 +1040,4 @@ export default function LobbyListClient({ initialLobbies, currentUserId, isPro }
             `}</style>
         </div>
     );
-}
+                                    }
