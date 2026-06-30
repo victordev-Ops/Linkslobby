@@ -285,12 +285,15 @@ export const useGameLogic = (lobbyId: string, userId?: string) => {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: data.id, status: 'sent' as const } : m));
 
       // If this is a question (truth/dare), update lobby with the question
-      if ((messageType === 'truth' || messageType === 'dare') && userId === lobby.current_asker_id) {
-        await supabase
-          .from('tod_lobbies')
-          .update({ current_question: content })
-          .eq('id', lobbyId);
-      }
+if ((messageType === 'truth' || messageType === 'dare') && userId === lobby.current_asker_id) {
+  const { data: ok, error: qError } = await supabase.rpc('submit_tod_question', {
+    lobby_uuid: lobbyId,
+    question_text: content,
+  });
+  if (qError || !ok) {
+    console.error('Failed to set current_question:', qError);
+  }
+        }
 
     } catch {
       toast.error("Message failed to send");
