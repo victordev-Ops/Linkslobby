@@ -59,7 +59,7 @@ export default function AmaPublicClient({
 
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <h1 className="text-xl font-black text-gray-800 text-center">
-                Ask @{username}
+                Ask {username}
               </h1>
               {isPro && <VerifiedBadge size={18} className="text-orange-500" />}
             </div>
@@ -98,11 +98,11 @@ export default function AmaPublicClient({
             className="p-12 flex flex-col items-center text-center"
           >
             <div className="mb-6 flex justify-center">
-              <CheckCircle size={52} className="text-orange-500" strokeWidth={1.5} />
+              <CheckCircle size={52} strokeWidth={1.5} />
             </div>
             <h2 className="text-2xl font-black text-gray-800 mb-2">Sent!</h2>
             <p className="text-gray-500 font-medium mb-8">
-              Your anonymous question is waiting for @{username}
+              Your anonymous question is waiting for {username}
             </p>
             <div className="w-full space-y-3">
               <button
@@ -125,7 +125,6 @@ export default function AmaPublicClient({
                     <h3 className="font-bold text-gray-800 text-sm group-hover:text-orange-600 transition-colors">Create your own Link</h3>
                     <p className="text-gray-500 text-xs line-clamp-1 mt-0.5">Receive anonymous questions</p>
                   </div>
-                  <div className="text-orange-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all">✨</div>
                 </Link>
               </div>
             </div>
