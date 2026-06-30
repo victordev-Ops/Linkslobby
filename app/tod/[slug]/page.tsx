@@ -4,6 +4,9 @@ import { createServerClient } from "@supabase/ssr";
 import TODGameClient from "@/components/tod/TODGameClient";
 import { XP_REWARDS, applyRewardMultiplier, formatRewardReason, isBonusActive } from "@/hooks/xp";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Next.js 15+ - params is a Promise
 export default async function TODGamePage({
   params,
@@ -48,7 +51,6 @@ export default async function TODGamePage({
 
   // 1. Resolve Slug/ID to Lobby UUID
   let lobbyId = slug;
-
   // Check if slug is a valid UUID
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
@@ -149,5 +151,5 @@ export default async function TODGamePage({
   }
 
   return <TODGameClient lobbyId={lobbyId} />;
-}
-
+    }
+  
