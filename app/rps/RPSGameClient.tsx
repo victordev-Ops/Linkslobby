@@ -5,6 +5,7 @@ import { useRPSEngine } from "./hooks/useRPSEngine"
 import { RPSLobby } from "./components/RPSLobby"
 import { RPSWaitingRoom } from "./components/RPSWaitingRoom"
 import { RPSArena } from "./components/RPSArena"
+import { RPSStakeSelector } from "./components/RPSStakeSelector"
 
 interface RPSGameClientProps {
     profile: { id: string; username: string; slug: string; is_pro: boolean }
@@ -23,6 +24,11 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
                 </div>
             </div>
         )
+    }
+
+    // ─── Stake Selector Modal ───
+    if (engine.showStakeSelector) {
+        return <RPSStakeSelector engine={engine} />
     }
 
     // ─── Screens ───
