@@ -1,88 +1,21 @@
 "use client"
 import { useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 import { ArrowLeft, Loader2, Monitor, Users, UserPlus, History, Star, Swords, X, Ghost, Bot } from "lucide-react"
 import type { useRPSEngine } from "../hooks/useRPSEngine"
 import { useRouter } from "next/navigation"
 
-// Same 9-point topology (cuff → palm → thumb → web → tipA → mid-web → tipB → palm → cuff)
-// smoothed with Catmull-Rom-to-Bezier, so the browser tweens point-for-point between
-// shapes instead of cross-fading — the hand silhouette actually reshapes itself.
-const HAND_PATHS = {
-    rock: "M -10.00,30.00 C -5.67,20.67 8.67,17.67 16.00,14.00 C 23.33,10.33 28.00,8.00 34.00,8.00 C 40.00,8.00 45.67,12.67 52.00,14.00 C 58.33,15.33 67.67,12.33 72.00,16.00 C 76.33,19.67 77.67,29.00 78.00,36.00 C 78.33,43.00 78.00,51.00 74.00,58.00 C 70.00,65.00 68.00,76.00 54.00,78.00 C 40.00,80.00 0.67,78.00 -10.00,70.00 C -20.67,62.00 -14.33,39.33 -10.00,30.00 Z",
-    paper: "M -10.00,30.00 C -6.00,19.33 11.00,15.67 14.00,10.00 C 17.00,4.33 3.00,-6.00 8.00,-4.00 C 13.00,-2.00 28.00,20.67 44.00,22.00 C 60.00,23.33 100.33,1.00 104.00,4.00 C 107.67,7.00 65.33,31.33 66.00,40.00 C 66.67,48.67 111.33,48.67 108.00,56.00 C 104.67,63.33 65.67,81.00 46.00,84.00 C 26.33,87.00 -0.67,83.00 -10.00,74.00 C -19.33,65.00 -14.00,40.67 -10.00,30.00 Z",
-    scissors: "M -10.00,28.00 C -5.67,19.00 10.00,17.67 16.00,16.00 C 22.00,14.33 21.67,17.67 26.00,18.00 C 30.33,18.33 28.67,20.67 42.00,18.00 C 55.33,15.33 103.33,-1.67 106.00,2.00 C 108.67,5.67 58.00,30.67 58.00,40.00 C 58.00,49.33 109.00,51.33 106.00,58.00 C 103.00,64.67 59.33,78.00 40.00,80.00 C 20.67,82.00 -1.67,78.67 -10.00,70.00 C -18.33,61.33 -14.33,37.00 -10.00,28.00 Z",
-} as const
-
-const MORPH_VALUES = `${HAND_PATHS.rock};${HAND_PATHS.paper};${HAND_PATHS.scissors};${HAND_PATHS.rock}`
-const MORPH_KEYTIMES = "0;0.33;0.66;1"
-const MORPH_SPLINES = "0.45 0 0.2 1;0.45 0 0.2 1;0.45 0 0.2 1"
-
-/** One 3D-shaded hand: gradient body for form, a clipped gloss highlight + underside
- *  shadow for volume, and an SMIL `d` morph cycling rock → paper → scissors. */
-function Hand3D({ side, animate }: { side: "left" | "right"; animate: boolean }) {
-    const id = side === "left" ? "lh" : "rh"
-    const hueA = side === "left" ? "#6ee7b7" : "#99f6e4"
-    const hueB = side === "left" ? "#10b981" : "#2dd4bf"
-    const hueC = side === "left" ? "#065f46" : "#0f766e"
-    const mirror = side === "right"
-
-    return (
-        <div
-            className={`w-24 h-24 ${animate ? `rps3d-${side}` : ""}`}
-            style={{ perspective: 500, filter: `drop-shadow(0 10px 14px ${side === "left" ? "rgba(16,185,129,0.35)" : "rgba(45,212,191,0.35)"})` }}
-        >
-            <div className="w-full h-full" style={{ transform: mirror ? "scaleX(-1)" : undefined }}>
-                <svg viewBox="-30 -20 145 115" className="w-full h-full overflow-visible">
-                    <defs>
-                        <linearGradient id={`${id}-grad`} x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor={hueA} />
-                            <stop offset="55%" stopColor={hueB} />
-                            <stop offset="100%" stopColor={hueC} />
-                        </linearGradient>
-                        <clipPath id={`${id}-clip`}>
-                            <use href={`#${id}-shape`} />
-                        </clipPath>
-                        <filter id={`${id}-blur`} x="-50%" y="-50%" width="200%" height="200%">
-                            <feGaussianBlur stdDeviation="9" />
-                        </filter>
-                    </defs>
-
-                    {/* grounding shadow */}
-                    <ellipse cx="34" cy="92" rx="44" ry="10" fill="black" opacity="0.28" filter={`url(#${id}-blur)`} />
-
-                    {/* cuff (static — only the hand mass morphs) */}
-                    <rect x="-26" y="34" width="34" height="32" rx="15" fill={`url(#${id}-grad)`} opacity="0.9" />
-
-                    {/* morphing hand body */}
-                    <path id={`${id}-shape`} d={HAND_PATHS.rock} fill={`url(#${id}-grad)`}>
-                        {animate && (
-                            <animate
-                                attributeName="d"
-                                values={MORPH_VALUES}
-                                keyTimes={MORPH_KEYTIMES}
-                                dur="3s"
-                                calcMode="spline"
-                                keySplines={MORPH_SPLINES}
-                                repeatCount="indefinite"
-                            />
-                        )}
-                    </path>
-
-                    {/* volume: clipped gloss highlight + underside shade, riding along with the morph */}
-                    <g clipPath={`url(#${id}-clip)`}>
-                        <ellipse cx="22" cy="14" rx="34" ry="20" fill="white" opacity="0.4" filter={`url(#${id}-blur)`} />
-                        <ellipse cx="58" cy="70" rx="46" ry="24" fill="black" opacity="0.22" filter={`url(#${id}-blur)`} />
-                    </g>
-                </svg>
-            </div>
-        </div>
-    )
-}
+// react-three-fiber needs a real browser/WebGL context, so the scene is loaded
+// client-only and skipped entirely during SSR.
+const RPSHandsScene = dynamic(() => import("./RPSHandsScene").then(m => m.RPSHandsScene), {
+    ssr: false,
+    loading: () => <div className="w-full h-full animate-pulse rounded-2xl bg-white/5" />,
+})
 
 /**
- * Two 3D-shaded hands enter from opposite edges and clash toward a center VS puck.
- * Each hand's silhouette morphs — rock → paper → scissors — rather than cross-fading
- * between flat icons, so it reads as an actual hand reshaping itself mid-throw.
+ * Real rendered 3D: two articulated hands (palm + 4 fingers + thumb, each with real
+ * joints) face each other and cycle rock → paper → scissors by rotating those joints,
+ * lit with a key/fill rig and shot with a perspective camera — not a flat icon swap.
  */
 function RPSHandsHero() {
     const [reduceMotion, setReduceMotion] = useState(false)
@@ -96,37 +29,8 @@ function RPSHandsHero() {
     }, [])
 
     return (
-        <div className="relative w-full max-w-[300px] h-32 mx-auto select-none" aria-hidden="true" style={{ perspective: 700 }}>
-            <style>{`
-                @keyframes rps3d-left {
-                    0%, 100% { transform: translateX(-14px) translateZ(-14px) rotateY(24deg) rotateX(4deg); }
-                    16%, 49%, 83% { transform: translateX(4px) translateZ(12px) rotateY(10deg) rotateX(2deg); }
-                }
-                @keyframes rps3d-right {
-                    0%, 100% { transform: translateX(14px) translateZ(-14px) rotateY(-24deg) rotateX(4deg); }
-                    16%, 49%, 83% { transform: translateX(-4px) translateZ(12px) rotateY(-10deg) rotateX(2deg); }
-                }
-                @keyframes rps-badge-pulse {
-                    0%, 100% { transform: scale(0.9) translateZ(0); opacity: 0.75; }
-                    16%, 49%, 83% { transform: scale(1.15) translateZ(10px); opacity: 1; }
-                }
-                .rps3d-left { animation: rps3d-left 3s ease-in-out infinite; transform-style: preserve-3d; }
-                .rps3d-right { animation: rps3d-right 3s ease-in-out infinite; transform-style: preserve-3d; }
-                .rps-badge { animation: rps-badge-pulse 3s ease-in-out infinite; }
-                @media (prefers-reduced-motion: reduce) {
-                    .rps3d-left, .rps3d-right, .rps-badge { animation: none !important; transform: none !important; }
-                }
-            `}</style>
-
-            <div className="absolute inset-0 flex items-center justify-between" style={{ transformStyle: "preserve-3d" }}>
-                <Hand3D side="left" animate={!reduceMotion} />
-
-                <div className="rps-badge shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 border border-white/15 backdrop-blur-sm flex items-center justify-center mx-1 shadow-lg shadow-black/30">
-                    <span className="text-[11px] font-black tracking-wider text-white/80">VS</span>
-                </div>
-
-                <Hand3D side="right" animate={!reduceMotion} />
-            </div>
+        <div className="relative w-full max-w-[320px] h-40 mx-auto" aria-hidden="true">
+            <RPSHandsScene reduceMotion={reduceMotion} />
         </div>
     )
 }
