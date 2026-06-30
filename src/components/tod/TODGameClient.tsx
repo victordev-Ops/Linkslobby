@@ -27,11 +27,11 @@ interface TODGameClientProps {
 export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const { profile } = useAuth();
   const router = useRouter();
+  
   const [isUploading, setIsUploading] = useState(false);
   const handleUploadImage = async (file: File): Promise<string | null> => {
     setIsUploading(true);
     try {
-      // Compress image before passing to the upload action
       const optimizedFile = await compressImage(file);
       const url = await uploadImage(optimizedFile);
       setIsUploading(false);
@@ -42,15 +42,17 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       return null;
     }
   };
+  
   const [showSidebar, setShowSidebar] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<typeof messages[0] | null>(null);
+  const [replyingTo, setReplyingTo] = useState<any | null>(null);
   const [hideFinishSummary, setHideFinishSummary] = useState(false);
   const [friendsList, setFriendsList] = useState<FriendshipWithProfile[]>([]);
   const [invitedFriendIds, setInvitedFriendIds] = useState<Set<string>>(new Set());
   const [isLoadingFriends, setIsLoadingFriends] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const previousMessageCount = useRef(0);
@@ -84,22 +86,37 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   } = useGameLogic(lobbyId, profile?.id);
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [locallyRemovedIds, setLocallyRemovedIds] = useState<Set<string>>(new Set());
+
+  const handleRemoveParticipant = async (id: string) => {
+    setLocallyRemovedIds(prev => new Set(prev).add(id));
+    await removeParticipant(id);
+  };
+  
+  const handleBanParticipant = async (id: string) => {
+    setLocallyRemovedIds(prev => new Set(prev).add(id));
+    await banParticipant(id);
+  };
+  
+  const handleDeclineRequest = async (userId: string) => {
+    setLocallyRemovedIds(prev => new Set(prev).add(userId));
+    await declineRequest(userId);
+  };
 
   const currentUserParticipant = participants.find(p => p.user_id === profile?.id);
   const isJoined = currentUserParticipant?.status === 'joined';
   const isRejected = currentUserParticipant?.status === 'rejected';
   const isBanned = currentUserParticipant?.status === 'banned';
 
-  // Filter participants for UI - only show joined users in the list/counts
-  const joinedParticipants = participants.filter(p => p.status === 'joined');
-  const pendingRequests = participants.filter(p => p.status === 'pending');
-  const bannedParticipants = participants.filter(p => p.status === 'banned');
+  // Apply optimistic update filtering
+  const activeParticipants = participants.filter(p => !locallyRemovedIds.has(p.id) && !locallyRemovedIds.has(p.user_id));
+  const joinedParticipants = activeParticipants.filter(p => p.status === 'joined');
+  const pendingRequests = activeParticipants.filter(p => p.status === 'pending');
+  const bannedParticipants = activeParticipants.filter(p => p.status === 'banned');
 
-  // Group messages with their answers - efficient O(n) with question_ref
   const messagesWithAnswers = useMemo(() => {
     return messages.map(msg => {
       if (msg.message_type === 'truth' || msg.message_type === 'dare') {
-        // Find answer by question_ref foreign key - O(n) single pass
         const answer = messages.find(m =>
           m.message_type === 'answer' &&
           m.question_ref === msg.id
@@ -110,10 +127,8 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     });
   }, [messages]);
 
-  // Smart scroll: only auto-scroll if user is near bottom
   const scrollToBottom = (force = false) => {
     if (!messagesContainerRef.current || !messagesEndRef.current) return;
-
     const container = messagesContainerRef.current;
     const scrollThreshold = 150;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
@@ -137,45 +152,40 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     };
   }, [cleanup]);
 
-  const targetUser = participants.find(p => p.user_id === lobby?.current_target_id);
-  const askerUser = participants.find(p => p.user_id === lobby?.current_asker_id);
+  const targetUser = activeParticipants.find(p => p.user_id === lobby?.current_target_id);
+  const askerUser = activeParticipants.find(p => p.user_id === lobby?.current_asker_id);
   const isTarget = profile?.id === lobby?.current_target_id;
   const isAsker = profile?.id === lobby?.current_asker_id;
   const isHost = profile?.id === lobby?.host_id;
 
-  // Track status changes for notifications
   const prevStatusRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const currentStatus = currentUserParticipant?.status;
     const prevStatus = prevStatusRef.current;
 
-    // Only if we had a previous status (so we don't trigger on initial load if pending)
     if (prevStatus === 'pending') {
       if (currentStatus === 'joined') {
         toast.success("Request Approved! Welcome to the game! 🎉");
       } else if (currentStatus === 'rejected') {
         toast.error("Your join request was declined by the host.");
+        router.refresh();
         router.push('/tod');
       } else if (currentStatus === undefined && !isLoading && !isHost) {
-        // If we were pending and now we are gone (and not loading, and not host deleting ourselves)
-        // This case might still happen if record is deleted, but now we use rejected status
         toast.error("You have been removed from the lobby.");
+        router.refresh();
         router.push('/tod');
       }
     }
-
     prevStatusRef.current = currentStatus;
   }, [currentUserParticipant?.status, isLoading, isHost, router]);
 
-  // Reset finish summary hidden state when game ends
   useEffect(() => {
     if (lobby?.status === 'finished') {
       setHideFinishSummary(false);
     }
   }, [lobby?.status]);
 
-  // Fetch friends for the host in waiting state
   useEffect(() => {
     if (isHost && lobby?.status === 'waiting') {
       setIsLoadingFriends(true);
@@ -198,10 +208,10 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     }
   }, [lobby]);
 
-  // Handle banned status - redirect immediately
   useEffect(() => {
     if (isBanned && !isLoading) {
       toast.error('You have been banned from this lobby.');
+      router.refresh();
       router.push('/tod');
     }
   }, [isBanned, isLoading, router]);
@@ -213,7 +223,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       text: `Come play Truth or Dare with me on Say! 🎉`,
       url,
     };
-
     try {
       if (navigator.share && navigator.canShare?.(shareData)) {
         await navigator.share(shareData);
@@ -222,7 +231,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         toast.success("Link copied! Share with friends 🎉");
       }
     } catch (err: any) {
-      // User cancelled share dialog — not an error
       if (err?.name !== 'AbortError') {
         await navigator.clipboard.writeText(url);
         toast.success("Link copied! Share with friends 🎉");
@@ -232,18 +240,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
   const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget;
-    // Check if scrolled to top and there are more messages to load
     if (container.scrollTop === 0 && hasMoreMessages && !isLoadingMore && !isLoading) {
       const prevScrollHeight = container.scrollHeight;
       setIsLoadingMore(true);
-
       await loadMoreMessages();
-
-      // Wait for DOM to update with new messages then restore scroll position
       setTimeout(() => {
         if (container) {
           const newScrollHeight = container.scrollHeight;
-          // Calculate the difference and maintain position
           container.scrollTop = newScrollHeight - prevScrollHeight;
         }
         setIsLoadingMore(false);
@@ -254,15 +257,12 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
   const handleSelectMode = async (mode: 'truth' | 'dare') => {
     await selectMode(mode);
   };
-
   const handleStartGame = async () => {
     await startGame();
   };
-
   const handleNextRound = async () => {
     await startNextRound();
   };
-
   const handleEndGame = async () => {
     await endGame();
   };
@@ -274,26 +274,19 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     let messageType: 'chat' | 'truth' | 'dare' | 'system' | 'answer' = 'chat';
     let questionRef: string | undefined;
 
-    // Determine message type based on game state
     if (lobby?.status === 'active') {
-      // If asker is asking the question
       if (isAsker && lobby?.selected_mode && !lobby?.current_question) {
         messageType = lobby.selected_mode;
       }
-      // If target is answering the question
       else if (isTarget && lobby?.current_question) {
-        // Find the LATEST question message by content
         const questionMsg = [...messages].reverse().find(m =>
           (m.message_type === 'truth' || m.message_type === 'dare') &&
           m.content === lobby.current_question
         );
-
         const hasAnswer = questionMsg && messages.some(m =>
           m.message_type === 'answer' &&
           m.question_ref === questionMsg.id
         );
-
-        // Target MUST explicitly reply (swipe) the question card to answer
         if (!hasAnswer && questionMsg && replyingTo?.id === questionMsg.id) {
           messageType = 'answer';
           questionRef = questionMsg.id;
@@ -301,17 +294,13 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       }
     }
 
-    // Add reply context to message if replying AND it's not being marked as an official game answer
     let finalContent = content;
     if (replyingTo && messageType !== 'answer') {
       const replyUsername = replyingTo.profiles?.username || 'Someone';
-
-      // If the message being replied to is already a reply, strip the grandparent context
       let contentToPreview = replyingTo.content;
       if (contentToPreview.startsWith('@') && contentToPreview.includes('\n\n')) {
         contentToPreview = contentToPreview.split('\n\n').slice(1).join('\n\n');
       }
-
       const replyPreview = contentToPreview.length > 50
         ? contentToPreview.substring(0, 50) + '...'
         : contentToPreview;
@@ -319,28 +308,26 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     }
 
     await sendMessage(finalContent, imageUrl, messageType, profile?.username, questionRef);
-    setReplyingTo(null); // Clear reply after sending
+    setReplyingTo(null);
     setTimeout(() => scrollToBottom(true), 100);
   };
 
-
-
   const handleLeaveLobby = async () => {
     if (!lobby) {
+      router.refresh();
       router.push('/tod');
       return;
     }
 
-    // For pending/rejected users — just leave without confirmation
     if (!isHost && !isJoined) {
       setIsLeaving(true);
       await leaveLobby();
       cleanup();
+      router.refresh();
       router.push('/tod');
       return;
     }
 
-    // Otherwise show the confirmation modal
     setShowLeaveConfirm(true);
   };
 
@@ -353,6 +340,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         await leaveLobby();
       }
       cleanup();
+      router.refresh();
       router.push('/tod');
     } catch {
       setIsLeaving(false);
@@ -369,39 +357,27 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         element.classList.remove('ring-2', 'ring-red-500', 'ring-offset-2', 'ring-offset-slate-950');
       }, 2000);
     }
-    // Close sidebar on mobile after clicking
     if (showSidebar) {
       setShowSidebar(false);
     }
   };
 
-  const handleReply = (message: typeof messages[0]) => {
+  const handleReply = (message: any) => {
     setReplyingTo(message);
-    // Focus on input (implement in ChatInput)
   };
 
   const handleCancelReply = () => {
     setReplyingTo(null);
   };
 
-
-
   const canSendMessage = () => {
     if (!isJoined) return false;
-
-    // Host can always chat if they are joined
     if (isHost) return true;
-
-    // Allow chat in waiting and finished states for everyone
     if (lobby?.status === 'waiting') return true;
     if (lobby?.status === 'finished') return true;
 
-    // During active game
     if (lobby?.status === 'active') {
-      // Asker can ask question after mode is selected
       if (lobby?.selected_mode && !lobby?.current_question && isAsker) return true;
-
-      // Target: can only send if they are replying to the question card (swipe) or after answering
       if (lobby?.current_question && isTarget) {
         const currentQuestionMsg = [...messages].reverse().find(m =>
           (m.message_type === 'truth' || m.message_type === 'dare') &&
@@ -411,28 +387,21 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
           m.message_type === 'answer' &&
           m.question_ref === currentQuestionMsg.id
         );
-        // If already answered, everyone can chat
         if (hasAnswer) return true;
-        // Target must swipe-reply to the question card — only allow if replying to that exact card
         if (replyingTo?.id === currentQuestionMsg?.id) return true;
-        // Block regular typing — force the swipe
         return false;
       }
 
-      // After target answers, everyone can chat until next round
       if (lobby?.current_question) {
         const hasAnswer = messages.some(m =>
           m.message_type === 'answer' &&
-          m.question_ref && // Message is an answer
+          m.question_ref && 
           messages.some(q => q.id === m.question_ref && q.content === lobby.current_question)
         );
-        if (hasAnswer) return true; // Everyone can chat after answer
+        if (hasAnswer) return true; 
       }
-
-      // Otherwise spectators cannot chat
       return false;
     }
-
     return false;
   };
 
@@ -458,7 +427,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
           m.question_ref === currentQuestionMsg.id
         );
         if (hasAnswer) return "Chat with everyone...";
-        
         if (replyingTo?.id === currentQuestionMsg?.id) {
           return "Type your official answer...";
         }
@@ -476,7 +444,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         if (hasAnswer) return "Chat with everyone...";
         return "Waiting for answer...";
       }
-      // Default for spectators
       return "Spectating - chat disabled during game...";
     }
     return "Type a message...";
@@ -507,8 +474,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     );
   }
-
-
 
   return (
   <div className="fixed inset-0 flex items-center justify-center bg-slate-950 overflow-hidden font-sans selection:bg-red-500/30 overscroll-behavior-none touch-none">
@@ -567,9 +532,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 <Clock size={32} className="text-amber-400" />
               </div>
               <h2 className="text-3xl font-black text-white mb-4 italic">Waiting for Approval</h2>
-              <p className="text-slate-400 max-w-md leading-relaxed mb-8">
-                This is a private lobby. Your request to join has been sent to the host.
-                Please wait while they review your request.
+              <p classNaame="text-slate-400 max-w-md leading-relaxed mb-8">
+                 This is a private lobby. Your request to join has been sent to the host.
+                 Please wait while they review your request.
               </p>
               <button
                 onClick={handleLeaveLobby}
@@ -629,7 +594,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
               <AnimatePresence>
                 {showMenu && (
-                  <>
+                   <>
                     <div
                       className="fixed inset-0 z-[150] bg-transparent"
                       onClick={() => setShowMenu(false)}
@@ -640,7 +605,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                       exit={{ opacity: 0, scale: 0.95, y: -10 }}
                       className="absolute top-full right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden z-[160] flex flex-col p-1.5"
                     >
-                      {/* Menu Items */}
                       <button
                         onClick={copyInviteLink}
                         className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 rounded-xl transition-colors text-left w-full"
@@ -671,7 +635,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                       )}
 
                       {isHost && lobby.status === 'finished' && messages.length > 3 && (
-                        <button
+                       <button
                           onClick={() => {
                             handleStartGame();
                             setShowMenu(false);
@@ -686,7 +650,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                       <div className="h-px bg-slate-800 my-1 font-bold" />
 
                       <button
-                        onClick={() => router.push('/tod')}
+                        onClick={() => { router.refresh(); router.push('/tod'); }}
                         className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 rounded-xl transition-colors text-left w-full"
                       >
                         <ChevronLeft size={16} />
@@ -725,7 +689,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                     {isLoadingMore ? "Loading history..." : "Scroll up for more"}
                   </div>
                 </div>
-              )}
+               )}
 
 
               {lobby.status === 'waiting' && (
@@ -761,10 +725,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 );
               })}
 
-              {/* Next Round Button - efficiently checks for answer via question_ref */}
+              {/* Next Round Button */}
               {lobby.status === 'active' && lobby.current_question && isHost && (
                 (() => {
-                  // Find the LATEST question message by content
                   const currentQuestionMsg = [...messages].reverse().find(m =>
                     (m.message_type === 'truth' || m.message_type === 'dare') &&
                     m.content === lobby.current_question
@@ -772,7 +735,6 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
 
                   if (!currentQuestionMsg) return null;
 
-                  // Check if there's an answer with matching question_ref - O(n) single pass
                   const hasAnswer = messages.some(m =>
                     m.message_type === 'answer' &&
                     m.question_ref === currentQuestionMsg.id
@@ -800,7 +762,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                       </button>
                     )}
                     <button
-                      onClick={handleLeaveLobby}
+                       onClick={handleLeaveLobby}
                       className="bg-slate-800 border border-slate-700 text-white px-8 py-3 rounded-full font-bold hover:bg-slate-700 transition-all active:scale-95 inline-flex items-center gap-2"
                     >
                       <ArrowLeft size={20} />
@@ -838,7 +800,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                   >
                     <div className="flex gap-1 px-3 py-2 bg-slate-800/80 backdrop-blur-md rounded-2xl rounded-bl-none border border-slate-700/50 shadow-lg">
                       <div className="flex gap-1 items-center h-4">
-                        {[0, 1, 2].map((i) => (
+                         {[0, 1, 2].map((i) => (
                           <motion.div
                             key={i}
                             animate={{
@@ -919,14 +881,14 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                     pendingRequests={pendingRequests}
                     bannedParticipants={bannedParticipants}
                     onApproveRequest={approveRequest}
-                    onDeclineRequest={declineRequest}
-                    onBanParticipant={banParticipant}
+                    onDeclineRequest={handleDeclineRequest}
+                    onBanParticipant={handleBanParticipant}
                     onUnbanParticipant={unbanParticipant}
                     isHost={isHost}
                     onlineUsers={onlineUsers}
                     currentAskerId={lobby.current_asker_id}
                     lobbyName={lobby.name}
-                    onRemoveParticipant={removeParticipant}
+                    onRemoveParticipant={handleRemoveParticipant}
                     currentUserId={profile?.id}
                   />
                 </div>
@@ -934,6 +896,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
             </div>
           )}
         </AnimatePresence>
+        
         {/* Leave / Delete Confirmation Modal */}
         <AnimatePresence>
           {showLeaveConfirm && (
@@ -987,4 +950,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     </div >
   );
-}
+                    }
