@@ -1,6 +1,9 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import LobbyListClient, { Lobby } from './LobbyListClient';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function TODLobbyList() {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -57,5 +60,4 @@ export default async function TODLobbyList() {
       isPro={profileData?.is_pro || false}
     />
   );
-}
-
+                                       }
