@@ -61,7 +61,7 @@ export default function AmaPublicClient({
               <h1 className="text-xl font-black text-gray-800 text-center">
                 Ask {username}
               </h1>
-              {isPro && <VerifiedBadge size={18} className="text-orange-500" />}
+              {isPro && <VerifiedBadge size={18} />}
             </div>
             <p className="text-sm text-gray-400 mb-6 font-medium">Anonymous Question</p>
 
@@ -102,7 +102,7 @@ export default function AmaPublicClient({
             </div>
             <h2 className="text-2xl font-black text-gray-800 mb-2">Sent!</h2>
             <p className="text-gray-500 font-medium mb-8">
-              Your anonymous question is waiting for {username}
+              Your anonymous question is waiting for <b>{username}</b>
             </p>
             <div className="w-full space-y-3">
               <button
