@@ -3,11 +3,11 @@ import { useEffect, useState } from "react"
 import { ArrowLeft, Loader2, Monitor, Users, UserPlus, History, Star, Swords, X, Ghost, Bot } from "lucide-react"
 import type { useRPSEngine } from "../hooks/useRPSEngine"
 import { useRouter } from "next/navigation"
-import { RPSHandsScene2D } from "./RPSHandsScene2D"
+import { RPSHandsSceneEmoji } from "./RPSHandsSceneEmoji"
 
 /**
- * Two flat-illustration human hands (skin-tone SVG, not 3D-rigged) face each
- * other and crossfade through rock → paper → scissors poses.
+ * Two emoji hands (👊 ✋ ✌️) face each other and crossfade through
+ * rock → paper → scissors.
  */
 function RPSHandsHero() {
     const [reduceMotion, setReduceMotion] = useState(false)
@@ -22,7 +22,7 @@ function RPSHandsHero() {
 
     return (
         <div className="relative w-full max-w-[320px] h-40 mx-auto" aria-hidden="true">
-            <RPSHandsScene2D reduceMotion={reduceMotion} />
+            <RPSHandsSceneEmoji reduceMotion={reduceMotion} />
         </div>
     )
 }
@@ -254,4 +254,4 @@ export function RPSLobby({ engine }: { engine: ReturnType<typeof useRPSEngine> }
             </main>
         </div>
     )
-}
+                                                                  }
