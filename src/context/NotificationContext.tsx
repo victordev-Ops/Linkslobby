@@ -78,9 +78,7 @@ export function NotificationProvider({
     fetchUserSessions()
   }, [profileId, supabase])
 
-  // ─── Optimized refresh: 5 parallel queries instead of 8 ───
-  // Removed: getSessions() server action call (was the heaviest)
-  // Removed: separate hidden_notifications + notification_reads queries (merged into filtering)
+  // ─── Optimized refresh ───
   const refreshUnreadCount = useCallback(async () => {
     if (!profileId) {
       setUnreadCount(0)
@@ -88,7 +86,10 @@ export function NotificationProvider({
       return
     }
 
-    const [confRes, dykmRes, xpRes, hotSeatRes, hiddenRes, chatUnreadRes] = await Promise.all([
+    const [
+      confRes, dykmRes, xpRes, hotSeatRes, hiddenRes, chatUnreadRes,
+      turnRes, friendReqRes, friendRespRes, lobbyRespRes, hotSeatAnsRes, readsRes
+    ] = await Promise.all([
       supabase
         .from('confessions')
         .select('id', { count: 'exact', head: true })
@@ -114,29 +115,71 @@ export function NotificationProvider({
         .from('hidden_notifications')
         .select('notification_id')
         .eq('user_id', profileId),
-      // Lightweight chat unread count — count messages in user's sessions where
-      // sender != user and created_at > last_read_at, via a join
       supabase
         .from('chat_participants')
         .select('session_id, last_read_at')
         .eq('user_id', profileId),
+      // Lobby turn events (own is_read column)
+      supabase
+        .from('tod_turn_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', profileId)
+        .eq('is_read', false),
+      // Friend requests (incoming, pending)
+      supabase
+        .from('friendships')
+        .select('id')
+        .eq('addressee_id', profileId)
+        .eq('status', 'pending'),
+      // Friend request responses (I'm requester, accepted — declines are deleted, unobservable)
+      supabase
+        .from('friendships')
+        .select('id')
+        .eq('requester_id', profileId)
+        .eq('status', 'accepted'),
+      // Lobby join responses (my participant status rejected/banned)
+      supabase
+        .from('tod_participants')
+        .select('id')
+        .eq('user_id', profileId)
+        .in('status', ['rejected', 'banned']),
+      // Hot Seat answers (I'm asker, question resolved)
+      supabase
+        .from('hot_seat_questions')
+        .select('id')
+        .eq('asker_id', profileId)
+        .in('status', ['answered', 'skipped', 'timed_out']),
+      // notification_reads — needed to filter the above 4 "virtual" types down to unread only
+      supabase
+        .from('notification_reads')
+        .select('notification_id, notification_type')
+        .eq('user_id', profileId),
     ])
 
-    // Calculate notification count
     const hiddenIds = new Set((hiddenRes.data || []).map(h => h.notification_id))
+    const readIds = new Set((readsRes.data || []).map(r => `${r.notification_type}:${r.notification_id}`))
+
     const confessionsCount = confRes.count || 0
     const dykmCount = dykmRes.count || 0
     const xpCount = xpRes.count || 0
     const hotSeatCount = hotSeatRes.count || 0
+    const turnCount = turnRes.count || 0
 
-    setUnreadCount(confessionsCount + dykmCount + xpCount + hotSeatCount)
+    const friendReqCount = (friendReqRes.data || []).filter(r => !readIds.has(`friend_request:${r.id}`)).length
+    const friendRespCount = (friendRespRes.data || []).filter(r => !readIds.has(`friend_request_response:${r.id}`)).length
+    const lobbyRespCount = (lobbyRespRes.data || []).filter(r => !readIds.has(`lobby_join_response:${r.id}`)).length
+    const hotSeatAnsCount = (hotSeatAnsRes.data || []).filter(r => !readIds.has(`hot_seat_answer:${r.id}`)).length
 
-    // Calculate chat unread — lightweight: check sessions updated since last_read
+    setUnreadCount(
+      confessionsCount + dykmCount + xpCount + hotSeatCount + turnCount +
+      friendReqCount + friendRespCount + lobbyRespCount + hotSeatAnsCount
+    )
+
+    // Chat unread (unchanged)
     if (chatUnreadRes.data && chatUnreadRes.data.length > 0) {
       const sessions = chatUnreadRes.data
       const sessionIds = sessions.map((s: any) => s.session_id)
 
-      // Get sessions with activity
       const { data: activeSessions } = await supabase
         .from('chat_sessions')
         .select('id, updated_at')
@@ -148,7 +191,7 @@ export function NotificationProvider({
         for (const session of activeSessions) {
           const lastRead = sessionMap.get(session.id)
           if (new Date(session.updated_at) > new Date(lastRead as string || 0)) {
-            totalUnread++  // Count sessions with unreads, not individual messages
+            totalUnread++
           }
         }
       }
@@ -158,7 +201,6 @@ export function NotificationProvider({
     }
   }, [profileId, supabase])
 
-  // Debounced version — prevents rapid-fire refreshes from realtime events
   const debouncedRefresh = useDebouncedCallback(refreshUnreadCount, 500)
 
   useEffect(() => {
@@ -173,55 +215,31 @@ export function NotificationProvider({
       .channel(`notifications-${profileId}`)
       // Chat Messages
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'chat_messages'
+        event: 'INSERT', schema: 'public', table: 'chat_messages'
       }, async (payload) => {
         const msg = payload.new
         if (msg.sender_id === profileId) return
-
         if (userSessionIds.length > 0 && !userSessionIds.includes(msg.session_id)) return
-
         debouncedRefresh()
-
         toast('New Message! 💬', {
           description: msg.content?.substring(0, 50),
-          action: {
-            label: 'View',
-            onClick: () => window.location.href = `/messages/${msg.session_id}`
-          }
+          action: { label: 'View', onClick: () => window.location.href = `/messages/${msg.session_id}` }
         })
       })
-      // Chat read updates
       .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'chat_participants',
-        filter: `user_id=eq.${profileId}`
-      }, () => {
-        debouncedRefresh()
-      })
+        event: 'UPDATE', schema: 'public', table: 'chat_participants', filter: `user_id=eq.${profileId}`
+      }, () => debouncedRefresh())
       // Confessions
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'confessions',
-        filter: `profile_id=eq.${profileId}`
+        event: 'INSERT', schema: 'public', table: 'confessions', filter: `profile_id=eq.${profileId}`
       }, (payload) => {
         debouncedRefresh()
         const msg = payload.new
         const isDM = msg.message?.startsWith('[DM:')
-
         let title = 'New message! 💌'
         let description = 'You received a new secret message.'
-
-        if (isDM) {
-          title = 'New Direct Message! 💬'
-          description = 'You have a new private message.'
-        } else if (msg.message_type === 'ama') {
-          title = 'New AMA Question! ❓'
-          description = 'Someone asked you a question!'
-        }
+        if (isDM) { title = 'New Direct Message! 💬'; description = 'You have a new private message.' }
+        else if (msg.message_type === 'ama') { title = 'New AMA Question! ❓'; description = 'Someone asked you a question!' }
 
         toast(title, {
           description,
@@ -241,87 +259,145 @@ export function NotificationProvider({
       })
       // DYKM Scores
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'dykm_scores',
-        filter: `quiz_owner_id=eq.${profileId}`
+        event: 'INSERT', schema: 'public', table: 'dykm_scores', filter: `quiz_owner_id=eq.${profileId}`
       }, (payload) => {
         debouncedRefresh()
         const score = payload.new
         toast('Quiz result! 🏆', {
           description: `${score.responder_name} scored ${score.score}/${score.total_questions} on your quiz!`,
-          action: {
-            label: 'View',
-            onClick: () => window.location.href = '/notifications'
-          }
+          action: { label: 'View', onClick: () => window.location.href = '/notifications' }
         })
       })
-      // TOD Turns
+      // Lobby turns — now sourced from tod_turn_events, not tod_lobbies UPDATE directly
       .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'tod_lobbies'
-      }, (payload) => {
-        const lobby = payload.new
-        if (lobby.current_target_id === profileId) {
+        event: 'INSERT', schema: 'public', table: 'tod_turn_events', filter: `user_id=eq.${profileId}`
+      }, async (payload) => {
+        const turn = payload.new
+        debouncedRefresh()
+
+        const { data: lobby } = await supabase
+          .from('tod_lobbies')
+          .select('slug, name')
+          .eq('id', turn.lobby_id)
+          .single()
+
+        const lobbyName = lobby?.name ? ` in ${lobby.name}` : ''
+        const slug = lobby?.slug
+
+        if (turn.role === 'target') {
           toast('Your Turn! 🎯', {
-            description: 'It is your turn to answer in Truth or Dare!',
-            action: {
-              label: 'Go to Game',
-              onClick: () => window.location.href = `/tod/${lobby.slug}`
-            }
+            description: `It's your turn to answer${lobbyName}!`,
+            action: { label: 'Go to Game', onClick: () => window.location.href = `/tod/${slug}` }
           })
-        } else if (lobby.current_asker_id === profileId) {
+        } else {
           toast('Your Turn to Ask! 🎲', {
-            description: 'It is your turn to ask a question in Truth or Dare!',
-            action: {
-              label: 'Go to Game',
-              onClick: () => window.location.href = `/tod/${lobby.slug}`
-            }
+            description: `It's your turn to ask${lobbyName}!`,
+            action: { label: 'Go to Game', onClick: () => window.location.href = `/tod/${slug}` }
           })
         }
       })
-      // Hot Seat Questions
+      // Lobby join responses
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'hot_seat_questions'
+        event: 'UPDATE', schema: 'public', table: 'tod_participants', filter: `user_id=eq.${profileId}`
+      }, async (payload) => {
+        const p = payload.new
+        if (p.status !== 'rejected' && p.status !== 'banned') return
+        debouncedRefresh()
+
+        const { data: lobby } = await supabase
+          .from('tod_lobbies')
+          .select('slug, name')
+          .eq('id', p.lobby_id)
+          .single()
+
+        const lobbyName = lobby?.name || 'the lobby'
+        toast(p.status === 'banned' ? 'You were banned 🚫' : 'Request declined', {
+          description: p.status === 'banned'
+            ? `You've been banned from ${lobbyName}.`
+            : `Your request to join ${lobbyName} was declined.`,
+        })
+      })
+      // Friend requests (incoming)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'friendships', filter: `addressee_id=eq.${profileId}`
+      }, async (payload) => {
+        const fr = payload.new
+        if (fr.status !== 'pending') return
+        debouncedRefresh()
+
+        const { data: requester } = await supabase
+          .from('profiles')
+          .select('username, slug')
+          .eq('id', fr.requester_id)
+          .single()
+
+        toast('New Friend Request! 👋', {
+          description: `@${requester?.username || 'Someone'} wants to be friends.`,
+          action: { label: 'View', onClick: () => window.location.href = requester?.slug ? `/u/${requester.slug}` : '/notifications' }
+        })
+      })
+      // Friend request responses (I'm requester, accepted)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'friendships', filter: `requester_id=eq.${profileId}`
+      }, async (payload) => {
+        const fr = payload.new
+        if (fr.status !== 'accepted') return
+        debouncedRefresh()
+
+        const { data: addressee } = await supabase
+          .from('profiles')
+          .select('username, slug')
+          .eq('id', fr.addressee_id)
+          .single()
+
+        toast('Friend Request Accepted! 🤝', {
+          description: `@${addressee?.username || 'Someone'} accepted your friend request!`,
+          action: { label: 'View', onClick: () => window.location.href = addressee?.slug ? `/u/${addressee.slug}` : '/notifications' }
+        })
+      })
+      // Hot Seat Questions (host — new question)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'hot_seat_questions'
       }, (payload) => {
         const q = payload.new
         if (hostedSessionIds.includes(q.session_id)) {
           toast('Hot Seat: New Question! 🔥', {
             description: 'A new rapid fire question has been added!',
-            action: {
-              label: 'Go to Game',
-              onClick: () => window.location.href = `/hot-seat`
-            }
+            action: { label: 'Go to Game', onClick: () => window.location.href = `/hot-seat` }
           })
         }
       })
-      // Catch-all refresh triggers (debounced to prevent storms)
+      // Hot Seat answers (asker — question resolved)
       .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'confessions',
-        filter: `profile_id=eq.${profileId}`
-      }, () => debouncedRefresh())
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'xp_transactions',
-        filter: `user_id=eq.${profileId}`
-      }, () => debouncedRefresh())
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'hot_seat_questions'
-      }, () => debouncedRefresh())
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'dykm_scores',
-        filter: `quiz_owner_id=eq.${profileId}`
-      }, () => debouncedRefresh())
+        event: 'UPDATE', schema: 'public', table: 'hot_seat_questions'
+      }, async (payload) => {
+        const q = payload.new
+        if (q.asker_id !== profileId) return
+        if (!['answered', 'skipped', 'timed_out'].includes(q.status)) return
+        debouncedRefresh()
+
+        const { data: session } = await supabase
+          .from('hot_seat_sessions')
+          .select('slug, name')
+          .eq('id', q.session_id)
+          .single()
+
+        const titles: Record<string, string> = {
+          answered: 'Your Question Was Answered! 🔥',
+          skipped: 'Your Question Was Skipped',
+          timed_out: 'Your Question Timed Out'
+        }
+
+        toast(titles[q.status], {
+          description: session?.name ? `In session: ${session.name}` : undefined,
+          action: { label: 'View', onClick: () => window.location.href = `/hot-seat/${session?.slug || ''}` }
+        })
+      })
+      // Catch-all refresh triggers (debounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'confessions', filter: `profile_id=eq.${profileId}` }, () => debouncedRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'xp_transactions', filter: `user_id=eq.${profileId}` }, () => debouncedRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hot_seat_questions' }, () => debouncedRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dykm_scores', filter: `quiz_owner_id=eq.${profileId}` }, () => debouncedRefresh())
       .subscribe()
 
     return () => {
@@ -357,4 +433,4 @@ export const useNotifications = () => {
     throw new Error('useNotifications must be used within NotificationProvider')
   }
   return context
-}
+            }
