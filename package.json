@@ -10,6 +10,9 @@
     "cap:sync": "npx cap sync"
   },
   "dependencies": {
+    "three": "^0.179.1",
+    "@react-three/fiber": "^9.3.0",
+    "@react-three/drei": "^10.7.4",
     "@capacitor/core": "^8.2.0",
     "@serwist/next": "^9.4.2",
     "@serwist/sw": "^9.4.2",
