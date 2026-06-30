@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { sendFriendRequest } from '@/actions/friends';
 import VerifiedBadge from '@/components/VerifiedBadge';
-
 import { Participant } from '../hooks/useGameLogic';
 
 interface Message {
@@ -61,12 +60,8 @@ export const PlayersSidebar = ({
   const router = useRouter();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
-  // Defensive filter: only ever show participants who are actually 'joined'.
-  // Pending/rejected/banned participants have their own dedicated sections
-  // (or shouldn't be shown at all) and must never appear in the main list.
   const joinedParticipants = participants.filter(p => p.status === 'joined');
 
-  // Filter for game events: truth/dare questions, system messages (start/end)
   const gameEvents = messages.filter(m =>
     m.message_type === 'system' ||
     m.message_type === 'truth' ||
@@ -93,11 +88,9 @@ export const PlayersSidebar = ({
     if (onActivityClick) {
       onActivityClick(messageId);
     } else {
-      // Default scroll behavior
       const element = document.getElementById(`message-${messageId}`);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Add temporary highlight
         element.classList.add('ring-2', 'ring-red-500', 'ring-offset-2', 'ring-offset-slate-950');
         setTimeout(() => {
           element.classList.remove('ring-2', 'ring-red-500', 'ring-offset-2', 'ring-offset-slate-950');
@@ -108,7 +101,7 @@ export const PlayersSidebar = ({
 
   return (
     <aside className={`w-64 flex-shrink-0 border-r border-slate-800/50 bg-slate-900/30 backdrop-blur-sm flex flex-col ${className}`}>
-      {/* Lobby Name Header - Added for mobile first / sidebar context */}
+      {/* Lobby Name Header */}
       <div className="p-4 border-b border-slate-800/50 bg-slate-900/40">
         <div className="flex items-center gap-2 mb-1">
           <Sparkles size={16} className="text-red-400" />
@@ -120,6 +113,7 @@ export const PlayersSidebar = ({
           Truth or Dare
         </p>
       </div>
+
       {/* Join Requests Section */}
       {isHost && pendingRequests.length > 0 && (
         <div className="p-4 border-b border-slate-800/50 bg-red-500/5">
@@ -249,19 +243,18 @@ export const PlayersSidebar = ({
                   {isAsker && (
                     <MessageCircle size={14} className="text-blue-400 animate-bounce [animation-duration:2s]" />
                   )}
+                  
                   {/* Player Actions Menu */}
                   <div className="relative">
-                    {!isSelf && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuId(activeMenuId === participant.id ? null : participant.id);
-                        }}
-                        className="ml-1 w-6 h-6 rounded hover:bg-slate-800 flex items-center justify-center transition text-slate-400 hover:text-white"
-                      >
-                        <MoreVertical size={14} />
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuId(activeMenuId === participant.id ? null : participant.id);
+                      }}
+                      className="ml-1 w-6 h-6 rounded hover:bg-slate-800 flex items-center justify-center transition text-slate-400 hover:text-white"
+                    >
+                      <MoreVertical size={14} />
+                    </button>
 
                     <AnimatePresence>
                       {activeMenuId === participant.id && (
@@ -278,7 +271,6 @@ export const PlayersSidebar = ({
                           >
                             <button
                               onClick={() => {
-                                // Default to ID if username is missing, but prefer username
                                 const identifier = participant.profiles?.username || participant.user_id;
                                 router.push(`/profile/${identifier}`);
                                 setActiveMenuId(null);
@@ -289,21 +281,23 @@ export const PlayersSidebar = ({
                               Profile
                             </button>
 
-                            <button
-                              onClick={async () => {
-                                setActiveMenuId(null);
-                                const result = await sendFriendRequest(participant.user_id);
-                                if (result.success) {
-                                  toast.success('Friend request sent!');
-                                } else {
-                                  toast.error(result.error || 'Failed to send request');
-                                }
-                              }}
-                              className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
-                            >
-                              <UserPlus size={14} className="text-purple-400" />
-                              Add Friend
-                            </button>
+                            {!isSelf && (
+                              <button
+                                onClick={async () => {
+                                  setActiveMenuId(null);
+                                  const result = await sendFriendRequest(participant.user_id);
+                                  if (result.success) {
+                                    toast.success('Friend request sent!');
+                                  } else {
+                                    toast.error(result.error || 'Failed to send request');
+                                  }
+                                }}
+                                className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
+                              >
+                                <UserPlus size={14} className="text-purple-400" />
+                                Add Friend
+                              </button>
+                            )}
 
                             {isHost && participant.user_id !== hostId && (
                               <>
@@ -410,8 +404,7 @@ export const PlayersSidebar = ({
                       {event.message_type === 'truth' || event.message_type === 'dare' ? (
                         <>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[10px] font-bold uppercase ${event.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'
-                              }`}>
+                            <span className={`text-[10px] font-bold uppercase ${event.message_type === 'truth' ? 'text-blue-400' : 'text-orange-400'}`}>
                               {event.message_type}
                             </span>
                             <span className="text-[10px] text-slate-500">
@@ -427,7 +420,7 @@ export const PlayersSidebar = ({
                           {event.content}
                         </p>
                       )}
-                      <p className="text-[10px] text-slate-500 mt-1">
+                      <p className="teext-[10px] text-slate-500 mt-1">
                         {new Date(event.created_at).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit'
