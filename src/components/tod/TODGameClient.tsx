@@ -532,7 +532,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
                 <Clock size={32} className="text-amber-400" />
               </div>
               <h2 className="text-3xl font-black text-white mb-4 italic">Waiting for Approval</h2>
-              <p classNaame="text-slate-400 max-w-md leading-relaxed mb-8">
+              <p className="text-slate-400 max-w-md leading-relaxed mb-8">
                  This is a private lobby. Your request to join has been sent to the host.
                  Please wait while they review your request.
               </p>
@@ -950,4 +950,4 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
       </div>
     </div >
   );
-                    }
+                                                                                                                    }
