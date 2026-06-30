@@ -1,21 +1,13 @@
 "use client"
 import { useEffect, useState } from "react"
-import dynamic from "next/dynamic"
 import { ArrowLeft, Loader2, Monitor, Users, UserPlus, History, Star, Swords, X, Ghost, Bot } from "lucide-react"
 import type { useRPSEngine } from "../hooks/useRPSEngine"
 import { useRouter } from "next/navigation"
-
-// react-three-fiber needs a real browser/WebGL context, so the scene is loaded
-// client-only and skipped entirely during SSR.
-const RPSHandsScene = dynamic(() => import("./RPSHandsScene").then(m => m.RPSHandsScene), {
-    ssr: false,
-    loading: () => <div className="w-full h-full animate-pulse rounded-2xl bg-white/5" />,
-})
+import { RPSHandsScene2D } from "./RPSHandsScene2D"
 
 /**
- * Real rendered 3D: two articulated hands (palm + 4 fingers + thumb, each with real
- * joints) face each other and cycle rock → paper → scissors by rotating those joints,
- * lit with a key/fill rig and shot with a perspective camera — not a flat icon swap.
+ * Two flat-illustration human hands (skin-tone SVG, not 3D-rigged) face each
+ * other and crossfade through rock → paper → scissors poses.
  */
 function RPSHandsHero() {
     const [reduceMotion, setReduceMotion] = useState(false)
@@ -30,7 +22,7 @@ function RPSHandsHero() {
 
     return (
         <div className="relative w-full max-w-[320px] h-40 mx-auto" aria-hidden="true">
-            <RPSHandsScene reduceMotion={reduceMotion} />
+            <RPSHandsScene2D reduceMotion={reduceMotion} />
         </div>
     )
 }
