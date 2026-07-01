@@ -1,7 +1,7 @@
 "use client"
 
 import { Loader2 } from "lucide-react"
-import { useRPSEngine } from "./hooks/useRPSEngine"
+import { useRPSEngine } from "./useRPSEngine"
 import { RPSLobby } from "./components/RPSLobby"
 import { RPSWaitingRoom } from "./components/RPSWaitingRoom"
 import { RPSArena } from "./components/RPSArena"
