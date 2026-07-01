@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import ClientRedirect from '@/components/ClientRedirect'
 import HotSeatGameClient from './HotSeatGameClient'
 
 interface PageProps {
@@ -14,7 +14,12 @@ export default async function HotSeatSessionPage({ params }: PageProps) {
     // But let's check auth status
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) redirect(`/login?next=/hot-seat/${slug}`)
+    // Don't call redirect() here — it aborts the response with a 307 before
+    // this route's OG metadata is ever sent, which is why link previews
+    // were broken. Render normally and redirect client-side after mount
+    // instead, so crawlers see the page + its metadata while real
+    // signed-out users still get bounced to /login right away.
+    if (!user) return <ClientRedirect to={`/login?next=/hot-seat/${slug}`} />
 
     // Fetch session
     const { data: session } = await supabase
@@ -26,7 +31,7 @@ export default async function HotSeatSessionPage({ params }: PageProps) {
         .eq('slug', slug)
         .single()
 
-    if (!session) redirect('/hot-seat')
+    if (!session) return <ClientRedirect to="/hot-seat" />
 
     // Fetch user profile
     const { data: profile } = await supabase
@@ -35,7 +40,7 @@ export default async function HotSeatSessionPage({ params }: PageProps) {
         .eq('id', user.id)
         .single()
 
-    if (!profile) redirect('/auth/setup')
+    if (!profile) return <ClientRedirect to="/auth/setup" />
 
     return <HotSeatGameClient session={session} userProfile={profile} />
 }
