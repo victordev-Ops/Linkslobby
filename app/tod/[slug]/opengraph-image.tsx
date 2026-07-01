@@ -5,8 +5,13 @@ export const alt = 'Truth or Dare — Hop In. Let’s Play.'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
+// Static branding image — no per-user data needed, so it can be cached
+// aggressively and has no external calls that could fail.
 export const revalidate = 86400
 
+// Loads a Google Font weight, subset to only the characters we render.
+// Never throws — returns null on any failure so the image still renders
+// with the system font instead of crashing.
 async function loadGoogleFont(family: string, weight: number, text: string) {
   try {
     const cssUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(
@@ -25,12 +30,10 @@ async function loadGoogleFont(family: string, weight: number, text: string) {
 
 export default async function Image() {
   const wordmark = 'Truth or Dare'
-  const tagline = "Hop In. Let's Play."
+  const tagline = 'Hop In. Let’s Play.'
 
-  // We must append the "!" motif to the wordmark string here. 
-  // Otherwise, the font subsetter skips it, and the image rendering fails.
   const [poppinsExtraBold, poppinsSemiBold] = await Promise.all([
-    loadGoogleFont('Poppins', 800, wordmark + '!'),
+    loadGoogleFont('Poppins', 800, wordmark),
     loadGoogleFont('Poppins', 600, tagline),
   ])
 
@@ -49,12 +52,12 @@ export default async function Image() {
           alignItems: 'center',
           justifyContent: 'center',
           fontFamily: fonts.length ? 'Poppins' : 'sans-serif',
-          // Reverted to the exact radial-gradient format from your original file for guaranteed compatibility
-          background: 'radial-gradient(circle at 30% 25%, #F87171 0%, #EF4444 38%, #B91C1C 72%, #450A0A 100%)',
+          // Pepper red linear gradient matching the requested ascent
+          background: 'linear-gradient(135deg, #F87171 0%, #EF4444 30%, #DC2626 70%, #7F1D1D 100%)',
           position: 'relative',
         }}
       >
-        {/* Soft glow accents matching the red tones */}
+        {/* Soft glow accents */}
         <div
           style={{
             position: 'absolute',
@@ -63,7 +66,7 @@ export default async function Image() {
             width: 420,
             height: 420,
             borderRadius: 9999,
-            background: 'rgba(239, 68, 68, 0.45)', // Red-500 glow
+            background: 'rgba(239, 68, 68, 0.45)',
             display: 'flex',
           }}
         />
@@ -80,7 +83,7 @@ export default async function Image() {
           }}
         />
 
-        {/* Exclamation mark motif */}
+        {/* Motif icon area */}
         <div
           style={{
             position: 'absolute',
@@ -90,13 +93,13 @@ export default async function Image() {
             width: 88,
             height: 88,
             borderRadius: 9999,
-            background: 'rgba(254, 202, 202, 0.25)', // Red-200
+            background: 'rgba(254, 202, 202, 0.25)',
             border: '2px solid rgba(254, 202, 202, 0.6)',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 44,
             fontWeight: 800,
-            color: '#FEE2E2', // Red-100
+            color: '#FEE2E2',
           }}
         >
           !
@@ -107,7 +110,7 @@ export default async function Image() {
           style={{
             display: 'flex',
             color: '#ffffff',
-            fontSize: 130, // Safely scaled down so the text fits within the 1200px bounds
+            fontSize: 150,
             fontWeight: 800,
             letterSpacing: '-0.04em',
             lineHeight: 1,
@@ -124,7 +127,7 @@ export default async function Image() {
             width: 84,
             height: 8,
             borderRadius: 9999,
-            background: 'linear-gradient(90deg, #FEE2E2 0%, #FECACA 100%)', // Red-100 to Red-200
+            background: 'linear-gradient(90deg, #FEE2E2 0%, #FECACA 100%)',
             marginTop: 28,
             marginBottom: 28,
           }}
@@ -145,4 +148,5 @@ export default async function Image() {
     ),
     { ...size, fonts: fonts.length ? fonts : undefined }
   )
-}
+        }
+          
