@@ -2,7 +2,7 @@
 import React, { useEffect, useRef } from "react"
 import { ArrowLeft, AlertTriangle, Loader2, Monitor, RotateCcw, Star, Swords, Zap } from "lucide-react"
 import confetti from 'canvas-confetti'
-import type { useRPSEngine } from "../hooks/useRPSEngine"
+import type { useRPSEngine } from "../useRPSEngine"
 import type { RPSMove } from "@/actions/rps"
 import { RPSCountdownHands } from "./RPSCountdownHands"
 
