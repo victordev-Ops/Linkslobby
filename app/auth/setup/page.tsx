@@ -40,16 +40,61 @@ function SetupUsernameContent() {
   const { refreshProfile } = useAuth()
 
   // Quick session check on mount - much faster than waiting for full AuthContext
+  //
+  // This used to do a single synchronous getSession() check and bounce to
+  // a bare '/login' if it came back empty. That raced with the auth cookies
+  // set by the /auth/confirm redirect (especially on Safari/mobile), and on
+  // a false negative it dropped the `next`/`returnTo` destination entirely,
+  // stranding people who came from a deep link (e.g. quiz results) back on
+  // the dashboard after re-logging in. This version gives the session a
+  // short grace period to arrive via onAuthStateChange before giving up,
+  // and always preserves `next` on the eventual redirect if it does fail.
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setHasSession(!!session)
+    let resolved = false
+
+    const redirectToLogin = () => {
+      if (resolved) return
+      resolved = true
+      const loginUrl = next
+        ? `/login?returnTo=${encodeURIComponent(next)}`
+        : '/login'
+      router.replace(loginUrl)
+    }
+
+    const confirmSession = (session: unknown) => {
+      if (resolved || !session) return
+      resolved = true
+      setHasSession(true)
       setSessionChecked(true)
-      if (!session) {
-        router.replace('/login')
-      }
+    }
+
+    // 1. Immediate check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      confirmSession(session)
+      // If null here, don't bail yet — cookies from the /auth/confirm
+      // redirect may still be propagating to the browser client.
     })
-  }, [router])
+
+    // 2. Catch a session that arrives just after mount
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      confirmSession(session)
+    })
+
+    // 3. Only conclude "no session" after a short grace period
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        setSessionChecked(true)
+        setHasSession(false)
+        redirectToLogin()
+      }
+    }, 1500)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
+  }, [router, next])
 
   // Validate username availability
   useEffect(() => {
