@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { ArrowLeft, Loader2, Monitor, Users, UserPlus, History, Star, Swords, X, Ghost, Bot } from "lucide-react"
-import type { useRPSEngine } from "../hooks/useRPSEngine"
+import type { useRPSEngine } from "../useRPSEngine"
 import { useRouter } from "next/navigation"
 import { RPSHandsSceneEmoji } from "./RPSHandsSceneEmoji"
 
