@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import TODGameClient from "@/components/tod/TODGameClient";
+import ClientRedirect from "@/components/ClientRedirect";
 import { XP_REWARDS, applyRewardMultiplier, formatRewardReason, isBonusActive } from "@/hooks/xp";
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +46,13 @@ export default async function TODGamePage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(`/login?next=/tod/${slug}`);
+    // IMPORTANT: don't call redirect() here. redirect() throws and aborts
+    // the response with a 307 before the HTML (and this route's OG
+    // metadata) is ever sent — which is why link previews were broken.
+    // Rendering the page normally and redirecting client-side after mount
+    // keeps the 200 response + metadata intact for crawlers, while real
+    // signed-out users still get bounced to /login right away.
+    return <ClientRedirect to={`/login?next=/tod/${slug}`} />;
   }
 
   // 1. Resolve Slug/ID to Lobby UUID
@@ -61,8 +67,8 @@ export default async function TODGamePage({
     .maybeSingle();
 
   if (!lobbyData) {
-    // Fallback if not found
-    redirect('/tod?error=lobby_not_found');
+    // Same reasoning as above — defer to client-side redirect.
+    return <ClientRedirect to="/tod?error=lobby_not_found" />;
   }
 
   lobbyId = lobbyData.id;
@@ -79,7 +85,7 @@ export default async function TODGamePage({
 
     // If user is banned, redirect them
     if (existingParticipant?.status === 'banned') {
-      redirect('/tod?error=banned');
+      return <ClientRedirect to="/tod?error=banned" />;
     }
 
     // Get lobby privacy setting
@@ -151,5 +157,4 @@ export default async function TODGamePage({
   }
 
   return <TODGameClient lobbyId={lobbyId} />;
-    }
-  
+}
