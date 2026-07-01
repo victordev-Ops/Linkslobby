@@ -52,13 +52,12 @@ export default async function Image() {
           alignItems: 'center',
           justifyContent: 'center',
           fontFamily: fonts.length ? 'Poppins' : 'sans-serif',
-          // Deep charcoal base so the orange accent (matching the page's
-          // #EA580C background) pops instead of competing with itself.
-          background: 'linear-gradient(135deg, #1C1917 0%, #431407 55%, #7C2D12 100%)',
+          // Changed to a brighter linear gradient style 
+          background: 'linear-gradient(135deg, #FDBA74 0%, #FB923C 30%, #EA580C 70%, #9A3412 100%)',
           position: 'relative',
         }}
       >
-        {/* Soft glow accents so the gradient reads with depth, not flat */}
+        {/* Soft glow accents updated for brighter matching tones */}
         <div
           style={{
             position: 'absolute',
@@ -67,7 +66,7 @@ export default async function Image() {
             width: 420,
             height: 420,
             borderRadius: 9999,
-            background: 'rgba(234, 88, 12, 0.35)',
+            background: 'rgba(253, 186, 116, 0.45)',
             display: 'flex',
           }}
         />
@@ -79,7 +78,7 @@ export default async function Image() {
             width: 460,
             height: 460,
             borderRadius: 9999,
-            background: 'rgba(255, 255, 255, 0.06)',
+            background: 'rgba(255, 255, 255, 0.12)',
             display: 'flex',
           }}
         />
@@ -94,13 +93,13 @@ export default async function Image() {
             width: 88,
             height: 88,
             borderRadius: 9999,
-            background: 'rgba(234, 88, 12, 0.18)',
-            border: '2px solid rgba(251, 146, 60, 0.4)',
+            background: 'rgba(253, 186, 116, 0.25)',
+            border: '2px solid rgba(253, 186, 116, 0.6)',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 44,
             fontWeight: 800,
-            color: '#FB923C',
+            color: '#FFEDD5',
           }}
         >
           ?
@@ -115,7 +114,7 @@ export default async function Image() {
             fontWeight: 800,
             letterSpacing: '-0.04em',
             lineHeight: 1,
-            textShadow: '0 12px 40px rgba(0,0,0,0.45)',
+            textShadow: '0 8px 30px rgba(0,0,0,0.3)', // Softened shadow to fit a brighter background
           }}
         >
           {wordmark}
@@ -128,7 +127,7 @@ export default async function Image() {
             width: 84,
             height: 8,
             borderRadius: 9999,
-            background: 'linear-gradient(90deg, #EA580C 0%, #FB923C 100%)',
+            background: 'linear-gradient(90deg, #FFEDD5 0%, #FDBA74 100%)',
             marginTop: 28,
             marginBottom: 28,
           }}
@@ -138,7 +137,7 @@ export default async function Image() {
         <div
           style={{
             display: 'flex',
-            color: 'rgba(255, 255, 255, 0.85)',
+            color: 'rgba(255, 255, 255, 0.95)', // Increased opacity slightly for contrast
             fontSize: 36,
             fontWeight: 600,
           }}
@@ -149,4 +148,5 @@ export default async function Image() {
     ),
     { ...size, fonts: fonts.length ? fonts : undefined }
   )
-}
+  }
+  
