@@ -73,11 +73,11 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
 
             <main className="max-w-md mx-auto px-6 py-10">
                 <div className="flex flex-col items-center text-center">
-                    <div className="inline-block px-3 py-1 bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest rounded-full mb-6">
+                    <div className="inline-block px-3 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 text-[10px] font-bold uppercase tracking-widest rounded-full mb-6">
                         Do You Know Me?
                     </div>
 
-                    <div className="w-20 h-20 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-indigo-500/30 mb-6 rotate-3">
+                    <div className="w-20 h-20 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/30 mb-6 rotate-3">
                         <Brain className="w-10 h-10 text-white" />
                     </div>
 
@@ -90,10 +90,10 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
                     </p>
 
                     <div className="w-full bg-white dark:bg-[#1a1429] rounded-3xl p-8 border border-slate-100 dark:border-white/5 shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600" />
+                        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600" />
 
                         <div className="flex flex-col items-center">
-                            <div className={`px-4 py-1.5 bg-gradient-to-r ${score.score === score.total_questions ? 'from-amber-400 to-yellow-500' : 'from-indigo-500 to-purple-600'} text-white text-xs font-black uppercase tracking-wider rounded-full mb-4 flex items-center gap-1.5`}>
+                            <div className={`px-4 py-1.5 bg-gradient-to-r ${score.score === score.total_questions ? 'from-amber-400 to-yellow-500' : 'from-blue-500 to-indigo-600'} text-white text-xs font-black uppercase tracking-wider rounded-full mb-4 flex items-center gap-1.5`}>
                                 <span>{tier.emoji}</span> {tier.label}
                             </div>
 
@@ -115,7 +115,7 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
                                 {[...Array(score.total_questions || 5)].map((_, i) => (
                                     <div
                                         key={i}
-                                        className={`w-3 h-3 rounded-full ${i < score.score ? 'bg-emerald-500' : 'bg-slate-100 dark:bg-white/10'}`}
+                                        className={`w-3 h-3 rounded-full ${i < score.score ? 'bg-green-500' : 'bg-slate-100 dark:bg-white/10'}`}
                                     />
                                 ))}
                             </div>
@@ -140,7 +140,7 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
                     <div className="w-full mt-10">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                <Sparkles size={16} className="text-indigo-500" /> Question Breakdown
+                                <Sparkles size={16} className="text-blue-500" /> Question Breakdown
                             </h3>
                             {!isPro && isOwner && (
                                 <div className="px-3 py-1 bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg text-[10px] font-bold uppercase tracking-wider">
@@ -161,4 +161,5 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
             </main>
         </div>
     )
-}
+                                    }
+            
