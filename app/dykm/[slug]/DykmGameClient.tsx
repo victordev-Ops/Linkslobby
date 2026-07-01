@@ -199,7 +199,7 @@ export default function DykmGameClient({ profile, questions }: { profile: any; q
           transition={{ duration: 0.4 }}
           className="bg-white w-full max-w-md p-8 rounded-[2rem] shadow-sm border border-slate-100 text-center space-y-6"
         >
-          <div className="w-12 h-12 shrink-0 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+          <div className="w-12 h-12 shrink-0 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
                   <Brain size={24} />
                 </div>
 
