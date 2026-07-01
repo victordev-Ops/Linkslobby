@@ -73,11 +73,11 @@ export default function DykmResultQuestions({ scoreId, answers, revealedIndices,
                         {/* Status Icon */}
                         <div className="absolute top-4 right-4">
                             {ans.is_correct ? (
-                                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-full flex items-center gap-1">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-green-600 bg-green-50 dark:bg-green-500/10 px-2 py-1 rounded-full flex items-center gap-1">
                                     <Check size={12} /> Nailed it
                                 </span>
                             ) : (
-                                <span className="text-[10px] font-black uppercase tracking-wider text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-1 rounded-full flex items-center gap-1">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-red-500 bg-red-50 dark:bg-red-500/10 px-2 py-1 rounded-full flex items-center gap-1">
                                     <X size={12} /> Missed it
                                 </span>
                             )}
@@ -95,7 +95,7 @@ export default function DykmResultQuestions({ scoreId, answers, revealedIndices,
                                 <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
                                     Correct Answer
                                 </span>
-                                <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                                <div className="text-sm font-bold text-green-600 dark:text-green-400 flex items-center gap-2">
                                     <Check size={14} />
                                     {ans.correct_answer}
                                 </div>
@@ -103,16 +103,16 @@ export default function DykmResultQuestions({ scoreId, answers, revealedIndices,
 
                             {/* Their Answer */}
                             <div className={`p-3 rounded-xl border transition-colors ${ans.is_correct
-                                    ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20"
-                                    : "bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20"
+                                    ? "bg-green-50 dark:bg-green-500/10 border-green-100 dark:border-green-500/20"
+                                    : "bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20"
                                 }`}>
-                                <span className={`text-[10px] font-bold uppercase block mb-1 ${ans.is_correct ? "text-emerald-600/70 dark:text-emerald-400/70" : "text-rose-600/70 dark:text-rose-400/70"
+                                <span className={`text-[10px] font-bold uppercase block mb-1 ${ans.is_correct ? "text-green-600/70 dark:text-green-400/70" : "text-red-600/70 dark:text-red-400/70"
                                     }`}>
                                     They Guessed
                                 </span>
 
                                 {isRevealed ? (
-                                    <div className={`text-sm font-bold flex items-center gap-2 ${ans.is_correct ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"
+                                    <div className={`text-sm font-bold flex items-center gap-2 ${ans.is_correct ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"
                                         }`}>
                                         {ans.is_correct ? <Check size={14} /> : <X size={14} />}
                                         {ans.your_answer}
@@ -142,5 +142,4 @@ export default function DykmResultQuestions({ scoreId, answers, revealedIndices,
             })}
         </div>
     )
-                    }
-                              
+}
