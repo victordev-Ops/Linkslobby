@@ -1,7 +1,15 @@
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { headers } from 'next/headers'
+import { headers, cookies } from 'next/headers'
+
+// Fallback carrier for the post-auth destination. The `next` query param
+// riding through emailRedirectTo can get stripped — most commonly because
+// the exact redirect URL (with query string) isn't in Supabase's
+// Authentication > URL Configuration > Redirect URLs allowlist, but also by
+// some email clients rewriting links. This cookie is a same-request-origin
+// fallback that survives that, since it never depends on the email link URL.
+const POST_AUTH_REDIRECT_COOKIE = 'post_auth_redirect'
 
 export type AuthResponse = {
   success: boolean
@@ -20,6 +28,19 @@ export async function signUp(email: string, next?: string): Promise<AuthResponse
   // Security: Do NOT check if the user exists first — that leaks account existence.
   // Supabase's signInWithOtp handles both new and existing users seamlessly.
   // The magic link works for sign-up AND sign-in.
+
+  // Stash the intended destination server-side too, as a fallback for when
+  // the `next` query param doesn't survive the round trip through the email link.
+  if (next) {
+    const cookieStore = await cookies()
+    cookieStore.set(POST_AUTH_REDIRECT_COOKIE, next, {
+      maxAge: 60 * 10, // 10 minutes — long enough to check email, short enough to be safe
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    })
+  }
 
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim().toLowerCase(),
@@ -80,4 +101,5 @@ export async function deleteAccount(): Promise<AuthResponse> {
     console.error('Delete Account Error:', error)
     return { success: false, message: error instanceof Error ? error.message : 'Failed to delete account' }
   }
-}
+      }
+      
