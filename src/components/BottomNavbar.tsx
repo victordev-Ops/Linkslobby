@@ -31,7 +31,7 @@ export default function BottomNavbar() {
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-[#0f0a1e]/90 backdrop-blur-lg border-t border-gray-100 dark:border-white/10 z-50 pb-[env(safe-area-inset-bottom)] transition-colors">
+    <nav className="fixed-bottom-nav fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-[#0f0a1e]/90 backdrop-blur-lg border-t border-gray-100 dark:border-white/10 z-50 pb-[env(safe-area-inset-bottom)] transition-colors">
       <div className="max-w-md mx-auto px-4 h-16 flex justify-around items-center">
         {navItems.map((item) => {
           // Logic: Active if strictly matched or if it's the inbox subpath
