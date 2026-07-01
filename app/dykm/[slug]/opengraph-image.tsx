@@ -19,26 +19,12 @@ export default async function Image({ params }: { params: { slug: string } }) {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          // Blue linear gradient to match the vivid, high-energy aesthetic
           background: 'linear-gradient(135deg, #BFDBFE 0%, #60A5FA 30%, #3B82F6 70%, #1E3A8A 100%)',
           position: 'relative',
+          padding: '0 80px', // Added horizontal padding to prevent edge clipping
         }}
       >
-        {/* Soft glow accents */}
-        <div
-          style={{
-            position: 'absolute',
-            top: -140,
-            right: -140,
-            width: 420,
-            height: 420,
-            borderRadius: 9999,
-            background: 'rgba(59, 130, 246, 0.45)', // Blue-500 glow
-            display: 'flex',
-          }}
-        />
-
-        {/* Question Mark Motif */}
+        {/* Motif */}
         <div
           style={{
             position: 'absolute',
@@ -48,7 +34,7 @@ export default async function Image({ params }: { params: { slug: string } }) {
             width: 88,
             height: 88,
             borderRadius: 9999,
-            background: 'rgba(219, 234, 254, 0.25)', // Blue-100
+            background: 'rgba(219, 234, 254, 0.25)',
             border: '2px solid rgba(219, 234, 254, 0.6)',
             alignItems: 'center',
             justifyContent: 'center',
@@ -60,22 +46,23 @@ export default async function Image({ params }: { params: { slug: string } }) {
           ?
         </div>
 
-        {/* Wordmark */}
+        {/* Wordmark with refined spacing */}
         <div
           style={{
             display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
             color: '#ffffff',
-            fontSize: 120,
+            fontSize: 100, // Slightly reduced to ensure better word distribution
             fontWeight: 800,
             letterSpacing: '-0.04em',
-            lineHeight: 1,
+            lineHeight: 1.1, // Increased line-height for readability
             textShadow: '0 8px 30px rgba(0,0,0,0.35)',
             textAlign: 'center',
           }}
         >
-          Answer this if you
-          <br />
-          know {displayName}...
+          <span>Answer this if you</span>
+          <span style={{ marginTop: '16px' }}>know {displayName}...</span>
         </div>
 
         {/* Accent divider */}
@@ -86,7 +73,7 @@ export default async function Image({ params }: { params: { slug: string } }) {
             height: 8,
             borderRadius: 9999,
             background: 'linear-gradient(90deg, #DBEAFE 0%, #BFDBFE 100%)',
-            marginTop: 40,
+            marginTop: 48,
           }}
         />
       </div>
