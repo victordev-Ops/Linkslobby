@@ -6,7 +6,7 @@ export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
 export default async function Image() {
-  const roomCode = 'B29CED' // This should ideally be extracted from searchParams
+  const roomCode = 'B29CED'
 
   return new ImageResponse(
     (
@@ -19,16 +19,13 @@ export default async function Image() {
           alignItems: 'center',
           justifyContent: 'center',
           background: 'linear-gradient(135deg, #DCFCE7 0%, #22C55E 30%, #16A34A 70%, #064E3B 100%)',
-          position: 'relative',
           padding: '0 80px',
         }}
       >
-        {/* Emojis to signify game type */}
         <div style={{ display: 'flex', fontSize: 120, marginBottom: 20 }}>
-          👊✋✌️
+          👊 ✋ ✌️
         </div>
 
-        {/* Room Label */}
         <div
           style={{
             display: 'flex',
@@ -46,7 +43,6 @@ export default async function Image() {
           RPS Room
         </div>
 
-        {/* Main Invite Text */}
         <div
           style={{
             display: 'flex',
@@ -59,13 +55,13 @@ export default async function Image() {
             textShadow: '0 8px 30px rgba(0,0,0,0.3)',
           }}
         >
-          <span>Challenge me to</span>
-          <span style={{ color: '#DCFCE7' }}>Rock Paper Scissors!</span>
+          <div style={{ display: 'flex' }}>Challenge me to</div>
+          <div style={{ display: 'flex', color: '#DCFCE7' }}>Rock Paper Scissors!</div>
         </div>
 
-        {/* Room Code Display */}
         <div
           style={{
+            display: 'flex',
             marginTop: 40,
             padding: '16px 32px',
             borderRadius: 16,
@@ -83,4 +79,4 @@ export default async function Image() {
     ),
     { ...size }
   )
-}
+          }
