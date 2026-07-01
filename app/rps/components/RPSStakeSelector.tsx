@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { ChevronDown, ChevronUp, Play } from "lucide-react"
-import type { useRPSEngine } from "../hooks/useRPSEngine"
+import type { useRPSEngine } from "../useRPSEngine"
 
 const MIN_STAKE = 50
 const MAX_STAKE = 10000
