@@ -74,6 +74,14 @@ export type RPSMatchHistoryItem = {
     opponent_avatar: string | null
 }
 
+export type RPSRoomPreview = {
+    room_code: string
+    stake_amount: number
+    best_of: number
+    host_name: string
+    host_avatar: string | null
+}
+
 export type RPSActionResult = {
     success: boolean
     error?: string
@@ -143,6 +151,32 @@ export async function joinRPSMatch(roomCode: string): Promise<RPSActionResult> {
     } catch (err: any) {
         console.error('joinRPSMatch error:', err)
         return { success: false, error: err.message || 'Failed to join match' }
+    }
+}
+
+// ─── Peek a room's stake before joining (read-only, no escrow) ──────
+// Lets a friend see what they're committing to (stake, best-of, host)
+// BEFORE they lock any Stars, instead of finding out only after
+// joinRPSMatch has already deducted their escrow.
+
+export async function peekRPSRoom(roomCode: string): Promise<{
+    success: boolean
+    room?: RPSRoomPreview
+    error?: string
+}> {
+    try {
+        const supabase = await createSupabaseServerClient()
+        const { data, error } = await supabase.rpc('rps_peek_room_v2', {
+            p_room_code: roomCode.trim().toUpperCase(),
+        })
+        if (error) {
+            console.error('peekRPSRoom RPC error:', error)
+            return { success: false, error: error.message }
+        }
+        return data as { success: boolean; room?: RPSRoomPreview; error?: string }
+    } catch (err: any) {
+        console.error('peekRPSRoom error:', err)
+        return { success: false, error: err.message || 'Failed to look up room' }
     }
 }
 
