@@ -1,7 +1,7 @@
 // app/confess/[slug]/opengraph-image.tsx
 import { ImageResponse } from 'next/og'
 
-export const alt = 'Send an anonymous confession'
+export const alt = 'Send me anonymous confession'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -29,7 +29,7 @@ async function loadGoogleFont(family: string, weight: number, text: string) {
 }
 
 export default async function Image() {
-  const wordmark = 'SAY'
+  const wordmark = 'CONFESSION'
   const tagline = 'Send me anonymous confession'
 
   const [poppinsExtraBold, poppinsSemiBold] = await Promise.all([
