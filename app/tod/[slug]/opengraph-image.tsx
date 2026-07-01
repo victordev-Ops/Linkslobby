@@ -1,7 +1,7 @@
 // app/tod/[slug]/opengraph-image.tsx
 import { ImageResponse } from 'next/og'
 
-export const alt = 'Play Truth or Dare — Join the lobby'
+export const alt = 'Truth or Dare — Hop In. Let’s Play.'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -25,10 +25,12 @@ async function loadGoogleFont(family: string, weight: number, text: string) {
 
 export default async function Image() {
   const wordmark = 'Truth or Dare'
-  const tagline = 'Hop In. Let’s Play'
+  const tagline = "Hop In. Let's Play."
 
+  // We must append the "!" motif to the wordmark string here. 
+  // Otherwise, the font subsetter skips it, and the image rendering fails.
   const [poppinsExtraBold, poppinsSemiBold] = await Promise.all([
-    loadGoogleFont('Poppins', 800, wordmark),
+    loadGoogleFont('Poppins', 800, wordmark + '!'),
     loadGoogleFont('Poppins', 600, tagline),
   ])
 
@@ -47,8 +49,8 @@ export default async function Image() {
           alignItems: 'center',
           justifyContent: 'center',
           fontFamily: fonts.length ? 'Poppins' : 'sans-serif',
-          // Pepper red linear gradient matching a vivid, high-energy aesthetic
-          background: 'linear-gradient(135deg, #F87171 0%, #EF4444 30%, #DC2626 70%, #7F1D1D 100%)',
+          // Reverted to the exact radial-gradient format from your original file for guaranteed compatibility
+          background: 'radial-gradient(circle at 30% 25%, #F87171 0%, #EF4444 38%, #B91C1C 72%, #450A0A 100%)',
           position: 'relative',
         }}
       >
@@ -78,7 +80,7 @@ export default async function Image() {
           }}
         />
 
-        {/* Motif placeholder (using an exclamation mark for Truth or Dare excitement) */}
+        {/* Exclamation mark motif */}
         <div
           style={{
             position: 'absolute',
@@ -105,7 +107,7 @@ export default async function Image() {
           style={{
             display: 'flex',
             color: '#ffffff',
-            fontSize: 150, // Scaled down slightly to accommodate a longer 3-word title
+            fontSize: 130, // Safely scaled down so the text fits within the 1200px bounds
             fontWeight: 800,
             letterSpacing: '-0.04em',
             lineHeight: 1,
@@ -143,5 +145,4 @@ export default async function Image() {
     ),
     { ...size, fonts: fonts.length ? fonts : undefined }
   )
-    }
-    
+}
