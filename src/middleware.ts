@@ -71,7 +71,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/ama/') ||
     pathname.startsWith('/anonymous/') ||
     pathname.startsWith('/dykm/') ||
-    pathname.startsWith('/tod/')
+    pathname.startsWith('/tod/') ||
+    pathname.startsWith('/hot-seat/')
 
   const isPublicRoute = isExactPublic || isPublicPrefix
 
