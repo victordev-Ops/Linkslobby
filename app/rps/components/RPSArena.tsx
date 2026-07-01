@@ -9,7 +9,7 @@ import { RPSCountdownHands } from "./RPSCountdownHands"
 const WINS_NEEDED = 3
 
 const CHOICES: { id: RPSMove; emoji: string; label: string }[] = [
-    { id: "rock", emoji: "✊", label: "Rock" },
+    { id: "rock", emoji: "👊", label: "Rock" },
     { id: "paper", emoji: "✋", label: "Paper" },
     { id: "scissors", emoji: "✌️", label: "Scissors" },
 ]
@@ -358,7 +358,7 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                             </div>
                         </div>
                         <div className="text-center space-y-2">
-                            <h3 className="text-xl font-black text-emerald-400">Move Locked 🔒</h3>
+                            <h3 className="text-xl font-black text-emerald-400">Move Locked </h3>
                             <p className="text-white/40 text-sm font-bold uppercase tracking-widest">
                                 {engine.aiActive ? "AI is thinking…" : engine.mode === "solo" ? "Resolving..." : `${opponentLabel} is thinking…`}
                             </p>
