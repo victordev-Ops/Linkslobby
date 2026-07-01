@@ -2,13 +2,28 @@
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { type NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+
+const POST_AUTH_REDIRECT_COOKIE = 'post_auth_redirect'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
   const code = searchParams.get('code')
-  const next = searchParams.get('next') || searchParams.get('returnTo') || ''
+
+  const cookieStore = await cookies()
+  const cookieRedirect = cookieStore.get(POST_AUTH_REDIRECT_COOKIE)?.value
+
+  // Prefer the URL param (fast path, works when the email link survives
+  // intact). Fall back to the cookie set during signUp() if the query
+  // string got stripped en route (e.g. Supabase's redirect URL allowlist
+  // doesn't include the exact query string, or an email client rewrote the
+  // link). Always clear the cookie once we've read it — it's single-use.
+  const next = searchParams.get('next') || searchParams.get('returnTo') || cookieRedirect || ''
+  if (cookieRedirect) {
+    cookieStore.delete(POST_AUTH_REDIRECT_COOKIE)
+  }
 
   const supabase = await createSupabaseServerClient()
   let userId: string | null = null
