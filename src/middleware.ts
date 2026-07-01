@@ -62,7 +62,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // 2. Define Public Routes
-  const publicPaths = ['/login', '/signup', '/manifest.webmanifest', '/sw.js', '/rps']
+  const publicPaths = ['/login', '/signup', '/manifest.webmanifest', '/sw.js']
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
 
   const isPublicPrefix =
@@ -72,7 +72,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/anonymous/') ||
     pathname.startsWith('/dykm/') ||
     pathname.startsWith('/tod/') ||
-    pathname.startsWith('/hot-seat/')
+    pathname.startsWith('/hot-seat/') ||
+    pathname.startsWith('/rps')
 
   const isPublicRoute = isExactPublic || isPublicPrefix
 
