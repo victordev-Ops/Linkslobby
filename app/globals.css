@@ -48,6 +48,10 @@ html.dark body {
 /* Next.js App Router uses a div inside body. We ensure the layout fills the screen */
 body>div {
   min-height: 100vh;
+  /* dvh accounts for mobile browser chrome (address bar) showing/hiding,
+     preventing the whole layout — and anything fixed to it — from
+     jumping/reflowing while the user scrolls */
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -57,6 +61,18 @@ main {
   flex: 1;
   width: 100%;
   /* This ensures that content can expand and scroll naturally */
+}
+
+/* 3b. Stabilize fixed bottom navigation on mobile scroll.
+   Promotes the nav to its own compositor layer so iOS/Android don't
+   repaint it (with its backdrop-blur) on every scroll frame, which is
+   the usual cause of a "shaking"/jittery fixed bar. */
+.fixed-bottom-nav {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* 4. Keep your App-like touch behaviors */
