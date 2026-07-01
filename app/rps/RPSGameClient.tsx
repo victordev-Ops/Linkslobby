@@ -41,4 +41,4 @@ export default function RPSGameClient({ profile }: RPSGameClientProps) {
     }
 
     return <RPSArena engine={engine} />
-}
+                }
