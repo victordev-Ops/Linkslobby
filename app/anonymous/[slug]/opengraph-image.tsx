@@ -25,7 +25,7 @@ async function loadGoogleFont(family: string, weight: number, text: string) {
 
 export default async function Image() {
   const wordmark = 'ANONYMOUS'
-  const tagline = 'Send an anonymous message'
+  const tagline = 'Send me anonymous message'
 
   const [poppinsExtraBold, poppinsSemiBold] = await Promise.all([
     loadGoogleFont('Poppins', 800, wordmark),
