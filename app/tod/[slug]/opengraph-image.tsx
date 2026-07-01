@@ -148,5 +148,4 @@ export default async function Image() {
     ),
     { ...size, fonts: fonts.length ? fonts : undefined }
   )
-        }
-          
+}
