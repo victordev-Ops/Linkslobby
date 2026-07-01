@@ -70,13 +70,13 @@ export default function BottomNavbar() {
                 {item.name}
               </span>
 
-           //  {isActive && (
-             //   <motion.div
-                //  layoutId="nav-indicator"
-               //   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-              //    className="absolute -top-0.5 w-8 h-1 bg-purple-600 dark:bg-purple-400 rounded-b-full"
-            //    />
-            //  )} 
+             {isActive && (
+                <motion.div
+                  layoutId="nav-indicator"
+                 transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  className="absolute -top-0.5 w-8 h-1 bg-purple-600 dark:bg-purple-400 rounded-b-full"
+                />
+              )} 
             </Link>
           )
         })}
