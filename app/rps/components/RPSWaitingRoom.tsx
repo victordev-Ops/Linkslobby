@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { ArrowLeft, Loader2, Share2, Monitor, Swords, Check, Copy } from "lucide-react"
-import type { useRPSEngine } from "../hooks/useRPSEngine"
+import type { useRPSEngine } from "../useRPSEngine"
 
 export function RPSWaitingRoom({ engine }: { engine: ReturnType<typeof useRPSEngine> }) {
     const [copied, setCopied] = useState(false)
