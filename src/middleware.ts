@@ -70,7 +70,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/confess/') ||
     pathname.startsWith('/ama/') ||
     pathname.startsWith('/anonymous/') ||
-    pathname.startsWith('/dykm/')
+    pathname.startsWith('/dykm/') ||
+    pathname.startsWith('/tod/')
 
   const isPublicRoute = isExactPublic || isPublicPrefix
 
