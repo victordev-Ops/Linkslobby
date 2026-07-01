@@ -23,6 +23,20 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
         redirect(`/login?returnTo=/dykm/results/${scoreId}`)
     }
 
+    // Claim this score row if it was saved anonymously (responder_id null)
+    // and belongs to this user's attempt — must happen BEFORE the select
+    // below, since RLS won't let them see the row at all until it's claimed.
+    // Safe to call unconditionally: it's a no-op if already claimed, already
+    // belongs to someone else, or this user is the quiz owner themselves.
+    const { error: claimError } = await supabase.rpc('claim_dykm_score', {
+        p_score_id: scoreId,
+    })
+    if (claimError) {
+        console.error('[DykmResultPage] claim_dykm_score failed:', claimError.message)
+        // Don't hard-fail the page over this — if it was already claimed
+        // or belongs to someone else, the select below will 404 correctly.
+    }
+
     // Fetch score details
     const { data: score } = await supabase
         .from('dykm_scores')
@@ -162,4 +176,5 @@ export default async function DykmResultPage({ params }: { params: Promise<{ sco
         </div>
     )
                                     }
-            
+
+        
