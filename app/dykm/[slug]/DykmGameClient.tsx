@@ -199,9 +199,9 @@ export default function DykmGameClient({ profile, questions }: { profile: any; q
           transition={{ duration: 0.4 }}
           className="bg-white w-full max-w-md p-8 rounded-[2rem] shadow-sm border border-slate-100 text-center space-y-6"
         >
-          <div className="w-20 h-20 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center mx-auto shadow-2xl shadow-blue-500/30 rotate-3">
-            <Brain className="w-10 h-10 text-white" />
-          </div>
+          <div className="w-12 h-12 shrink-0 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                  <Brain size={24} />
+                </div>
 
           <div className="space-y-2">
             <div className="inline-block px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-widest rounded-full">
@@ -328,13 +328,11 @@ export default function DykmGameClient({ profile, questions }: { profile: any; q
               href="/login"
               className="block w-full py-3 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition text-sm"
             >
-              🎉 Create Your Own Quiz
+               Create Your Own Quiz
             </a>
           </div>
 
-          <a href="/" className="block text-sm text-slate-400 font-medium hover:text-slate-600 transition">
-            Skip and go Home
-          </a>
+        
         </motion.div>
       </div>
     )
