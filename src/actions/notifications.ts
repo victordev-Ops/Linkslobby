@@ -14,6 +14,7 @@ export type NotificationType =
   | 'friend_request_response'
   | 'lobby_join_response'
   | 'hot_seat_answer'
+  | 'game_invite'
 
 // Types that live in notification_reads (no dedicated is_read column on the source table)
 const NOTIFICATION_READS_TYPES: NotificationType[] = [
@@ -37,6 +38,9 @@ export async function hideNotification(id: string, type: NotificationType) {
       xp: 'xp_transaction',
       hot_seat: 'hot_seat_question',
       tod_turn: 'tod_turn_event',
+      // game_invite has no mapping — it falls through to itself below.
+      // If hidden_notifications has a CHECK constraint on notification_type,
+      // make sure 'game_invite' is added to the allowed list.
     }
     const notificationType = typeMap[type] || type
 
@@ -91,6 +95,9 @@ export async function markNotificationAsRead(id: string, type: NotificationType)
         case 'tod_turn':
           await supabase.from('tod_turn_events').update({ is_read: true }).eq('id', id).eq('user_id', user.id)
           break
+        case 'game_invite':
+          await supabase.from('game_invites').update({ is_read: true }).eq('id', id).eq('invitee_id', user.id)
+          break
       }
     }
 
@@ -139,6 +146,13 @@ export async function markAllNotificationsAsRead() {
       .from('tod_turn_events')
       .update({ is_read: true })
       .eq('user_id', user.id)
+      .eq('is_read', false)
+
+    // 5b. Game invites (own is_read column)
+    await supabase
+      .from('game_invites')
+      .update({ is_read: true })
+      .eq('invitee_id', user.id)
       .eq('is_read', false)
 
     // 6. Legacy lobby system messages (tod_messages, type='lobby')
@@ -240,4 +254,5 @@ export async function markAllNotificationsAsRead() {
     console.error('Server Action Error:', error)
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
-                                                                                           }
+    }
+      
