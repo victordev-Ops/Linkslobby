@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import LobbyListClient, { Lobby } from './LobbyListClient';
 
@@ -6,9 +7,18 @@ export const revalidate = 0;
 
 export default async function TODLobbyList() {
   const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const headerList = await headers();
 
-  const [lobbyResult, profileData] = await Promise.all([
+  // middleware.ts already verified the session for this request and forwards
+  // it via x-user-id — skip the redundant second auth.getUser() network call.
+  // Falls back to a direct check if the header is ever missing.
+  const headerUserId = headerList.get('x-user-id');
+  const userPromise = headerUserId
+    ? Promise.resolve({ data: { user: { id: headerUserId } } })
+    : supabase.auth.getUser();
+
+  const [{ data: { user } }, lobbyResult, profileData] = await Promise.all([
+    userPromise,
     supabase
       .from('tod_lobbies')
       .select(`
@@ -25,10 +35,19 @@ export default async function TODLobbyList() {
       .order('category', { ascending: true })
       .order('created_at', { ascending: false })
       .limit(4),
-    user
-      ? supabase.from('profiles').select('is_pro').eq('id', user.id).single().then(r => r.data)
+    headerUserId
+      ? supabase.from('profiles').select('is_pro').eq('id', headerUserId).single().then(r => r.data)
       : Promise.resolve(null),
   ]);
+
+  // profileData above only fires when we already trust the header; if we had
+  // to fall back to a real auth check, fetch the pro flag now that we know
+  // the resolved user id (rare path — only hit if the header is missing).
+  const resolvedProfileData = headerUserId
+    ? profileData
+    : user
+      ? (await supabase.from('profiles').select('is_pro').eq('id', user.id).single()).data
+      : null;
 
   const lobbyData = lobbyResult.data || [];
 
@@ -57,7 +76,8 @@ export default async function TODLobbyList() {
     <LobbyListClient
       initialLobbies={lobbiesWithDetails}
       currentUserId={user?.id}
-      isPro={profileData?.is_pro || false}
+      isPro={resolvedProfileData?.is_pro || false}
     />
   );
-                                       }
+           }
+         
