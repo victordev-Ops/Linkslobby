@@ -148,10 +148,11 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
     }
   }
 
+  
+      // Applied modern gaming font families constraints via style or arbitrary class
   return (
-    {/* Applied modern gaming font families constraints via style or arbitrary class */}
     <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24 font-['Poppins',_'Nunito',_sans-serif]">
-
+      
       <div className="fixed inset-0 pointer-events-none hidden dark:block">
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]" />
@@ -159,6 +160,9 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
       {/* Navbar: Updated App Name to LinksLobby & Optimized Star Balance */}
       <nav className={`bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/10 sticky top-0 z-30 transition-all duration-200 ${isDykmModalOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        {/* ... rest of your code ... */}
+        
+
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
@@ -365,7 +369,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                         className="w-full py-3 border-2 border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/80 font-bold rounded-2xl text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95 hover:scale-[1.02]"
                       >
                         Edit Questions
-                     </button>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -418,7 +422,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 </div>
               )}
             </div>
-                  
+
             {/* Confessions Card */}
             <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
@@ -465,7 +469,8 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 </div>
               )}
             </div>
-                 {/* Hot Seat Card */}
+
+            {/* Hot Seat Card */}
             <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsHotSeatOpen(!isHotSeatOpen)}
@@ -506,7 +511,8 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 </div>
               )}
             </div>
-                {/* Rock Paper Scissors Card */}
+
+            {/* Rock Paper Scissors Card */}
             <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsRpsOpen(!isRpsOpen)}
@@ -551,7 +557,8 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
         </section>
 
       </main>
-                  {/* DYKM Modal */}
+
+      {/* DYKM Modal */}
       {isDykmModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white dark:bg-[#1a1429] w-full max-w-lg rounded-[2.5rem] shadow-2xl max-h-[90vh] overflow-y-auto border border-white/20 dark:border-white/10 flex flex-col">
@@ -626,6 +633,4 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
       )}
     </div>
   )
-                      }
-
-            
+                        }
