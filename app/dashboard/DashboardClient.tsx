@@ -4,14 +4,13 @@ import { useState, useEffect } from "react"
 import {
   Copy, Check, MessageCircleQuestion, Loader2, Share2,
   LayoutGrid, Lock, ChevronDown, Brain, X, Save,
-  Dices, Sparkles, Flame, Swords, BadgeCheck
+  Dices, Sparkles, Flame, Swords, Plus
 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/AuthContext"
 import { createClient } from "@/lib/supabase/client"
 import { useScrollLock } from "@/hooks/useScrollLock"
-import XPBalance from "@/components/XPBalance"
 import VerifiedBadge from "@/components/VerifiedBadge"
 import Link from "next/link"
 
@@ -24,8 +23,6 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const { user: authUser, profile: authProfile, loading: authLoading } = useAuth()
   const [supabase] = useState(() => createClient())
 
-  // Use server data if available, otherwise fall back to auth context
-  // This allows immediate rendering while hydration happens
   const profile = serverProfile || authProfile
   const loading = !profile && authLoading
 
@@ -34,20 +31,21 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   const [amaCopied, setAmaCopied] = useState(false)
   const [confessCopied, setConfessCopied] = useState(false)
   const [hotSeatCopied, setHotSeatCopied] = useState(false)
+  const [anonymousCopied, setAnonymousCopied] = useState(false)
 
-  // Accordion States
-  const [isAmaOpen, setIsAmaOpen] = useState(false)
-  const [isConfessOpen, setIsConfessOpen] = useState(false)
-  const [isDykmOpen, setIsDykmOpen] = useState(false)
-  const [isTodOpen, setIsTodOpen] = useState(false)
-  const [isHotSeatOpen, setIsHotSeatOpen] = useState(false)
-  const [isRpsOpen, setIsRpsOpen] = useState(false)
+  // Accordion States (Expanded by default constraint)
+  const [isAmaOpen, setIsAmaOpen] = useState(true)
+  const [isConfessOpen, setIsConfessOpen] = useState(true)
+  const [isDykmOpen, setIsDykmOpen] = useState(true)
+  const [isTodOpen, setIsTodOpen] = useState(true)
+  const [isHotSeatOpen, setIsHotSeatOpen] = useState(true)
+  const [isRpsOpen, setIsRpsOpen] = useState(true)
+  const [isAnonymousOpen, setIsAnonymousOpen] = useState(true)
+
+  // Navigation States
   const [isNavigatingToTod, setIsNavigatingToTod] = useState(false)
   const [isNavigatingToHotSeat, setIsNavigatingToHotSeat] = useState(false)
   const [isNavigatingToRps, setIsNavigatingToRps] = useState(false)
-  const [isAnonymousOpen, setIsAnonymousOpen] = useState(false)
-  const [anonymousCopied, setAnonymousCopied] = useState(false)
-
 
   // DYKM Logic
   const [hasDykm, setHasDykm] = useState(!!initialDykmQuestions)
@@ -64,14 +62,9 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
 
   useEffect(() => {
     if (!loading && !profile) {
-      // If not loading and no profile (neither server nor client), redirect
-      // But Middleware should have caught this generally.
       router.push('/login')
     }
   }, [profile, loading, router])
-
-  // Removed checkDykmStatus since we pass it from server
-  // or we could keep it as a re-verification if needed, but for speed we rely on server prop
 
   const handleSaveDykm = async () => {
     if (dykmQuestions.some((q: any) => !q.question || !q.answer)) {
@@ -93,25 +86,21 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
       setIsDykmModalOpen(false)
     } catch (err) {
       toast.error("Failed to save quiz")
-      //console.error(err)
     } finally {
       setIsSavingDykm(false)
     }
   }
 
-  // Truth or Dare Logic - Navigate to TOD dashboard
   const handleNavigateToTod = () => {
     setIsNavigatingToTod(true)
     router.push('/tod')
   }
 
-  // Hot Seat Logic - Navigate to Hot Seat
   const handleNavigateToHotSeat = () => {
     setIsNavigatingToHotSeat(true)
     router.push('/hot-seat')
   }
 
-  // RPS Logic - Navigate to Rock Paper Scissors
   const handleNavigateToRps = () => {
     setIsNavigatingToRps(true)
     router.push('/rps')
@@ -120,16 +109,16 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   if (loading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        <Loader2 className="w-10 h-10 animate-spin text-purple-600" />
       </div>
     )
   }
 
-  const amaUrl = `https://say-app.vercel.app/ama/${profile.slug}`
-  const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
-  const dykmUrl = `https://say-app.vercel.app/dykm/${profile.slug}`
-  const anonymousUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
-  const hotSeatUrl = `https://say-app.vercel.app/hot-seat/${profile.slug}`
+  const amaUrl = `https://linkslobby.vercel.app/ama/${profile.slug}`
+  const confessUrl = `https://linkslobby.vercel.app/confess/${profile.slug}`
+  const dykmUrl = `https://linkslobby.vercel.app/dykm/${profile.slug}`
+  const anonymousUrl = `https://linkslobby.vercel.app/anonymous/${profile.slug}`
+  const hotSeatUrl = `https://linkslobby.vercel.app/hot-seat/${profile.slug}`
 
   const handleCopy = async (text: string, type: 'hero' | 'ama' | 'confess' | 'dykm' | 'hotSeat' | 'anonymous') => {
     try {
@@ -160,111 +149,117 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24">
+    {/* Applied modern gaming font families constraints via style or arbitrary class */}
+    <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24 font-['Poppins',_'Nunito',_sans-serif]">
 
-      {/* Background Ambience (Dark Mode only) - Pinned from layout/settings style */}
       <div className="fixed inset-0 pointer-events-none hidden dark:block">
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]" />
       </div>
 
-      {/* Navbar */}
-      <nav className={`bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 sticky top-0 z-30 transition-all duration-200 ${isDykmModalOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      {/* Navbar: Updated App Name to LinksLobby & Optimized Star Balance */}
+      <nav className={`bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/10 sticky top-0 z-30 transition-all duration-200 ${isDykmModalOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-lg italic">S</span>
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
+              <span className="text-white font-black text-xl italic">L</span>
             </div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Say</h2>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">LinksLobby</h2>
           </div>
-          <XPBalance />
+          
+          {/* Optimized Star Balance UI */}
+          <button className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-500/20 px-3 py-1.5 rounded-full cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm">
+            <Sparkles size={16} className="text-amber-500" />
+            <span className="font-black text-amber-600 dark:text-amber-400 text-sm">1,250</span>
+            <div className="bg-amber-500 rounded-full w-4 h-4 flex items-center justify-center ml-1 shadow-inner">
+              <Plus size={12} className="text-white" strokeWidth={4} />
+            </div>
+          </button>
         </div>
       </nav>
 
       <main className="max-w-xl mx-auto px-4 py-8 space-y-8 relative z-10">
 
-        <header className="py-2">
-          <div className="flex items-center gap-3 mb-1">
+        <header className="py-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center gap-3 mb-2">
             {profile.avatar_url ? (
               <img
                 src={profile.avatar_url}
                 alt={profile.username}
-                className="w-10 h-10 rounded-full object-cover ring-2 ring-purple-500/30 shadow-md"
+                className="w-12 h-12 rounded-full object-cover ring-4 ring-purple-500/20 shadow-xl"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-lg ring-2 ring-purple-500/30 shadow-md">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-xl ring-4 ring-purple-500/20 shadow-xl">
                 {profile.username?.charAt(0).toUpperCase() || '?'}
               </div>
             )}
 
             <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2 leading-none">
-  Hi, {profile.username?.split(' ')[0]}
-  {profile.is_pro
-    ? <VerifiedBadge size={22} />
-    : <Link href="/upgrade" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-600 transition">
-        <VerifiedBadge size={22} /> Get Verified
-      </Link>
-  }
-</h1>
-
-          
-            
+              Hi, {profile.username?.split(' ')[0]}
+              {profile.is_pro
+                ? <VerifiedBadge size={24} />
+                : <Link href="/upgrade" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-600 transition">
+                    <VerifiedBadge size={24} /> Get Verified
+                  </Link>
+              }
+            </h1>
           </div>
           
-          <p className="text-slate-500 dark:text-white/60 text-sm font-medium">
-            Ready for some fun today?
+          <p className="text-slate-500 dark:text-white/60 text-base font-medium">
+            Ready to break the ice today? Pick a game below! 🎮
           </p>
         </header>
 
         {/* Game Collection Section */}
-        <section className="space-y-4">
+        <section className="space-y-5">
           <div className="flex items-center gap-2 px-2">
             <LayoutGrid size={18} className="text-purple-600 dark:text-purple-400" />
-            <h2 className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.2em]">Game Collection</h2>
+            <h2 className="text-[11px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.25em]">Game Collection</h2>
           </div>
 
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-4">
+            
             {/* Anonymous Link Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsAnonymousOpen(!isAnonymousOpen)}
-                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                className="p-5 flex items-center gap-4 cursor-pointer"
               >
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                  <Share2 size={24} />
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                  <Share2 size={28} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Anonymous Link</h3>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Receive anonymous messages from friends</p>
+                  <h3 className="font-black text-slate-900 dark:text-white text-lg mb-1">Anonymous Inbox</h3>
+                  <p className="text-slate-500 dark:text-white/60 text-sm font-medium line-clamp-1">Get unfiltered messages from friends</p>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isAnonymousOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={20} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isAnonymousOpen ? "rotate-180" : ""}`} />
               </div>
 
               {isAnonymousOpen && (
-                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
-                    <p className="text-[11px] text-indigo-700 dark:text-indigo-300 leading-relaxed font-medium">
-                      How it works: Share this link on your Story or Bio. Anyone can send you anonymous messages through this link!
+                <div className="px-5 pb-6 pt-0 space-y-4 animate-in slide-in-from-top-4 duration-300 fade-in">
+                  <div className="p-4 bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-500/10 dark:to-transparent rounded-2xl border-l-4 border-indigo-500">
+                    <p className="text-sm text-indigo-800 dark:text-indigo-200 font-semibold leading-relaxed">
+                      🤫 Drop this link in your bio and let the secret messages roll in!
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
+                  <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
                     <input
                       readOnly
                       value={anonymousUrl}
-                      className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
+                      className="flex-1 bg-transparent pl-4 py-2 text-xs font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
                     />
                     <button
                       onClick={() => handleCopy(anonymousUrl, 'anonymous')}
-                      className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${anonymousCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-transparent border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+                      className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border ${anonymousCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-white/10 border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 shadow-sm"}`}
                     >
-                      {anonymousCopied ? <Check size={14} /> : <Copy size={14} />}
+                      {anonymousCopied ? <Check size={16} /> : <Copy size={16} />}
                     </button>
                     <button
                       onClick={() => handleNativeShare(anonymousUrl, 'Send me an anonymous message!')}
-                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 active:scale-90 bg-white dark:bg-transparent"
+                      className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 active:scale-90 bg-white dark:bg-white/10 shadow-sm"
                     >
-                      <Share2 size={14} />
+                      <Share2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -272,103 +267,102 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
             </div>
 
             {/* Truth or Dare Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsTodOpen(!isTodOpen)}
-                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                className="p-5 flex items-center gap-4 cursor-pointer"
               >
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-                  <Dices size={24} />
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                  <Dices size={28} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-slate-900 dark:text-white text-base">Truth or Dare</h3>
-                    <div className="relative">
-                      {/* Beeping animation */}
-                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
-                      <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Live</span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-black text-slate-900 dark:text-white text-lg">Truth or Dare</h3>
+                    <div className="relative flex items-center">
+                      <span className="absolute -left-1 w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
+                      <span className="bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-lg shadow-rose-500/30">Live</span>
                     </div>
                   </div>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Play Truth/Dare Challenge with friends </p>
+                  <p className="text-slate-500 dark:text-white/60 text-sm font-medium line-clamp-1">Spin the bottle! Dare friends or hear truths.</p>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isTodOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={20} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isTodOpen ? "rotate-180" : ""}`} />
               </div>
 
               {isTodOpen && (
-                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="p-3 bg-rose-50 dark:bg-rose-500/10 rounded-xl border border-rose-100 dark:border-rose-500/20">
-                    <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed font-medium">
-                      How it works: Create a lobby and share the link with friends. Everyone takes turns asking or being the target. Real-time multiplayer fun!
+                <div className="px-5 pb-6 pt-0 space-y-4 animate-in slide-in-from-top-4 duration-300 fade-in">
+                  <div className="p-4 bg-gradient-to-r from-rose-50 to-transparent dark:from-rose-500/10 dark:to-transparent rounded-2xl border-l-4 border-rose-500">
+                    <p className="text-sm text-rose-800 dark:text-rose-200 font-semibold leading-relaxed">
+                      🔥 Drop the link, invite the squad, and take turns surviving crazy dares or spilling secrets!
                     </p>
                   </div>
 
                   <button
                     onClick={handleNavigateToTod}
                     disabled={isNavigatingToTod}
-                    className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-rose-200 dark:shadow-rose-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full py-4 bg-rose-600 text-white font-black rounded-2xl text-sm hover:bg-rose-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-xl shadow-rose-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {isNavigatingToTod ? <Loader2 size={16} className="animate-spin" /> : <Dices size={16} />}
-                    {isNavigatingToTod ? 'Loading...' : 'View Game Lobbies'}
+                    {isNavigatingToTod ? <Loader2 size={18} className="animate-spin" /> : <Dices size={18} />}
+                    {isNavigatingToTod ? 'Entering Lobby...' : 'Join the Fun'}
                   </button>
                 </div>
               )}
             </div>
 
             {/* DYKM Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsDykmOpen(!isDykmOpen)}
-                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                className="p-5 flex items-center gap-4 cursor-pointer"
               >
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                  <Brain size={24} />
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                  <Brain size={28} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Do You Know Me?</h3>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Create a quiz to test your friends</p>
+                  <h3 className="font-black text-slate-900 dark:text-white text-lg mb-1">Do You Know Me?</h3>
+                  <p className="text-slate-500 dark:text-white/60 text-sm font-medium line-clamp-1">The ultimate friendship test</p>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isDykmOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={20} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isDykmOpen ? "rotate-180" : ""}`} />
               </div>
 
               {isDykmOpen && (
-                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl border border-blue-100 dark:border-blue-500/20">
-                    <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed font-medium">
-                      How it works: Create 3 personal questions. Friends answer them to see how well they really know you.
+                <div className="px-5 pb-6 pt-0 space-y-4 animate-in slide-in-from-top-4 duration-300 fade-in">
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-500/10 dark:to-transparent rounded-2xl border-l-4 border-blue-500">
+                    <p className="text-sm text-blue-800 dark:text-blue-200 font-semibold leading-relaxed">
+                      🧠 Think they know you? Craft 3 questions and test their loyalty! 
                     </p>
                   </div>
 
                   {!hasDykm ? (
                     <button
                       onClick={() => setIsDykmModalOpen(true)}
-                      className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition-all active:scale-95 hover:scale-[1.02] shadow-lg shadow-blue-200 dark:shadow-blue-900/20"
+                      className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl text-sm hover:bg-blue-700 transition-all active:scale-95 hover:scale-[1.02] shadow-xl shadow-blue-500/20"
                     >
-                      Create My Quiz
+                      Craft Your Quiz
                     </button>
                   ) : (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
+                      <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
                         <input
                           readOnly
                           value={dykmUrl}
-                          className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
+                          className="flex-1 bg-transparent pl-4 py-2 text-xs font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
                         />
                         <button
                           onClick={() => handleCopy(dykmUrl, 'dykm')}
-                          className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${dykmCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-transparent border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+                          className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border ${dykmCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-white/10 border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 shadow-sm"}`}
                         >
-                          {dykmCopied ? <Check size={14} /> : <Copy size={14} />}
+                          {dykmCopied ? <Check size={16} /> : <Copy size={16} />}
                         </button>
                         <button
                           onClick={() => handleNativeShare(dykmUrl, 'How well do you know me? Take the quiz!')}
-                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 active:scale-90 bg-white dark:bg-transparent"
+                          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 active:scale-90 bg-white dark:bg-white/10 shadow-sm"
                         >
-                          <Share2 size={14} />
+                          <Share2 size={16} />
                         </button>
                       </div>
                       <button
                         onClick={() => setIsDykmModalOpen(true)}
-                        className="w-full py-2 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/60 font-bold rounded-xl text-[10px] hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95 hover:scale-[1.02]"
+                        className="w-full py-3 border-2 border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/80 font-bold rounded-2xl text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95 hover:scale-[1.02]"
                       >
                         Edit Questions
                       </button>
@@ -379,46 +373,46 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
             </div>
 
             {/* AMA Sticker Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsAmaOpen(!isAmaOpen)}
-                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                className="p-5 flex items-center gap-4 cursor-pointer"
               >
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center justify-center">
-                  <MessageCircleQuestion size={24} />
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                  <MessageCircleQuestion size={28} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Ask Me Anything </h3>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Get AMA link for your story and bio</p>
+                  <h3 className="font-black text-slate-900 dark:text-white text-lg mb-1">Ask Me Anything </h3>
+                  <p className="text-slate-500 dark:text-white/60 text-sm font-medium line-clamp-1">Let them ask, you answer</p>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isAmaOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={20} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isAmaOpen ? "rotate-180" : ""}`} />
               </div>
 
               {isAmaOpen && (
-                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="p-3 bg-orange-50 dark:bg-orange-500/10 rounded-xl border border-orange-100 dark:border-orange-500/20">
-                    <p className="text-[11px] text-orange-700 dark:text-orange-300 leading-relaxed font-medium">
-                      How it works: Share this link on your Story and Bio. Friends can tap it to ask you anything anonymously.
+                <div className="px-5 pb-6 pt-0 space-y-4 animate-in slide-in-from-top-4 duration-300 fade-in">
+                  <div className="p-4 bg-gradient-to-r from-orange-50 to-transparent dark:from-orange-500/10 dark:to-transparent rounded-2xl border-l-4 border-orange-500">
+                    <p className="text-sm text-orange-800 dark:text-orange-200 font-semibold leading-relaxed">
+                      🎤 Put yourself in the spotlight! Let your friends ask you anything anonymously.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
+                  <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
                     <input
                       readOnly
                       value={amaUrl}
-                      className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
+                      className="flex-1 bg-transparent pl-4 py-2 text-xs font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
                     />
                     <button
                       onClick={() => handleCopy(amaUrl, 'ama')}
-                      className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${amaCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-transparent border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+                      className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border ${amaCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-white/10 border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 shadow-sm"}`}
                     >
-                      {amaCopied ? <Check size={14} /> : <Copy size={14} />}
+                      {amaCopied ? <Check size={16} /> : <Copy size={16} />}
                     </button>
                     <button
                       onClick={() => handleNativeShare(amaUrl, 'Ask Me Anything anonymously!')}
-                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 active:scale-90 bg-white dark:bg-transparent"
+                      className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 active:scale-90 bg-white dark:bg-white/10 shadow-sm"
                     >
-                      <Share2 size={14} />
+                      <Share2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -426,46 +420,46 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
             </div>
 
             {/* Confessions Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsConfessOpen(!isConfessOpen)}
-                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                className="p-5 flex items-center gap-4 cursor-pointer"
               >
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                  <Lock size={22} />
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                  <Lock size={26} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Confessions</h3>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Receive anonymous confession and messages</p>
+                  <h3 className="font-black text-slate-900 dark:text-white text-lg mb-1">Confessions</h3>
+                  <p className="text-slate-500 dark:text-white/60 text-sm font-medium line-clamp-1">Unlock the secret vault</p>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isConfessOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={20} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isConfessOpen ? "rotate-180" : ""}`} />
               </div>
 
               {isConfessOpen && (
-                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="p-3 bg-purple-50 dark:bg-purple-500/10 rounded-xl border border-purple-100 dark:border-purple-500/20">
-                    <p className="text-[11px] text-purple-700 dark:text-purple-300 leading-relaxed font-medium">
-                      How it works: Share this special link. Anyone can send you a secret confession without you knowing who they are.
+                <div className="px-5 pb-6 pt-0 space-y-4 animate-in slide-in-from-top-4 duration-300 fade-in">
+                  <div className="p-4 bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-500/10 dark:to-transparent rounded-2xl border-l-4 border-purple-500">
+                    <p className="text-sm text-purple-800 dark:text-purple-200 font-semibold leading-relaxed">
+                      🔐 Unlock the vault. Receive anonymous secrets and confessions safely.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
+                  <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
                     <input
                       readOnly
                       value={confessUrl}
-                      className="flex-1 bg-transparent pl-3 py-1.5 text-[10px] font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
+                      className="flex-1 bg-transparent pl-4 py-2 text-xs font-bold text-slate-500 dark:text-white/60 focus:outline-none truncate"
                     />
                     <button
                       onClick={() => handleCopy(confessUrl, 'confess')}
-                      className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90 border ${confessCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-transparent border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+                      className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border ${confessCopied ? "bg-green-500 border-green-500 text-white" : "bg-white dark:bg-white/10 border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 shadow-sm"}`}
                     >
-                      {confessCopied ? <Check size={14} /> : <Copy size={14} />}
+                      {confessCopied ? <Check size={16} /> : <Copy size={16} />}
                     </button>
                     <button
                       onClick={() => handleNativeShare(confessUrl, 'Send me a secret confession!')}
-                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 active:scale-90 bg-white dark:bg-transparent"
+                      className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 active:scale-90 bg-white dark:bg-white/10 shadow-sm"
                     >
-                      <Share2 size={14} />
+                      <Share2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -473,85 +467,83 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
             </div>
 
             {/* Hot Seat Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsHotSeatOpen(!isHotSeatOpen)}
-                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                className="p-5 flex items-center gap-4 cursor-pointer"
               >
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                  <Flame size={24} />
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                  <Flame size={28} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-slate-900 dark:text-white text-base">Hot Seat</h3>
-                    <div className="relative">
-                      {/* Beeping animation */}
-                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-amber-500 rounded-full animate-ping"></span>
-                      <span className="bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Live</span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-black text-slate-900 dark:text-white text-lg">Hot Seat</h3>
+                    <div className="relative flex items-center">
+                      <span className="absolute -left-1 w-2 h-2 bg-amber-500 rounded-full animate-ping"></span>
+                      <span className="bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-lg shadow-amber-500/30">Live</span>
                     </div>
                   </div>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Answer rapid-fire questions under pressure</p>
+                  <p className="text-slate-500 dark:text-white/60 text-sm font-medium line-clamp-1">Face the ultimate interrogation</p>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isHotSeatOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={20} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isHotSeatOpen ? "rotate-180" : ""}`} />
               </div>
 
               {isHotSeatOpen && (
-                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="p-3 bg-amber-50 dark:bg-amber-500/10 rounded-xl border border-amber-100 dark:border-amber-500/20">
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed font-medium">
-                      How it works: Host a hot seat session and answer burning questions from your friends. Fast-paced and revealing!
+                <div className="px-5 pb-6 pt-0 space-y-4 animate-in slide-in-from-top-4 duration-300 fade-in">
+                  <div className="p-4 bg-gradient-to-r from-amber-50 to-transparent dark:from-amber-500/10 dark:to-transparent rounded-2xl border-l-4 border-amber-500">
+                    <p className="text-sm text-amber-800 dark:text-amber-200 font-semibold leading-relaxed">
+                      ⏳ No dodging! Face rapid-fire questions from friends in real-time.
                     </p>
                   </div>
 
                   <button
                     onClick={handleNavigateToHotSeat}
                     disabled={isNavigatingToHotSeat}
-                    className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs hover:bg-amber-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-amber-200 dark:shadow-amber-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full py-4 bg-amber-600 text-white font-black rounded-2xl text-sm hover:bg-amber-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-xl shadow-amber-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {isNavigatingToHotSeat ? <Loader2 size={16} className="animate-spin" /> : <Flame size={16} />}
-                    {isNavigatingToHotSeat ? 'Loading...' : 'Host Hot Seat'}
+                    {isNavigatingToHotSeat ? <Loader2 size={18} className="animate-spin" /> : <Flame size={18} />}
+                    {isNavigatingToHotSeat ? 'Loading...' : 'Take the Seat'}
                   </button>
                 </div>
               )}
             </div>
 
             {/* Rock Paper Scissors Card */}
-            <div className="bg-white dark:bg-[#1a1429]/50 dark:backdrop-blur-md rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm transition-all overflow-hidden">
+            <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsRpsOpen(!isRpsOpen)}
-                className="p-4 flex items-center gap-4 cursor-pointer active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                className="p-5 flex items-center gap-4 cursor-pointer"
               >
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                  <Swords size={24} />
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                  <Swords size={28} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-slate-900 dark:text-white text-base">Rock Paper Scissors</h3>
-                    <div className="relative">
-                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-                      <span className="bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">New</span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-black text-slate-900 dark:text-white text-lg">Rock Paper Scissors</h3>
+                    <div className="relative flex items-center">
+                      <span className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-lg shadow-emerald-500/30">New</span>
                     </div>
                   </div>
-                  <p className="text-slate-400 dark:text-white/60 text-xs line-clamp-1">Best of 5 — play solo or challenge a friend</p>
+                  <p className="text-slate-500 dark:text-white/60 text-sm font-medium line-clamp-1">The classic battle</p>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isRpsOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={20} className={`text-slate-300 dark:text-white/30 transition-transform duration-300 ${isRpsOpen ? "rotate-180" : ""}`} />
               </div>
 
               {isRpsOpen && (
-                <div className="px-4 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-100 dark:border-emerald-500/20">
-                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed font-medium">
-                      How it works: Choose Rock ✊, Paper ✋, or Scissors ✌️ each round. First to 3 wins takes the match! Play against the computer or invite a friend.
+                <div className="px-5 pb-6 pt-0 space-y-4 animate-in slide-in-from-top-4 duration-300 fade-in">
+                  <div className="p-4 bg-gradient-to-r from-emerald-50 to-transparent dark:from-emerald-500/10 dark:to-transparent rounded-2xl border-l-4 border-emerald-500">
+                    <p className="text-sm text-emerald-800 dark:text-emerald-200 font-semibold leading-relaxed">
+                      ⚔️ Settle the score! Jump into a best-of-5 showdown against the computer or a friend.
                     </p>
                   </div>
 
                   <button
                     onClick={handleNavigateToRps}
                     disabled={isNavigatingToRps}
-                    className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl text-xs hover:bg-emerald-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full py-4 bg-emerald-600 text-white font-black rounded-2xl text-sm hover:bg-emerald-700 transition-all active:scale-95 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {isNavigatingToRps ? <Loader2 size={16} className="animate-spin" /> : <Swords size={16} />}
-                    {isNavigatingToRps ? 'Loading...' : 'Play Now'}
+                    {isNavigatingToRps ? <Loader2 size={18} className="animate-spin" /> : <Swords size={18} />}
+                    {isNavigatingToRps ? 'Loading...' : 'Start Battle'}
                   </button>
                 </div>
               )}
@@ -560,38 +552,36 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
           </div>
         </section>
 
-
-
       </main>
 
       {/* DYKM Modal */}
       {isDykmModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white dark:bg-[#1a1429] w-full max-w-lg rounded-[2.5rem] shadow-2xl max-h-[90vh] overflow-y-auto border border-white/20 dark:border-white/10 flex flex-col">
             <div className="p-6 border-b border-slate-100 dark:border-white/10 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#1a1429]/90 backdrop-blur-md z-10">
-              <h3 className="font-bold text-lg text-slate-900 dark:text-white">Create Quiz</h3>
+              <h3 className="font-black text-xl text-slate-900 dark:text-white tracking-tight">Create Quiz</h3>
               <button
                 onClick={() => setIsDykmModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/60 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/20 transition-all active:scale-90 hover:rotate-90"
+                className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/60 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/20 transition-all active:scale-90 hover:rotate-90"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
             <div className="p-6 space-y-8">
               {dykmQuestions.map((q, idx) => (
-                <div key={idx} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-center">
+                <div key={idx} className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-sm font-black flex items-center justify-center shadow-inner">
                       {idx + 1}
                     </span>
-                    <span className="text-sm font-bold text-slate-700 dark:text-white">Question {idx + 1}</span>
+                    <span className="text-base font-bold text-slate-700 dark:text-white">Question {idx + 1}</span>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <input
                       placeholder="e.g. What is my favorite color?"
-                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-slate-50 dark:bg-white/5 border-2 border-slate-100 focus:border-blue-500 dark:border-white/10 rounded-2xl px-5 py-4 text-sm text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30 font-medium"
                       value={q.question}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -601,7 +591,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     />
                     <input
                       placeholder="Hint (optional but recommended)"
-                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-slate-50 dark:bg-white/5 border-2 border-slate-100 focus:border-blue-500 dark:border-white/10 rounded-2xl px-5 py-4 text-sm text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30 font-medium"
                       value={q.hint}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -611,7 +601,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                     />
                     <input
                       placeholder="Correct Answer"
-                      className="w-full bg-white dark:bg-white/5 border border-blue-100 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
+                      className="w-full bg-slate-50 dark:bg-white/5 border-2 border-slate-100 focus:border-blue-500 dark:border-white/10 rounded-2xl px-5 py-4 text-sm text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-white/30"
                       value={q.answer}
                       onChange={(e) => {
                         const newQ = [...dykmQuestions];
@@ -628,9 +618,9 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
               <button
                 onClick={handleSaveDykm}
                 disabled={isSavingDykm}
-                className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-blue-500/20"
+                className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50 hover:scale-[1.02] shadow-xl shadow-blue-500/20 text-base"
               >
-                {isSavingDykm ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                {isSavingDykm ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
                 Save Quiz
               </button>
             </div>
@@ -639,4 +629,4 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
       )}
     </div>
   )
-}
+                          }
