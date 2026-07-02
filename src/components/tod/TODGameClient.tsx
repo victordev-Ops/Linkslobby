@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, Users, Share2, Sparkles, Play, StopCircle, X, ArrowLeft, Timer, Clock, Trash2, LayoutGrid, ChevronLeft, LogOut, MoreVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useGameLogic } from "@/components/tod/hooks/useGameLogic";
+import { useGameLogic } from "./hooks/useGameLogic";
 import { PlayersSidebar } from "./ui/PlayersSidebar";
 import { ModeSelector } from "./ui/ModeSelector";
 import { MessageBubble } from "./ui/MessageBubble";
