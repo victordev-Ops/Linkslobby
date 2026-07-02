@@ -26,6 +26,12 @@ export default function DashboardLoading() {
   return (
     <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24">
 
+      {/* Background Ambience (Dark Mode only) — matches the real dashboard's glow */}
+      <div className="fixed inset-0 pointer-events-none hidden dark:block">
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]" />
+      </div>
+
       {/* Navbar skeleton */}
       <nav className="bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -65,12 +71,15 @@ export default function DashboardLoading() {
         </section>
       </main>
 
-      <style jsx global>{`
+      {/* Plain <style> tag on purpose — loading.tsx is a Server Component,
+          and `style jsx` needs the client-only styled-jsx runtime, which
+          breaks the Turbopack build here. A static <style> tag has no
+          such requirement. */}
+      <style>{`
         @keyframes shimmer {
           100% { transform: translateX(100%); }
         }
       `}</style>
     </div>
   )
-      }
-      
+}
