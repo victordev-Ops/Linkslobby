@@ -1,7 +1,7 @@
 // src/components/tod/ui/WaitingRoom.tsx
-import { Play, Users, Clock, UserPlus, Check, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
-import { useState } from 'react';
-import type { FriendshipWithProfile } from '@/actions/friends';
+import { Play, Users, Clock, UserPlus, Check, Loader2, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import type { FriendshipWithProfile, FriendSearchResult } from '@/actions/friends';
 
 interface WaitingRoomProps {
   isHost: boolean;
@@ -11,6 +11,9 @@ interface WaitingRoomProps {
   invitedFriendIds?: Set<string>;
   onInviteFriend?: (friendUserId: string) => Promise<void>;
   isLoadingFriends?: boolean;
+  // New: search-to-add flow, so the host isn't limited to their existing friends list
+  onSearchUsers?: (query: string) => Promise<FriendSearchResult[]>;
+  onAddFriend?: (userId: string) => Promise<void>;
 }
 
 export const WaitingRoom = ({
@@ -21,9 +24,17 @@ export const WaitingRoom = ({
   invitedFriendIds = new Set(),
   onInviteFriend,
   isLoadingFriends = false,
+  onSearchUsers,
+  onAddFriend,
 }: WaitingRoomProps) => {
   const [showFriends, setShowFriends] = useState(false);
   const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<FriendSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleInvite = async (friendUserId: string) => {
     if (!onInviteFriend || invitedFriendIds.has(friendUserId)) return;
@@ -34,6 +45,46 @@ export const WaitingRoom = ({
       setInvitingId(null);
     }
   };
+
+  const handleAdd = async (userId: string) => {
+    if (!onAddFriend || addedIds.has(userId)) return;
+    setAddingId(userId);
+    try {
+      await onAddFriend(userId);
+      setAddedIds(prev => new Set(prev).add(userId));
+    } finally {
+      setAddingId(null);
+    }
+  };
+
+  // Debounced search-as-you-type
+  useEffect(() => {
+    if (!onSearchUsers) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const results = await onSearchUsers(q);
+        setSearchResults(results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchQuery, onSearchUsers]);
 
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 min-h-[50vh]">
@@ -104,6 +155,79 @@ export const WaitingRoom = ({
 
                 {showFriends && (
                   <div className="mt-2 bg-slate-800/40 border border-slate-700/30 rounded-xl overflow-hidden">
+                    {onSearchUsers && (
+                      <div className="p-3 border-b border-slate-700/30">
+                        <div className="relative">
+                          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by username to add..."
+                            className="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg pl-9 pr-8 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-orange-500/50"
+                          />
+                          {searchQuery && (
+                            <button
+                              onClick={() => setSearchQuery('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+
+                        {searchQuery.trim().length >= 2 && (
+                          <div className="mt-2 max-h-48 overflow-y-auto divide-y divide-slate-700/30">
+                            {isSearching ? (
+                              <div className="py-6 flex justify-center">
+                                <Loader2 size={16} className="animate-spin text-slate-400" />
+                              </div>
+                            ) : searchResults.length === 0 ? (
+                              <p className="text-xs text-slate-500 text-center py-4">No users found</p>
+                            ) : (
+                              searchResults.map((r) => {
+                                const isFriend = r.friendshipStatus === 'accepted';
+                                const isPending = r.friendshipStatus === 'pending_sent' || addedIds.has(r.id);
+                                const isAdding = addingId === r.id;
+                                return (
+                                  <div key={r.id} className="flex items-center justify-between py-2.5">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                        {r.username?.[0]?.toUpperCase() || '?'}
+                                      </div>
+                                      <span className="text-sm text-white font-medium truncate">
+                                        @{r.username}
+                                      </span>
+                                    </div>
+                                    {isFriend ? (
+                                      <span className="text-[10px] font-bold text-green-400 px-2 flex-shrink-0">Friends</span>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleAdd(r.id)}
+                                        disabled={isPending || isAdding}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 flex-shrink-0 ${
+                                          isPending
+                                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                            : 'bg-slate-700 text-white hover:bg-slate-600'
+                                        } disabled:opacity-70 disabled:cursor-not-allowed`}
+                                      >
+                                        {isAdding ? (
+                                          <Loader2 size={12} className="animate-spin" />
+                                        ) : isPending ? (
+                                          <><Check size={12} /> Sent</>
+                                        ) : (
+                                          <><UserPlus size={12} /> Add</>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {isLoadingFriends ? (
                       <div className="py-8 flex flex-col items-center gap-2">
                         <Loader2 size={20} className="animate-spin text-slate-400" />
