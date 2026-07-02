@@ -35,6 +35,7 @@ export default async function ProfilePage() {
                 slug: profile.slug || '',
                 email: profile.email || user.email, // Fallback to auth email
                 avatar_url: profile.avatar_url,
+                cover_url: profile.cover_url,
                 dms_disabled: profile.dms_disabled || false,
                 is_pro: profile.is_pro || false,
                 bio: profile.bio || ''
@@ -46,4 +47,3 @@ export default async function ProfilePage() {
         />
     )
 }
-
