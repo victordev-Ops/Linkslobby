@@ -6,9 +6,9 @@ export async function middleware(request: NextRequest) {
 
   // 1. Skip Supabase for static assets and prefetches
   const isPrefetch = request.headers.get('x-middleware-prefetch') === '1'
-  
+
   if (
-    pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|webmanifest)$/) || 
+    pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|webmanifest)$/) ||
     pathname.startsWith('/_next') ||
     isPrefetch
   ) {
@@ -51,14 +51,18 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-  
-  if (authError) {
-    console.log(`[Middleware] Auth error for ${pathname}:`, authError.message)
-  }
-  if (user) {
-    console.log(`[Middleware] Authenticated: ${user.email} for ${pathname}`)
-  } else {
-    console.log(`[Middleware] Guest access for ${pathname}`)
+
+  // Logging on every single request (including every /tod/* hit) is real
+  // overhead in production and clutters logs. Keep it dev-only.
+  if (process.env.NODE_ENV === 'development') {
+    if (authError) {
+      console.log(`[Middleware] Auth error for ${pathname}:`, authError.message)
+    }
+    console.log(
+      user
+        ? `[Middleware] Authenticated: ${user.email} for ${pathname}`
+        : `[Middleware] Guest access for ${pathname}`
+    )
   }
 
   // 2. Define Public Routes
@@ -130,7 +134,35 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return response
+  // 5. Forward the identity we just verified so Server Components (page.tsx,
+  // layout.tsx, etc.) can skip calling supabase.auth.getUser() a second time
+  // — that call is a real network hit to the Supabase Auth server, and doing
+  // it twice per request was costing every /tod/* page load an extra round
+  // trip for zero benefit.
+  //
+  // Safe by construction: this header is set here, unconditionally, on every
+  // request that reaches this point (middleware always runs before the page
+  // does — there's no way for a client request to skip middleware and reach
+  // the page directly), so any client-supplied value for it is always
+  // overwritten below before the request continues.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.delete('x-user-id')
+  requestHeaders.delete('x-user-email')
+  if (user) {
+    requestHeaders.set('x-user-id', user.id)
+    if (user.email) requestHeaders.set('x-user-email', user.email)
+  }
+
+  const finalResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  })
+  // Carry over any cookies Supabase refreshed during this request (e.g. a
+  // rotated access token) onto the response we're actually returning.
+  response.cookies.getAll().forEach((cookie) => {
+    finalResponse.cookies.set(cookie.name, cookie.value, cookie)
+  })
+
+  return finalResponse
 }
 
 export const config = {
@@ -144,4 +176,5 @@ export const config = {
      */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
-}
+      }
+      
