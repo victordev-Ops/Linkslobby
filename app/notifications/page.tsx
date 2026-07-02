@@ -14,13 +14,22 @@ export default async function NotificationsPage() {
         redirect("/login")
     }
 
-    // Fetch hidden notifications for the user
+    // Fetch hidden notifications for the user.
+    // IMPORTANT: keyed by "${notification_type}:${notification_id}", not just id.
+    // notification_id alone is not safe to dedupe on across tables — a UUID from
+    // a hidden confession could theoretically collide with a game_invites row,
+    // silently hiding an unrelated notification. hideNotification() in
+    // notifications.ts stores the *source table* name (see typeMap there), so we
+    // mirror that mapping here to build matching keys.
     const { data: hiddenData } = await supabase
         .from("hidden_notifications")
-        .select("notification_id")
+        .select("notification_id, notification_type")
         .eq("user_id", user.id)
 
-    const hiddenIds = new Set((hiddenData || []).map(h => h.notification_id))
+    const hiddenKeys = new Set(
+        (hiddenData || []).map(h => `${h.notification_type}:${h.notification_id}`)
+    )
+    const isHidden = (id: string, dbType: string) => hiddenKeys.has(`${dbType}:${id}`)
 
     // Fetch confessions (confessions, ama, anonymous)
     const confessionsPromise = supabase
@@ -169,13 +178,13 @@ export default async function NotificationsPage() {
     // Filter out hidden notifications (only applies to hideable types — the 4 new
     // notification_reads types were never added to hidden_notifications, see isHideable()
     // in the client, so no filtering needed for them here)
-    const confessions = (confessionsRes.data || []).filter(c => !hiddenIds.has(c.id))
-    const dykmScores = (dykmRes.data || []).filter(s => !hiddenIds.has(s.id))
-    const filteredLobbyEvents = lobbyEvents.filter(e => !hiddenIds.has(e.id))
-    const xpTransactions = (xpRes.data || []).filter(x => !hiddenIds.has(x.id))
-    const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id))
-    const turnEvents = (turnEventsRes.data || []).filter(t => !hiddenIds.has(t.id))
-    const gameInvites = (gameInvitesRes.data || []).filter(i => !hiddenIds.has(i.id))
+    const confessions = (confessionsRes.data || []).filter(c => !isHidden(c.id, 'confession'))
+    const dykmScores = (dykmRes.data || []).filter(s => !isHidden(s.id, 'dykm_score'))
+    const filteredLobbyEvents = lobbyEvents.filter(e => !isHidden(e.id, 'lobby'))
+    const xpTransactions = (xpRes.data || []).filter(x => !isHidden(x.id, 'xp_transaction'))
+    const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !isHidden(q.id, 'hot_seat_question'))
+    const turnEvents = (turnEventsRes.data || []).filter(t => !isHidden(t.id, 'tod_turn_event'))
+    const gameInvites = (gameInvitesRes.data || []).filter(i => !isHidden(i.id, 'game_invite'))
 
     return (
         <NotificationsClient
@@ -196,5 +205,5 @@ export default async function NotificationsPage() {
             profileId={user.id}
         />
     )
-}
-    
+            }
+        
