@@ -365,7 +365,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                         className="w-full py-3 border-2 border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/80 font-bold rounded-2xl text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95 hover:scale-[1.02]"
                       >
                         Edit Questions
-                      </button>
+                     </button>
                     </div>
                   )}
                 </div>
@@ -418,7 +418,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 </div>
               )}
             </div>
-
+                  
             {/* Confessions Card */}
             <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
@@ -465,8 +465,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 </div>
               )}
             </div>
-
-            {/* Hot Seat Card */}
+                 {/* Hot Seat Card */}
             <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsHotSeatOpen(!isHotSeatOpen)}
@@ -507,8 +506,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
                 </div>
               )}
             </div>
-
-            {/* Rock Paper Scissors Card */}
+                {/* Rock Paper Scissors Card */}
             <div className="bg-white dark:bg-[#1a1429]/60 dark:backdrop-blur-xl rounded-3xl border border-slate-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
               <div
                 onClick={() => setIsRpsOpen(!isRpsOpen)}
@@ -553,8 +551,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
         </section>
 
       </main>
-
-      {/* DYKM Modal */}
+                  {/* DYKM Modal */}
       {isDykmModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white dark:bg-[#1a1429] w-full max-w-lg rounded-[2.5rem] shadow-2xl max-h-[90vh] overflow-y-auto border border-white/20 dark:border-white/10 flex flex-col">
@@ -629,4 +626,6 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
       )}
     </div>
   )
-                          }
+                      }
+
+            
