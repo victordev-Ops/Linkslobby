@@ -105,6 +105,14 @@ export default async function NotificationsPage() {
         .order("created_at", { ascending: false })
         .limit(50)
 
+    // NEW: Game invites (dedicated table, own is_read column)
+    const gameInvitesPromise = supabase
+        .from("game_invites")
+        .select("*, inviter:profiles!game_invites_inviter_id_fkey(username, slug, avatar_url)")
+        .eq("invitee_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50)
+
     // Fetch my read statuses for ALL notification_reads-backed types (was lobby_event-only)
     const readStatusPromise = supabase
         .from("notification_reads")
@@ -113,7 +121,8 @@ export default async function NotificationsPage() {
 
     const [
         confessionsRes, dykmRes, lobbiesRes, profileRes, xpRes, hotSeatRes, readStatusRes,
-        turnEventsRes, friendRequestsRes, friendResponsesRes, lobbyJoinResponsesRes, hotSeatAnswersRes
+        turnEventsRes, friendRequestsRes, friendResponsesRes, lobbyJoinResponsesRes, hotSeatAnswersRes,
+        gameInvitesRes
     ] = await Promise.all([
         confessionsPromise,
         dykmScoresPromise,
@@ -127,6 +136,7 @@ export default async function NotificationsPage() {
         friendResponsesPromise,
         lobbyJoinResponsesPromise,
         hotSeatAnswersPromise,
+        gameInvitesPromise,
     ])
 
     // Build the full "${type}:${id}" read-key set once, used by:
@@ -165,6 +175,7 @@ export default async function NotificationsPage() {
     const xpTransactions = (xpRes.data || []).filter(x => !hiddenIds.has(x.id))
     const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !hiddenIds.has(q.id))
     const turnEvents = (turnEventsRes.data || []).filter(t => !hiddenIds.has(t.id))
+    const gameInvites = (gameInvitesRes.data || []).filter(i => !hiddenIds.has(i.id))
 
     return (
         <NotificationsClient
@@ -178,10 +189,12 @@ export default async function NotificationsPage() {
             initialFriendResponses={friendResponsesRes.data || []}
             initialLobbyJoinResponses={lobbyJoinResponsesRes.data || []}
             initialHotSeatAnswers={hotSeatAnswersRes.data || []}
+            initialGameInvites={gameInvites}
             initialReadIds={allReadKeys}
             isPro={profileRes.data?.is_pro || false}
             username={profileRes.data?.username || ""}
             profileId={user.id}
         />
     )
-               }
+}
+    
