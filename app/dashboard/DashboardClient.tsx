@@ -680,7 +680,9 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
     Subscribe to Pro
   </Link>
 </div>
-
+</div>
+</section>
+</main>
 
       {/* DYKM Modal */}
       {isDykmModalOpen && (
