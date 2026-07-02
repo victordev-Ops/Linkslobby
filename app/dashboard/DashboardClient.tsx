@@ -649,27 +649,38 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
             {/* See More Games — teaser card, same shape language as the game
                 cards above but visually distinct (dashed border, no chevron)
                 since it's a promo, not a collapsible game. */}
-            <div className="relative rounded-2xl border-2 border-dashed border-purple-200 dark:border-purple-500/30 bg-gradient-to-br from-purple-50 via-white to-fuchsia-50 dark:from-purple-500/10 dark:via-transparent dark:to-fuchsia-500/10 p-6 text-center overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-500 delay-500">
-              <div className="w-12 h-12 mx-auto rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-purple-300/40 dark:shadow-purple-900/30">
-                <Sparkles size={22} />
-              </div>
-              <h3 className="font-bold text-slate-900 dark:text-white text-base font-[family-name:var(--font-display)] mb-1">See More Games</h3>
-              <p className="text-slate-500 dark:text-white/60 text-xs mb-4 max-w-[240px] mx-auto leading-relaxed">
-                New games land in the lobby first for Pro members. Unlock early access.
-              </p>
-              <Link
-                href="/upgrade"
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-bold rounded-xl text-xs hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-purple-300/30 dark:shadow-purple-900/20"
-              >
-                <BadgeCheck size={16} />
-                Go Pro
-              </Link>
-            </div>
+ <div className="relative rounded-2xl border border-blue-200 dark:border-blue-500/30 bg-gradient-to-br from-blue-50 via-white to-slate-50 dark:from-blue-950/40 dark:via-transparent dark:to-slate-900/50 p-8 text-center overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-500 delay-500 shadow-sm">
+  
+  {/* Decorative background glow for a premium feel */}
+  <div className="absolute -top-12 -right-12 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          </div>
-        </section>
+  <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-100 text-blue-500 dark:bg-blue-500/20 dark:text-blue-400 flex items-center justify-center mb-5 ring-8 ring-blue-50/50 dark:ring-blue-500/10">
+    <Sparkles size={26} strokeWidth={2} />
+  </div>
+  
+  <h3 className="font-bold text-slate-900 dark:text-white text-xl font-[family-name:var(--font-display)] mb-2">
+    Unlock Extra Games
+  </h3>
+  
+  <p className="text-slate-600 dark:text-slate-400 text-sm mb-8 max-w-[280px] mx-auto leading-relaxed">
+    Level up your lobby! Subscribe to Pro and instantly unlock our exclusive catalog of premium games.
+  </p>
+  
+  <Link
+    href="/upgrade"
+    className="inline-flex items-center justify-center gap-2.5 w-full sm:w-auto px-7 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-blue-500/25 dark:shadow-blue-900/40"
+  >
+    <BadgeCheck 
+      size={18} 
+      className="text-white shrink-0" 
+      fill="currentColor" 
+      stroke="#3b82f6" /* Matches the blue-500 background for a cutout effect */
+      strokeWidth={2.5} 
+    />
+    Subscribe to Pro
+  </Link>
+</div>
 
-      </main>
 
       {/* DYKM Modal */}
       {isDykmModalOpen && (
