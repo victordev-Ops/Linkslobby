@@ -655,7 +655,13 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   <div className="absolute -top-12 -right-12 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
   <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-100 text-blue-500 dark:bg-blue-500/20 dark:text-blue-400 flex items-center justify-center mb-5 ring-8 ring-blue-50/50 dark:ring-blue-500/10">
-    <Sparkles size={26} strokeWidth={2} />
+    <BadgeCheck 
+      size={25} 
+      className="text-white shrink-0" 
+      fill="currentColor" 
+      stroke="#3b82f6" /* Matches the blue-500 background for a cutout effect */
+      strokeWidth={2.5} 
+    />
   </div>
   
   <h3 className="font-bold text-slate-900 dark:text-white text-xl font-[family-name:var(--font-display)] mb-2">
@@ -663,7 +669,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   </h3>
   
   <p className="text-slate-600 dark:text-slate-400 text-sm mb-8 max-w-[280px] mx-auto leading-relaxed">
-    Level up your lobby! Subscribe to Pro and instantly unlock our exclusive catalog of premium games.
+    Level up your Collection! Subscribe to Pro and instantly unlock our exclusive catalog of premium games.
   </p>
   
   <Link
