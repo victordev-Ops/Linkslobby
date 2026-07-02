@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import TODGameClient from "@/components/tod/TODGameClient";
 import ClientRedirect from "@/components/ClientRedirect";
@@ -17,6 +17,7 @@ export default async function TODGamePage({
   const resolvedParams = await params;
   const slug = resolvedParams.slug;
   const cookieStore = await cookies();
+  const headerList = await headers();
 
   // Initialize Supabase Server Client
   const supabase = createServerClient(
@@ -40,10 +41,31 @@ export default async function TODGamePage({
     }
   );
 
-  // Auth Check
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+
+  // middleware.ts already verifies the session on every /tod/* request (it
+  // has to, to run its own route protection) and forwards the result via
+  // x-user-id. Trust that instead of paying for a second network round trip
+  // to Supabase's auth server. Falls back to a direct check if the header is
+  // ever missing, so this degrades safely rather than silently.
+  //
+  // Auth resolution and slug->id resolution don't depend on each other, so
+  // they run concurrently instead of one after another.
+  const headerUserId = headerList.get('x-user-id');
+
+  const [userResult, lobbyResult] = await Promise.all([
+    headerUserId
+      ? Promise.resolve({ data: { user: { id: headerUserId } } })
+      : supabase.auth.getUser(),
+    supabase
+      .from("tod_lobbies")
+      .select("id")
+      .or(`slug.eq."${slug}",id.eq."${isUUID ? slug : '00000000-0000-0000-0000-000000000000'}"`)
+      .maybeSingle(),
+  ]);
+
+  const user = userResult.data.user;
+  const { data: lobbyData } = lobbyResult;
 
   if (!user) {
     // IMPORTANT: don't call redirect() here. redirect() throws and aborts
@@ -55,106 +77,64 @@ export default async function TODGamePage({
     return <ClientRedirect to={`/login?next=/tod/${slug}`} />;
   }
 
-  // 1. Resolve Slug/ID to Lobby UUID
-  let lobbyId = slug;
-  // Check if slug is a valid UUID
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
-
-  const { data: lobbyData } = await supabase
-    .from("tod_lobbies")
-    .select("id")
-    .or(`slug.eq."${slug}",id.eq."${isUUID ? slug : '00000000-0000-0000-0000-000000000000'}"`)
-    .maybeSingle();
-
   if (!lobbyData) {
     // Same reasoning as above — defer to client-side redirect.
     return <ClientRedirect to="/tod?error=lobby_not_found" />;
   }
 
-  lobbyId = lobbyData.id;
+  const lobbyId = lobbyData.id;
 
-  // 2. Auto-Join Logic (Server-side) using resolved lobbyId
-  if (lobbyId) {
-    // Check if user already has a participant record
-    const { data: existingParticipant } = await supabase
-      .from("tod_participants")
-      .select("id, status")
-      .eq("lobby_id", lobbyId)
-      .eq("user_id", user.id)
-      .maybeSingle();
+  // Auto-Join Logic — this used to be ~4 sequential round trips (existing
+  // participant check -> lobby privacy check -> insert/update). Now it's a
+  // single RPC call that does the same status-transition logic atomically
+  // in the database. See supabase_migration_tod_join_lobby.sql.
+  const { data: joinResult, error: joinRpcError } = await supabase.rpc(
+    'tod_join_lobby',
+    { p_lobby_id: lobbyId }
+  );
 
-    // If user is banned, redirect them
-    if (existingParticipant?.status === 'banned') {
-      return <ClientRedirect to="/tod?error=banned" />;
-    }
+  if (joinRpcError) {
+    console.error("Error joining lobby:", joinRpcError.message);
+  }
 
-    // Get lobby privacy setting
-    const { data: lobbyInfo } = await supabase
-      .from("tod_lobbies")
-      .select("is_private")
-      .eq("id", lobbyId)
-      .single();
+  // If user is banned, redirect them
+  if (joinResult?.banned) {
+    return <ClientRedirect to="/tod?error=banned" />;
+  }
 
-    if (existingParticipant) {
-      // User has a record - check if they need to rejoin
-      if (existingParticipant.status === 'joined') {
-        // Already joined, do nothing
-      } else if (existingParticipant.status === 'rejected') {
-        // Previously rejected - update to pending if private, joined if public
-        const newStatus = lobbyInfo?.is_private ? 'pending' : 'joined';
-        await supabase
-          .from("tod_participants")
-          .update({ status: newStatus })
-          .eq("id", existingParticipant.id);
-      } else if (existingParticipant.status === 'pending') {
-        // Still pending, do nothing
+  // Award XP when user successfully joins a public lobby for the first time.
+  // Unchanged from the original — same condition, same reward calculation,
+  // same RPC call — just driven by the join RPC's result flag instead of
+  // being computed inline across several awaited queries.
+  if (joinResult?.newly_joined_public) {
+    try {
+      // Get user's pro status
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_pro, bonus_2x_started_at')
+        .eq('id', user.id)
+        .single();
+
+      const isPro = profile?.is_pro ?? false;
+      const hasBonus = isBonusActive(profile?.bonus_2x_started_at);
+      const amount = applyRewardMultiplier(XP_REWARDS.TOD_PARTICIPANT_JOINED, isPro, hasBonus);
+      const reason = formatRewardReason('Joined Public Lobby', isPro, hasBonus);
+
+      const { error: xpError } = await supabase.rpc('add_xp', {
+        p_user_id: user.id,
+        p_amount: amount,
+        p_reason: reason,
+        p_metadata: { type: 'tod_join', lobby_id: lobbyId, is_public: true }
+      });
+
+      if (xpError) {
+        console.error("Failed to award XP for joining lobby:", xpError);
       }
-    } else {
-      // New participant - insert with appropriate status
-      const initialStatus = lobbyInfo?.is_private ? 'pending' : 'joined';
-      const { error: joinError } = await supabase
-        .from("tod_participants")
-        .insert({
-          lobby_id: lobbyId,
-          user_id: user.id,
-          status: initialStatus
-        });
-
-      if (joinError) {
-        console.error("Error joining lobby:", joinError.message);
-      } else {
-        // Award XP when user successfully joins a public lobby
-        if (initialStatus === 'joined' && !lobbyInfo?.is_private) {
-          try {
-            // Get user's pro status
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('is_pro, bonus_2x_started_at')
-              .eq('id', user.id)
-              .single();
-
-            const isPro = profile?.is_pro ?? false;
-            const hasBonus = isBonusActive(profile?.bonus_2x_started_at);
-            const amount = applyRewardMultiplier(XP_REWARDS.TOD_PARTICIPANT_JOINED, isPro, hasBonus);
-            const reason = formatRewardReason('Joined Public Lobby', isPro, hasBonus);
-
-            const { error: xpError } = await supabase.rpc('add_xp', {
-              p_user_id: user.id,
-              p_amount: amount,
-              p_reason: reason,
-              p_metadata: { type: 'tod_join', lobby_id: lobbyId, is_public: true }
-            });
-
-            if (xpError) {
-              console.error("Failed to award XP for joining lobby:", xpError);
-            }
-          } catch (xpErr) {
-            console.error("Error awarding XP:", xpErr);
-          }
-        }
-      }
+    } catch (xpErr) {
+      console.error("Error awarding XP:", xpErr);
     }
   }
 
   return <TODGameClient lobbyId={lobbyId} />;
-}
+      }
+          
