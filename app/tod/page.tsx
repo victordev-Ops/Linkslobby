@@ -11,64 +11,67 @@ export default async function TODLobbyList() {
 
   // middleware.ts already verified the session for this request and forwards
   // it via x-user-id — skip the redundant second auth.getUser() network call.
-  // Falls back to a direct check if the header is ever missing.
   const headerUserId = headerList.get('x-user-id');
   const userPromise = headerUserId
     ? Promise.resolve({ data: { user: { id: headerUserId } } })
     : supabase.auth.getUser();
 
-  const [{ data: { user } }, lobbyResult, profileData] = await Promise.all([
+  const [{ data: { user } }, profileData] = await Promise.all([
     userPromise,
-    supabase
-      .from('tod_lobbies')
-      .select(`
-        id,
-        host_id,
-        name,
-        category,
-        is_private,
-        status,
-        created_at,
-        profiles:host_id (username)
-      `)
-      .not('status', 'in', '("finished","closed")')
-      .order('category', { ascending: true })
-      .order('created_at', { ascending: false })
-      .limit(4),
     headerUserId
       ? supabase.from('profiles').select('is_pro').eq('id', headerUserId).single().then(r => r.data)
       : Promise.resolve(null),
   ]);
 
-  // profileData above only fires when we already trust the header; if we had
-  // to fall back to a real auth check, fetch the pro flag now that we know
-  // the resolved user id (rare path — only hit if the header is missing).
   const resolvedProfileData = headerUserId
     ? profileData
     : user
       ? (await supabase.from('profiles').select('is_pro').eq('id', user.id).single()).data
       : null;
 
-  const lobbyData = lobbyResult.data || [];
-
   let lobbiesWithDetails: Lobby[] = [];
-  if (lobbyData.length > 0) {
-    const lobbyIds = lobbyData.map(l => l.id);
-    const { data: participantData } = await supabase
-      .from('tod_participants')
-      .select('lobby_id, user_id, status')
-      .in('lobby_id', lobbyIds);
 
-    lobbiesWithDetails = lobbyData.map(lobby => {
-      const participants = participantData?.filter(p => p.lobby_id === lobby.id) || [];
-      const userPart = user?.id ? participants.find(p => p.user_id === user.id) : null;
+  if (user?.id) {
+    // Only lobbies this user is actually part of (host or participant) —
+    // there's no more browsing a public/private directory.
+    const { data: participantRows } = await supabase
+      .from('tod_participants')
+      .select(`
+        status,
+        tod_lobbies (
+          id, host_id, name, slug, category, status, created_at,
+          profiles:host_id (username)
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('status', 'joined');
+
+    const rows = (participantRows || []).filter(r => (r as any).tod_lobbies);
+    const lobbyIds = rows.map(r => (r as any).tod_lobbies.id);
+
+    let participantCounts: Record<string, number> = {};
+    if (lobbyIds.length > 0) {
+      const { data: countRows } = await supabase
+        .from('tod_participants')
+        .select('lobby_id')
+        .eq('status', 'joined')
+        .in('lobby_id', lobbyIds);
+
+      participantCounts = (countRows || []).reduce((acc, p) => {
+        acc[p.lobby_id] = (acc[p.lobby_id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+    }
+
+    lobbiesWithDetails = rows.map(r => {
+      const lobby = (r as any).tod_lobbies;
       return {
         ...lobby,
-        host_profile: (lobby as any).profiles,
-        participant_count: participants.length,
-        is_participant: !!userPart,
-        user_status: userPart?.status,
-      } as unknown as Lobby;
+        host_profile: lobby.profiles,
+        participant_count: participantCounts[lobby.id] || 0,
+        is_participant: true,
+        user_status: (r as any).status,
+      } as Lobby;
     });
   }
 
@@ -79,5 +82,4 @@ export default async function TODLobbyList() {
       isPro={resolvedProfileData?.is_pro || false}
     />
   );
-           }
-         
+}
