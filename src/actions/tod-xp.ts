@@ -26,8 +26,6 @@ export async function penalizeSkippedRound(lobbyId: string) {
         if (lobby.current_question && lobby.current_target_id) {
             // 3. Deduct XP from target (Requires Admin/Service Role)
             // We use the service role key to bypass RLS since Host cannot spend Target's XP
-            const supabaseAdmin = await createSupabaseServerClient() // Just for types, but we need meaningful client
-
             const adminClient = require('@supabase/supabase-js').createClient(
                 process.env.NEXT_PUBLIC_SUPABASE_URL!,
                 process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -90,7 +88,88 @@ export async function penalizeSystemModeSelection(lobbyId: string) {
     }
 }
 
-export async function joinLobbyAction(lobbyId: string, isPrivate: boolean) {
+// ─── Create a lobby (host only, enforces free/pro limit server-side) ───
+// Limit is also enforced by a DB trigger (tod_enforce_lobby_limit) so this
+// stays correct even if two create requests race — the trigger is the
+// source of truth, this is just a friendlier error path.
+const FREE_LOBBY_LIMIT = 1
+const PRO_LOBBY_LIMIT = 3
+
+function slugify(text: string) {
+    return text
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]+/g, '')
+        .replace(/--+/g, '-')
+}
+
+export async function createLobbyAction(name: string, category: string) {
+    const supabase = await createSupabaseServerClient()
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { success: false, message: 'Not authenticated' }
+
+        if (!name?.trim()) {
+            return { success: false, message: 'Please enter a lobby name' }
+        }
+
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_pro')
+            .eq('id', user.id)
+            .single()
+
+        const isPro = profile?.is_pro ?? false
+        const maxLobbies = isPro ? PRO_LOBBY_LIMIT : FREE_LOBBY_LIMIT
+
+        const { count, error: countError } = await supabase
+            .from('tod_lobbies')
+            .select('id', { count: 'exact', head: true })
+            .eq('host_id', user.id)
+
+        if (countError) throw countError
+
+        if ((count ?? 0) >= maxLobbies) {
+            return { success: false, limitReached: true, message: `You've reached your limit of ${maxLobbies} lobby${maxLobbies > 1 ? 'ies' : ''}.` }
+        }
+
+        const { data: lobby, error: lobbyError } = await supabase
+            .from('tod_lobbies')
+            .insert({
+                host_id: user.id,
+                status: 'waiting',
+                name: name.trim(),
+                slug: `${slugify(name)}-${Math.random().toString(36).substring(2, 6)}`,
+                category,
+            })
+            .select()
+            .single()
+
+        if (lobbyError) throw lobbyError
+
+        const { error: joinError } = await supabase
+            .from('tod_participants')
+            .insert({
+                lobby_id: lobby.id,
+                user_id: user.id,
+                status: 'joined'
+            })
+
+        if (joinError) throw joinError
+
+        return { success: true, lobby }
+    } catch (error: any) {
+        console.error('Create lobby error:', error)
+        return { success: false, message: error.message || 'Failed to create lobby' }
+    }
+}
+
+// ─── Join a lobby (via shared link). No more private/public split — the
+// only gate is whether the host has banned this user. ───
+export async function joinLobbyAction(lobbyId: string) {
     const supabase = await createSupabaseServerClient()
 
     try {
@@ -108,11 +187,11 @@ export async function joinLobbyAction(lobbyId: string, isPrivate: boolean) {
             const { isUserBlocked } = await import('@/actions/blocked-users')
             const blocked = await isUserBlocked(lobbyCheck.host_id, user.id)
             if (blocked) {
-                return { success: false, error: 'You cannot join this lobby.' }
+                return { success: false, message: 'You cannot join this lobby.' }
             }
         }
 
-        // 1. Check if already joined
+        // 1. Check if already joined / banned
         const { data: existing } = await supabase
             .from('tod_participants')
             .select('status')
@@ -121,91 +200,60 @@ export async function joinLobbyAction(lobbyId: string, isPrivate: boolean) {
             .maybeSingle()
 
         if (existing) {
+            if (existing.status === 'banned') {
+                return { success: false, status: 'banned', message: 'You have been banned from this lobby 🚫' }
+            }
             return { success: true, status: existing.status, message: 'Already joined' }
         }
 
-        // 2. Determine initial status
-        const initialStatus = isPrivate ? 'pending' : 'joined'
-
-        // 3. Insert participant
+        // 2. Insert participant — always joins directly now
         const { error: joinError } = await supabase
             .from('tod_participants')
             .insert({
                 lobby_id: lobbyId,
                 user_id: user.id,
-                status: initialStatus
+                status: 'joined'
             })
 
         if (joinError) throw joinError
 
-        // 4. If public lobby, award XP to HOST
-        if (!isPrivate && initialStatus === 'joined') {
-            // Get lobby host
-            const { data: lobby } = await supabase
-                .from('tod_lobbies')
-                .select('host_id')
-                .eq('id', lobbyId)
+        // 3. Award XP to host for a new player joining
+        if (lobbyCheck?.host_id) {
+            const adminClient = require('@supabase/supabase-js').createClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.SUPABASE_SERVICE_ROLE_KEY!,
+                {
+                    auth: {
+                        autoRefreshToken: false,
+                        persistSession: false
+                    }
+                }
+            )
+
+            const { data: hostProfile } = await adminClient
+                .from('profiles')
+                .select('is_pro')
+                .eq('id', lobbyCheck.host_id)
                 .single()
 
-            if (lobby && lobby.host_id) {
-                // Check if host is pro (for bonus)
-                // Use admin client to award XP to host
-                const adminClient = require('@supabase/supabase-js').createClient(
-                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-                    {
-                        auth: {
-                            autoRefreshToken: false,
-                            persistSession: false
-                        }
-                    }
-                )
+            const hostIsPro = hostProfile?.is_pro ?? false
+            const rewardAmount = 5 // XP_REWARDS.TOD_PARTICIPANT_JOINED
+            const finalAmount = hostIsPro ? rewardAmount * 2 : rewardAmount
+            const reason = hostIsPro ? 'Player joined your lobby (2x Pro Bonus)' : 'Player joined your lobby'
 
-                // Check if host is pro using admin client (bypasses RLS)
-                const { data: hostProfile } = await adminClient
-                    .from('profiles')
-                    .select('is_pro')
-                    .eq('id', lobby.host_id)
-                    .single()
-
-                const isPro = hostProfile?.is_pro ?? false
-
-                // Use admin client to award XP to host
-                // (adminClient is already initialized above for the Pro check)
-
-                // Import XP constants needed (re-defining simply here to avoid importing client-heavy file if needed, 
-                // but better to import if possible. Let's try importing `XP_REWARDS` from hooks/xp first if it works, 
-                // but that file has 'createClient'. Safe to import constants though? 
-                // Actually `hooks/xp.ts` imports `createClient` at top level. That might break server action if it tries to use browser client.
-                // Let's safe-guard by just using the value or importing if safe. 
-                // hooks/xp.ts:1: import { createClient } from '@/lib/supabase/client' -> might be issue.
-                // I will hardcode the reward value here to be safe and avoid "client component" error or similar in server action.
-                // Better yet, I'll assume 5 XP as per previous code.
-                /* 
-                   XP_REWARDS.TOD_PARTICIPANT_JOINED = 5
-                */
-
-                const rewardAmount = 5 // XP_REWARDS.TOD_PARTICIPANT_JOINED
-                const finalAmount = isPro ? rewardAmount * 2 : rewardAmount
-                const reason = isPro ? 'Player joined your lobby (2x Pro Bonus)' : 'Player joined your lobby'
-
-                await adminClient.rpc('add_xp', {
-                    p_user_id: lobby.host_id,
-                    p_amount: finalAmount,
-                    p_reason: reason,
-                    // p_metadata: { lobby_id: lobbyId, joined_user_id: user.id } 
-                    // The signature in previous file used p_metadata. Let's keep it if RPC supports it.
-                    // The original earnXP used p_metadata.
-                    p_metadata: { lobby_id: lobbyId, joined_user_id: user.id }
-                })
-            }
+            await adminClient.rpc('add_xp', {
+                p_user_id: lobbyCheck.host_id,
+                p_amount: finalAmount,
+                p_reason: reason,
+                p_metadata: { lobby_id: lobbyId, joined_user_id: user.id }
+            })
         }
 
-        return { success: true, status: initialStatus }
+        return { success: true, status: 'joined' }
 
     } catch (error: any) {
         console.error('Join lobby error:', error)
-        return { success: false, error: error.message }
+        return { success: false, message: error.message }
     }
 }
 
@@ -217,12 +265,6 @@ export async function deleteLobbyAction(lobbyId: string) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { success: false, message: 'Not authenticated' }
 
-        // Single atomic RPC: verifies host ownership, deletes turn events,
-        // messages, participants, then the lobby itself — in that FK order.
-        // (The previous version deleted messages + participants manually
-        // via the session-bound client, which silently no-ops if RLS
-        // doesn't have a matching DELETE policy, and never cleaned up
-        // tod_turn_events at all, which is also FK'd to tod_lobbies.)
         const { data, error } = await supabase.rpc('delete_tod_lobby', {
             p_lobby_id: lobbyId,
         })
@@ -259,4 +301,5 @@ export async function getUserLobbies() {
         console.error('Get user lobbies error:', error)
         return []
     }
-}
+            }
+        
