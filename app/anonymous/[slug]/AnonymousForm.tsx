@@ -29,6 +29,7 @@ const SUGGESTIONS = [
 export default function AnonymousForm({ profileId, action, isBlocked = false }: AnonymousFormProps) {
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<ActionResponse | null>(null)
+  const [message, setMessage] = useState('')
   const [charCount, setCharCount] = useState(0)
   const [placeholderText, setPlaceholderText] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
@@ -98,11 +99,17 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
 
     if (chars.length > MAX_CHARS) {
       // Hard stop at the limit — anything typed past this point is dropped,
-      // never counted, and never shown.
+      // never counted, and never shown. Because the textarea is controlled,
+      // writing the trimmed string back into state is the ONLY thing that
+      // determines what's rendered — there's no separate DOM value that can
+      // drift out of sync with charCount, so what the sender sees, what
+      // charCount reports, and what FormData reads at submit are always
+      // the same string.
       const trimmed = chars.slice(0, MAX_CHARS).join('')
-      e.target.value = trimmed
+      setMessage(trimmed)
       setCharCount(MAX_CHARS)
     } else {
+      setMessage(value)
       setCharCount(chars.length)
     }
   }
@@ -114,6 +121,7 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
       if (result.success) {
         setFeedback({ success: true })
         formRef.current?.reset()
+        setMessage('')
         setCharCount(0)
       } else {
         setFeedback({ error: result.error })
@@ -172,6 +180,7 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
         <textarea
           name="message"
           rows={5}
+          value={message}
           placeholder={placeholderText}
           className="w-full bg-gray-50 text-gray-900 placeholder-gray-400 rounded-2xl p-4 border border-gray-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all resize-none text-sm leading-relaxed"
           required
