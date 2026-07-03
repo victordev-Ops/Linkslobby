@@ -15,6 +15,27 @@ interface AnonymousFormProps {
 
 const MAX_CHARS = 1000
 
+// Counts by grapheme cluster (what a person perceives as "one character"),
+// not by raw Unicode code point. This matters for compound emoji — flags,
+// family emoji, skin-tone modifiers, anything joined with a ZWJ (👨‍👩‍👧‍👦, 👍🏽,
+// 🏳️‍🌈) — which are made of multiple code points but read as a single
+// character. Array.from(str) would count each piece separately and could
+// slice a compound emoji in half when trimming to the limit. Using the same
+// segmenter on the client and server keeps the counter, the truncation
+// point, and the server's validation permanently in agreement.
+const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
+  ? new Intl.Segmenter('en', { granularity: 'grapheme' })
+  : null
+
+function toGraphemes(value: string): string[] {
+  if (segmenter) {
+    return Array.from(segmenter.segment(value), (s) => s.segment)
+  }
+  // Fallback for environments without Intl.Segmenter (very old browsers) —
+  // still better than raw UTF-16 .length, though it can't group ZWJ sequences.
+  return Array.from(value)
+}
+
 // Rotating hints shown as an animated, typewriter-style placeholder.
 // Gives senders a nudge on the kind of messages that land well.
 const SUGGESTIONS = [
@@ -31,6 +52,7 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
   const [feedback, setFeedback] = useState<ActionResponse | null>(null)
   const [message, setMessage] = useState('')
   const [charCount, setCharCount] = useState(0)
+  const [wasTruncated, setWasTruncated] = useState(false)
   const [placeholderText, setPlaceholderText] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -91,30 +113,32 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
-    // Split by Unicode code point (not raw UTF-16 units) so emojis, accents,
-    // and other multi-unit characters are counted as one character each and
-    // never get sliced in half — a half-cut emoji is invalid UTF-8 and Postgres
-    // will reject the insert.
-    const chars = Array.from(value)
+    const graphemes = toGraphemes(value)
 
-    if (chars.length > MAX_CHARS) {
-      // Hard stop at the limit — anything typed past this point is dropped,
-      // never counted, and never shown. Because the textarea is controlled,
-      // writing the trimmed string back into state is the ONLY thing that
-      // determines what's rendered — there's no separate DOM value that can
-      // drift out of sync with charCount, so what the sender sees, what
-      // charCount reports, and what FormData reads at submit are always
-      // the same string.
-      const trimmed = chars.slice(0, MAX_CHARS).join('')
+    if (graphemes.length > MAX_CHARS) {
+      // Hard stop at the limit — trimming on grapheme boundaries means a
+      // compound emoji at the cutoff is either kept whole or dropped whole,
+      // never split into a broken glyph.
+      const trimmed = graphemes.slice(0, MAX_CHARS).join('')
       setMessage(trimmed)
       setCharCount(MAX_CHARS)
+      setWasTruncated(true)
     } else {
       setMessage(value)
-      setCharCount(chars.length)
+      setCharCount(graphemes.length)
+      setWasTruncated(false)
     }
   }
 
   const handleSubmit = (formData: FormData) => {
+    // Catch whitespace-only messages before the round trip — required/
+    // minLength on the textarea don't stop a string of only spaces or
+    // newlines, so without this the server would be the first to reject it.
+    if (message.trim().length === 0) {
+      setFeedback({ error: 'Write something before sending.' })
+      return
+    }
+
     setFeedback(null)
     startTransition(async () => {
       const result = await action(profileId, formData)
@@ -123,6 +147,7 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
         formRef.current?.reset()
         setMessage('')
         setCharCount(0)
+        setWasTruncated(false)
       } else {
         setFeedback({ error: result.error })
       }
@@ -171,7 +196,11 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
   return (
     <form ref={formRef} action={handleSubmit} className="space-y-3">
       {feedback?.error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-500 text-sm text-center font-medium">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-500 text-sm text-center font-medium"
+        >
           {feedback.error}
         </div>
       )}
@@ -182,6 +211,7 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
           rows={5}
           value={message}
           placeholder={placeholderText}
+          aria-describedby={wasTruncated ? 'message-limit-notice' : undefined}
           className="w-full bg-gray-50 text-gray-900 placeholder-gray-400 rounded-2xl p-4 border border-gray-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all resize-none text-sm leading-relaxed"
           required
           minLength={1}
@@ -195,6 +225,12 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
           <span className="text-gray-200">/{MAX_CHARS}</span>
         </div>
       </div>
+
+      {wasTruncated && (
+        <p id="message-limit-notice" role="status" className="text-xs text-red-400 font-medium -mt-1 px-1">
+          You've hit the {MAX_CHARS}-character limit — anything past this point wasn't added.
+        </p>
+      )}
 
       <button
         type="submit"
