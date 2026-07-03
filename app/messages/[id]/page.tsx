@@ -1,7 +1,9 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import DirectMessageClient from '@/components/tod/DirectMessageClient'
-import { getOrCreateSession } from '@/actions/chat'
+import { findExistingSession } from '@/actions/chat'
+
+export const dynamic = 'force-dynamic'
 
 // Helper to check UUID format
 const isUUID = (str: string) => {
@@ -9,6 +11,14 @@ const isUUID = (str: string) => {
     return regex.test(str)
 }
 
+/**
+ * IMPORTANT: this page NEVER creates a chat_sessions/chat_participants row.
+ * It only reads. If no session exists yet between the current user and the
+ * target, it renders <DirectMessageClient> in "draft" mode (sessionId=null).
+ * The very first message the user sends is what atomically creates the
+ * session, via sendMessageToUser() -> the send_dm_message RPC. If the user
+ * navigates away without sending anything, nothing was ever persisted.
+ */
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const supabase = await createSupabaseServerClient()
@@ -18,131 +28,109 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         redirect('/login')
     }
 
+    // ── Case 1: id is a username (profile slug), not a UUID at all ──
     if (!isUUID(id)) {
-        // Find profile by username
         const { data: targetProfile } = await supabase
             .from('profiles')
-            .select('id')
+            .select('id, username, slug, avatar_url, is_pro, deactivated_at, dms_disabled')
             .eq('username', id)
-            .single()
+            .maybeSingle()
 
-        if (!targetProfile) {
-            notFound()
-        }
-
-        // Get or create session
-        const result = await getOrCreateSession(targetProfile.id)
-
-        if (result.success && result.sessionId) {
-            redirect(`/messages/${result.sessionId}`)
-        } else {
-            // Handle error (e.g., self-message attempt or DB error)
+        if (!targetProfile) notFound()
+        if (targetProfile.deactivated_at) {
+            // Account no longer active — nothing to draft a conversation with.
             redirect('/inbox')
         }
+
+        return renderForTarget(supabase, user.id, targetProfile)
     }
 
-    const sessionIdOrUserId = id
+    // ── Case 2: id is a UUID — could be an existing session id OR a user id ──
 
-    // Try treating ID as a Session ID first
-    const { data: sessionData, error: sessionFetchError } = await supabase
+    // Try it as a session id first, and confirm the current user is actually
+    // a participant (read-only, RLS-safe).
+    const { data: fullSessionData } = await supabase
         .from('chat_sessions')
         .select(`
             id,
-            chat_participants!inner (
+            chat_participants (
                 user_id,
-                profiles (
-                   id,
-                   username,
-                   slug,
-                   xp_balance,
-                   avatar_url,
-                   is_pro
-                )
+                profiles ( id, username, slug, xp_balance, avatar_url, is_pro, deactivated_at )
             )
         `)
-        .eq('id', sessionIdOrUserId)
+        .eq('id', id)
         .maybeSingle()
-        
-    // Also ensuring user is a participant using `!inner` doesn't return full participant list
-    // so we re-fetch all participants for that session if it exists to get the other profile
-    let isSessionValidAndJoined = false
-    let finalSessionDataForRender: any = null
 
-    if (sessionData) {
-        // Re-query to get all participants for this session
-         const { data: fullSessionData } = await supabase
-            .from('chat_sessions')
-            .select(`
-                id,
-                chat_participants (
-                    user_id,
-                    profiles (
-                       id,
-                       username,
-                       slug,
-                       xp_balance,
-                       avatar_url,
-                       is_pro
-                    )
-                )
-            `)
-            .eq('id', sessionData.id)
-            .single()
-            
-        if (fullSessionData) {
-            const isParticipant = fullSessionData.chat_participants.some((p: any) => p.user_id === user.id)
-            if (isParticipant) {
-                isSessionValidAndJoined = true
-                finalSessionDataForRender = fullSessionData
+    if (fullSessionData) {
+        const isParticipant = fullSessionData.chat_participants.some((p: any) => p.user_id === user.id)
+        if (isParticipant) {
+            const otherParticipant = fullSessionData.chat_participants.find((p: any) => p.user_id !== user.id)
+            const rawProfile = otherParticipant?.profiles
+            const profileData = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile
+
+            const targetProfile = {
+                id: profileData?.id || null,
+                username: profileData?.username || 'Unknown User',
+                avatar_url: profileData?.avatar_url || null,
+                is_pro: profileData?.is_pro || false,
+                slug: profileData?.slug || null,
+                is_deactivated: !profileData || !!profileData?.deactivated_at,
             }
+
+            return (
+                <DirectMessageClient
+                    sessionId={fullSessionData.id}
+                    isDraft={false}
+                    currentUser={user}
+                    targetProfile={targetProfile}
+                />
+            )
         }
+        // A session exists with this id but the user isn't in it — treat as not found,
+        // don't fall through to "treat id as a user id" (that would be a confused state).
+        notFound()
     }
 
-    if (!isSessionValidAndJoined) {
-        // Not a valid session or user not in it. Treat ID as user_id.
-        const { data: targetProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', sessionIdOrUserId)
-            .maybeSingle()
+    // Not a session id. Try it as a user id instead — this is the "new DM" entry point.
+    const { data: targetProfile } = await supabase
+        .from('profiles')
+        .select('id, username, slug, avatar_url, is_pro, deactivated_at, dms_disabled')
+        .eq('id', id)
+        .maybeSingle()
 
-        if (!targetProfile) {
-            notFound() // Neither a valid session nor a valid user
-        }
+    if (!targetProfile) notFound()
+    if (targetProfile.id === user.id) redirect('/inbox') // can't message yourself
+    if (targetProfile.deactivated_at) redirect('/inbox')
 
-        // Get or create session using the user_id
-        const result = await getOrCreateSession(targetProfile.id)
-
-        if (result.success && result.sessionId) {
-             // Avoid infinite loop if somehow result.sessionId is exactly the SAME as url id
-             if (result.sessionId !== sessionIdOrUserId) {
-                redirect(`/messages/${result.sessionId}`)
-             }
-             // It created a session that somehow shares UUID with user? Exceptionally rare.
-        } else {
-            // Fail safely to inbox
-            redirect('/inbox')
-        }
-    }
-
-    if (!finalSessionDataForRender) {
-         notFound()
-    }
-
-    // Current session is valid and user is participant. Render Client.
-    const otherParticipant = finalSessionDataForRender.chat_participants.find((p: any) => p.user_id !== user.id)
-
-    const fallback = { id: 'unknown', username: 'Unknown User' }
-    const rawProfile = otherParticipant?.profiles
-    const profileData = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile
-
-    const targetProfile = {
-        id: profileData?.id || fallback.id,
-        username: profileData?.username || fallback.username,
-        avatar_url: profileData?.avatar_url || null,
-        is_pro: profileData?.is_pro || false,
-        slug: profileData?.slug || null
-    }
-
-    return <DirectMessageClient sessionId={finalSessionDataForRender.id} currentUser={user} targetProfile={targetProfile} />
+    return renderForTarget(supabase, user.id, targetProfile)
 }
+
+/**
+ * Shared logic once we've resolved a valid target profile (by username or by id):
+ * check read-only whether a session already exists; if so redirect into it
+ * (canonical /messages/<sessionId> URL), otherwise render draft mode.
+ */
+async function renderForTarget(supabase: any, myId: string, targetProfile: any) {
+    const existing = await findExistingSession(targetProfile.id)
+
+    if (existing.success && existing.sessionId) {
+        redirect(`/messages/${existing.sessionId}`)
+    }
+
+    // No session yet — draft mode. Nothing has been written to the DB.
+    return (
+        <DirectMessageClient
+            sessionId={null}
+            isDraft={true}
+            currentUser={{ id: myId }}
+            targetProfile={{
+                id: targetProfile.id,
+                username: targetProfile.username || null,
+                avatar_url: targetProfile.avatar_url || null,
+                is_pro: targetProfile.is_pro || false,
+                slug: targetProfile.slug || null,
+                dms_disabled: targetProfile.dms_disabled || false,
+            }}
+        />
+    )
+    }
