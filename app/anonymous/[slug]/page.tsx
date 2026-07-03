@@ -114,7 +114,7 @@ export default async function AnonymousPage({ params }: PageProps) {
             {/* Eyebrow badge */}
             <div className="flex justify-center mb-4">
               <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
-                🕵️ Anonymous drop
+                 Anonymous message 
               </span>
             </div>
 
@@ -144,7 +144,7 @@ export default async function AnonymousPage({ params }: PageProps) {
               )}
             </div>
             <p className="text-gray-400 text-sm font-medium">
-              Got something to say? Stay anon 🤫
+              Got something to say? Stay anonymous 🤫
             </p>
           </div>
 
