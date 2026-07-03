@@ -17,7 +17,7 @@ export async function sendAnonymousAction(profileId: string, formData: FormData)
   const { data: { user } } = await supabase.auth.getUser()
   const message = (formData.get('message') as string)?.trim()
 
-  if (!message || message.length < 1 || message.length > 1001) {
+  if (!message || message.length < 1 || message.length > 1000) {
     return { error: 'Message must be between 1 and 1000 characters.' }
   }
 
