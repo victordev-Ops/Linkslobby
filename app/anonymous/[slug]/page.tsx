@@ -23,8 +23,7 @@ export async function sendAnonymousAction(profileId: string, formData: FormData)
   const messageLength = message ? Array.from(message).length : 0
 
   if (!message || messageLength < 1 || messageLength > 1000) {
-    // TEMP DEBUG — remove once the mismatch is found
-    return { error: `Message must be between 1 and 1000 characters. [debug raw=${message?.length ?? 0} points=${messageLength}]` }
+    return { error: 'Message must be between 1 and 1000 characters.' }
   }
 
   const headersList = await headers()
