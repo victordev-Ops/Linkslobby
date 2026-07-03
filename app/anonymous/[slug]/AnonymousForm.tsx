@@ -18,7 +18,7 @@ const MAX_CHARS = 1000
 // Rotating hints shown as an animated, typewriter-style placeholder.
 // Gives senders a nudge on the kind of messages that land well.
 const SUGGESTIONS = [
-  "You're giving funny character energy lately 🎬",
+  "You're giving main character energy lately 🎬",
   "Ok but why are you this funny 😭",
   "I've had a crush on you since forever 👀",
   "Real ones know you're the moment fr",
@@ -90,14 +90,20 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
-    if (value.length > MAX_CHARS) {
+    // Split by Unicode code point (not raw UTF-16 units) so emojis, accents,
+    // and other multi-unit characters are counted as one character each and
+    // never get sliced in half — a half-cut emoji is invalid UTF-8 and Postgres
+    // will reject the insert.
+    const chars = Array.from(value)
+
+    if (chars.length > MAX_CHARS) {
       // Hard stop at the limit — anything typed past this point is dropped,
       // never counted, and never shown.
-      const trimmed = value.slice(0, MAX_CHARS)
+      const trimmed = chars.slice(0, MAX_CHARS).join('')
       e.target.value = trimmed
-      setCharCount(trimmed.length)
+      setCharCount(MAX_CHARS)
     } else {
-      setCharCount(value.length)
+      setCharCount(chars.length)
     }
   }
 
@@ -170,7 +176,6 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
           className="w-full bg-gray-50 text-gray-900 placeholder-gray-400 rounded-2xl p-4 border border-gray-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all resize-none text-sm leading-relaxed"
           required
           minLength={1}
-          maxLength={MAX_CHARS}
           disabled={isPending || isBlocked}
           onChange={handleChange}
         />
@@ -204,7 +209,7 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
       </button>
 
       <p className="text-center text-xs text-gray-400 pt-1">
-        Your identity stays hidden.
+        Your identity stays hidden. IP is never stored.
       </p>
 
       <style jsx>{`
@@ -314,5 +319,4 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
       `}</style>
     </form>
   )
-    }
-    
+}
