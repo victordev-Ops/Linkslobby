@@ -209,7 +209,7 @@ export default function ConfessionForm({
         </div>
 
         <h1 className="text-xl font-semibold text-slate-900">
-          Send a secret to
+          Send a secret confession to
         </h1>
 
         <div className="mt-1 inline-flex items-center gap-1.5 justify-center">
@@ -220,7 +220,7 @@ export default function ConfessionForm({
         </div>
 
         <p className="mt-3 text-sm text-slate-400 leading-relaxed">
-          Your identity is hidden. Be honest, be kind.
+          Your identity is hidden. Be honest
         </p>
       </div>
 
@@ -285,9 +285,7 @@ export default function ConfessionForm({
             )}
           </button>
 
-          <p className="text-center text-xs text-slate-400 pt-1">
-            IP addresses are never stored.
-          </p>
+          
         </form>
       </div>
 
