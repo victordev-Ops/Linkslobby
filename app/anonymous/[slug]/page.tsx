@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import AnonymousForm from './AnonymousForm'
-import VerifiedBadge from '@/components/VerifiedBadge' 
+import VerifiedBadge from '@/components/VerifiedBadge'
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
@@ -83,14 +83,28 @@ export default async function AnonymousPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-indigo-600 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen bg-indigo-600 relative overflow-hidden flex flex-col items-center justify-center p-6">
+      {/* Ambient floating glow blobs for a lively, game-y backdrop */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 -left-16 w-72 h-72 bg-purple-500/40 rounded-full blur-3xl animate-float-slow" />
+        <div className="absolute top-1/3 -right-20 w-80 h-80 bg-fuchsia-400/30 rounded-full blur-3xl animate-float-slower" />
+        <div className="absolute -bottom-24 left-1/4 w-64 h-64 bg-indigo-400/40 rounded-full blur-3xl animate-float-slow" />
+      </div>
+
+      <div className="w-full max-w-sm relative">
 
         {/* White card */}
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden animate-card-in">
 
           {/* Card header */}
           <div className="px-6 pt-8 pb-6 text-center">
+            {/* Eyebrow badge */}
+            <div className="flex justify-center mb-4">
+              <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
+                 Anonymous message 
+              </span>
+            </div>
+
             {/* Avatar */}
             <div className="flex justify-center mb-4">
               {profile.avatar_url ? (
@@ -107,17 +121,17 @@ export default async function AnonymousPage({ params }: PageProps) {
                 </div>
               )}
             </div>
-{/* Username + badge */}
-<div className="flex items-center justify-center gap-1.5 mb-1">
-  <h1 className="text-lg font-black text-gray-900">
-    {profile.username}
-  </h1>
-  {profile.is_pro && (
-    <VerifiedBadge size={18} />
-  )}
-</div>
+            {/* Username + badge */}
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <h1 className="text-lg font-black text-gray-900">
+                {profile.username}
+              </h1>
+              {profile.is_pro && (
+                <VerifiedBadge size={18} />
+              )}
+            </div>
             <p className="text-gray-400 text-sm font-medium">
-              Send an anonymous message
+              Got something to say? Stay anonymous 🤫
             </p>
           </div>
 
@@ -132,9 +146,34 @@ export default async function AnonymousPage({ params }: PageProps) {
         </div>
 
         <p className="mt-6 text-white/50 text-xs font-medium uppercase tracking-widest text-center">
-          Powered by Say App
+          Powered by <b>Linkslobby</b>
         </p>
       </div>
+
+      <style>{`
+        @keyframes float-slow {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(20px, -25px) scale(1.08); }
+        }
+        @keyframes float-slower {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-25px, 20px) scale(1.1); }
+        }
+        .animate-float-slow {
+          animation: float-slow 9s ease-in-out infinite;
+        }
+        .animate-float-slower {
+          animation: float-slower 12s ease-in-out infinite;
+        }
+
+        @keyframes card-in {
+          0% { opacity: 0; transform: translateY(16px) scale(0.98); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-card-in {
+          animation: card-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
     </div>
   )
 }
