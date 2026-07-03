@@ -2,7 +2,6 @@
 
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -13,35 +12,27 @@ interface CreateLobbyButtonProps {
 export const CreateLobbyButton = ({ userId }: CreateLobbyButtonProps) => {
   const [isCreating, setIsCreating] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleCreateLobby = async () => {
     setIsCreating(true);
     try {
-      // Create new lobby
-      const { data: lobby, error: lobbyError } = await supabase
-        .from('tod_lobbies')
-        .insert({
-          host_id: userId,
-          status: 'waiting'
-        })
-        .select()
-        .single();
+      // Goes through the shared server action so the free/pro lobby limit
+      // is always enforced the same way, no matter where "create" is
+      // triggered from.
+      const { createLobbyAction } = await import('@/actions/tod-xp');
+      const result = await createLobbyAction('Game Lobby', 'Casual');
 
-      if (lobbyError) throw lobbyError;
-
-      // Auto-join as participant
-      const { error: joinError } = await supabase
-        .from('tod_participants')
-        .insert({
-          lobby_id: lobby.id,
-          user_id: userId
-        });
-
-      if (joinError) throw joinError;
+      if (!result.success) {
+        if (result.limitReached) {
+          toast.error(result.message || "You've reached your lobby limit");
+          router.push('/tod');
+          return;
+        }
+        throw new Error(result.message || 'Failed to create lobby');
+      }
 
       toast.success('Lobby created! 🎉');
-      router.push(`/tod/${lobby.id}`);
+      router.push(`/tod/${result.lobby.slug || result.lobby.id}`);
     } catch (error: any) {
       toast.error('Failed to create lobby');
       console.error(error);
@@ -61,4 +52,3 @@ export const CreateLobbyButton = ({ userId }: CreateLobbyButtonProps) => {
     </button>
   );
 };
-      
