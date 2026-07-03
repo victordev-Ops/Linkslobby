@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import InboxClient from '@/components/InboxClient'
 import InboxSkeleton from '@/components/InboxSkeleton'
+import { getSessions } from '@/actions/chat'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -32,8 +33,11 @@ async function ConfessionsLoader({
   userId: string
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
 }) {
-  // Fetch both confessions and profile data
-  const [confessionsRes, profileRes] = await Promise.all([
+  // Fetch confessions, profile data, and DM sessions together — previously
+  // sessions were only ever fetched client-side, so the DM list started
+  // empty on every load and popped in a beat later (part of the flicker
+  // reported in the inbox).
+  const [confessionsRes, profileRes, sessionsRes] = await Promise.all([
     supabase
       .from('confessions')
       .select('id, message, created_at, is_read, profile_id, message_type')
@@ -44,7 +48,8 @@ async function ConfessionsLoader({
       .from('profiles')
       .select('username, slug, restricted_words, show_watermark')
       .eq('id', userId)
-      .single()
+      .single(),
+    getSessions()
   ])
 
   if (confessionsRes.error) {
@@ -67,6 +72,7 @@ async function ConfessionsLoader({
   return (
     <InboxClient
       initialConfessions={confessionsRes.data || []}
+      initialSessions={sessionsRes.success ? (sessionsRes.data as any) : []}
       userId={userId}
       username={username}
       restrictedWords={restrictedWords}
