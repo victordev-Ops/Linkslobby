@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronUp, Play } from "lucide-react"
 import type { useRPSEngine } from "../useRPSEngine"
+import XPBalance from "@/components/XPBalance"
 
 const MIN_STAKE = 50
 const MAX_STAKE = 10000
@@ -28,14 +29,14 @@ export function RPSStakeSelector({ engine }: { engine: ReturnType<typeof useRPSE
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-[#0a0a0f] border border-white/10 rounded-2xl p-8 max-w-sm w-full space-y-6">
                 <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-black text-white">Select Stake</h2>
-                    <p className="text-white/50 text-sm">How many Stars do you want to wager?</p>
+                    <h2 className="text-2xl font-black text-white font-[family-name:var(--font-display)]">Set Your Wager</h2>
+                    <p className="text-white/50 text-sm">How many Stars are you putting on the line?</p>
                 </div>
 
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                        <span className="text-white/60">Your Balance:</span>
-                        <span className="text-amber-400 font-bold">{engine.starBalance} ⭐</span>
+                        <span className="text-white/60">Your Balance</span>
+                        <XPBalance />
                     </div>
                     
                     <div className="bg-white/5 rounded-xl p-6 space-y-4">
@@ -85,7 +86,7 @@ export function RPSStakeSelector({ engine }: { engine: ReturnType<typeof useRPSE
                         className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white rounded-xl font-bold transition flex items-center justify-center gap-2"
                     >
                         <Play size={16} />
-                        Play
+                        Lock In
                     </button>
                 </div>
             </div>
