@@ -86,4 +86,4 @@ export async function uploadDmPhoto(sessionId: string, formData: FormData) {
         console.error('uploadDmPhoto Error:', error)
         return { success: false, error: error instanceof Error ? error.message : 'Upload failed' }
     }
-    }
+                }
