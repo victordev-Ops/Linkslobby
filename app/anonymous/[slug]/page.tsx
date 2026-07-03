@@ -17,13 +17,21 @@ export async function sendAnonymousAction(profileId: string, formData: FormData)
   const { data: { user } } = await supabase.auth.getUser()
   const message = (formData.get('message') as string)?.trim()
 
-  // Count by Unicode code point, not raw UTF-16 length, so this matches what
-  // the sender saw in the character counter — emojis and accented characters
-  // take multiple UTF-16 units but should only count as one character each.
-  const messageLength = message ? Array.from(message).length : 0
+  // Count by grapheme cluster (Intl.Segmenter), matching the client exactly.
+  // Array.from()/code-point counting would disagree with the client on
+  // compound emoji (ZWJ sequences, skin-tone modifiers, flags) since those
+  // are multiple code points but a single perceived character — using the
+  // same segmentation on both sides means this check can never reject a
+  // message the client already accepted, or vice versa.
+  const messageLength = message
+    ? Array.from(new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(message)).length
+    : 0
 
-  if (!message || messageLength < 1 || messageLength > 1000) {
-    return { error: 'Message must be between 1 and 1000 characters.' }
+  if (!message || messageLength < 1) {
+    return { error: 'Write something before sending.' }
+  }
+  if (messageLength > 1000) {
+    return { error: `Message is too long by ${messageLength - 1000} characters.` }
   }
 
   const headersList = await headers()
