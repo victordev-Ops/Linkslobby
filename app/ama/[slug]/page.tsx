@@ -44,7 +44,7 @@ export default async function PublicAmaPage({ params }: PageProps) {
       />
 
       <p className="mt-8 text-white/60 text-xs font-medium uppercase tracking-widest">
-        Powered by Say App
+        Powered by Linkslobby
       </p>
     </div>
   )
