@@ -17,7 +17,12 @@ export async function sendAnonymousAction(profileId: string, formData: FormData)
   const { data: { user } } = await supabase.auth.getUser()
   const message = (formData.get('message') as string)?.trim()
 
-  if (!message || message.length < 1 || message.length > 1000) {
+  // Count by Unicode code point, not raw UTF-16 length, so this matches what
+  // the sender saw in the character counter — emojis and accented characters
+  // take multiple UTF-16 units but should only count as one character each.
+  const messageLength = message ? Array.from(message).length : 0
+
+  if (!message || messageLength < 1 || messageLength > 1000) {
     return { error: 'Message must be between 1 and 1000 characters.' }
   }
 
@@ -101,7 +106,7 @@ export default async function AnonymousPage({ params }: PageProps) {
             {/* Eyebrow badge */}
             <div className="flex justify-center mb-4">
               <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
-                 Anonymous message 
+                🕵️ Anonymous drop
               </span>
             </div>
 
@@ -131,7 +136,7 @@ export default async function AnonymousPage({ params }: PageProps) {
               )}
             </div>
             <p className="text-gray-400 text-sm font-medium">
-              Got something to say? Stay anonymous 🤫
+              Got something to say? Stay anon 🤫
             </p>
           </div>
 
@@ -146,7 +151,7 @@ export default async function AnonymousPage({ params }: PageProps) {
         </div>
 
         <p className="mt-6 text-white/50 text-xs font-medium uppercase tracking-widest text-center">
-          Powered by <b>Linkslobby</b>
+          Powered by Say App
         </p>
       </div>
 
