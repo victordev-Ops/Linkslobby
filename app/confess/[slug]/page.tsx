@@ -3,12 +3,15 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import ConfessionForm from './ConfessionForm'
+import { graphemeLength } from '@/lib/graphemes'
 
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ slug?: string }>
 }
+
+const CONFESSION_MAX_CHARS = 1000
 
 export async function sendConfessionAction(profileId: string, formData: FormData) {
   'use server'
@@ -17,8 +20,16 @@ export async function sendConfessionAction(profileId: string, formData: FormData
   const { data: { user } } = await supabase.auth.getUser()
   const message = (formData.get('message') as string)?.trim()
 
-  if (!message || message.length < 1 || message.length > 1000) {
-    return { error: 'Message must be between 1 and 1000 characters.' }
+  // Count by grapheme cluster (Intl.Segmenter), matching the client's live
+  // counter exactly — see lib/graphemes.ts. This can never reject a message
+  // the client already accepted, or vice versa, even with compound emoji.
+  const messageLength = message ? graphemeLength(message) : 0
+
+  if (!message || messageLength < 1) {
+    return { error: 'Write something before sending.' }
+  }
+  if (messageLength > CONFESSION_MAX_CHARS) {
+    return { error: `Message is too long by ${messageLength - CONFESSION_MAX_CHARS} characters.` }
   }
 
   const headersList = await headers()
@@ -95,7 +106,7 @@ export default async function ConfessPage({ params }: PageProps) {
       />
 
       <p className="mt-8 text-white/60 text-xs font-medium uppercase tracking-widest">
-        Powered by Say App
+        Powered by Linkslobby
       </p>
     </div>
   )
