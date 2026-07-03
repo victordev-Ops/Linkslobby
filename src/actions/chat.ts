@@ -203,26 +203,30 @@ export async function getSessions() {
     const unreadMap = new Map<string, number>()
 
     if (sessionsNeedingCount.length > 0) {
-        // Fetch all unread messages across ALL sessions in one query
+        // Fetch all unread-candidate messages across ALL sessions in one query.
+        // We now also select created_at so we can filter precisely per-session
+        // against that session's own last_read_at below — previously this counted
+        // EVERY non-self message in a flagged session (an "approximation" per the
+        // old comment here), which meant sending a new message to a session you'd
+        // already fully read would resurrect all of the other person's old,
+        // already-read messages as "unread" again. That approximation is gone.
         const unreadSessionIds = sessionsNeedingCount.map((p: any) => p.session_id)
         const { data: unreadMsgs } = await supabase
             .from('chat_messages')
-            .select('session_id')
+            .select('session_id, created_at')
             .in('session_id', unreadSessionIds)
             .neq('sender_id', user.id)
 
         if (unreadMsgs) {
-            // Filter by per-session last_read_at and count
             const lastReadMap = new Map(sessionsNeedingCount.map((p: any) =>
                 [p.session_id, p.last_read_at || new Date(0).toISOString()]
             ))
 
             for (const msg of unreadMsgs) {
-                // We can't easily filter by created_at > last_read_at in a cross-session query,
-                // but since we already filtered to sessions with updated_at > last_read_at,
-                // counting all non-self messages is a close approximation.
-                // For exact count, we'd need an RPC. This is efficient enough.
-                unreadMap.set(msg.session_id, (unreadMap.get(msg.session_id) || 0) + 1)
+                const lastRead = lastReadMap.get(msg.session_id)
+                if (lastRead && new Date(msg.created_at) > new Date(lastRead)) {
+                    unreadMap.set(msg.session_id, (unreadMap.get(msg.session_id) || 0) + 1)
+                }
             }
         }
     }
