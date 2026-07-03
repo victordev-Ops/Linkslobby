@@ -3,7 +3,6 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import InboxClient from '@/components/InboxClient'
 import InboxSkeleton from '@/components/InboxSkeleton'
-import { getSessions } from '@/actions/chat'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -33,11 +32,16 @@ async function ConfessionsLoader({
   userId: string
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
 }) {
-  // Fetch confessions, profile data, and DM sessions together — previously
-  // sessions were only ever fetched client-side, so the DM list started
-  // empty on every load and popped in a beat later (part of the flicker
-  // reported in the inbox).
-  const [confessionsRes, profileRes, sessionsRes] = await Promise.all([
+  // Fetch confessions and profile data. DM sessions are intentionally NOT
+  // fetched here — an earlier attempt to prefetch them here made this whole
+  // Suspense boundary wait on getSessions()'s extra round trips (participants,
+  // profiles, friendships, unread counts), which held the InboxSkeleton
+  // fallback up longer and made it look like the loader was stuck covering
+  // the chat list. Sessions load client-side in InboxClient instead — the
+  // flicker that was originally caused by that client-side load is fixed at
+  // the merge layer there (cache never clobbers live data), so nothing is
+  // lost by not blocking the initial server render on it.
+  const [confessionsRes, profileRes] = await Promise.all([
     supabase
       .from('confessions')
       .select('id, message, created_at, is_read, profile_id, message_type')
@@ -48,8 +52,7 @@ async function ConfessionsLoader({
       .from('profiles')
       .select('username, slug, restricted_words, show_watermark')
       .eq('id', userId)
-      .single(),
-    getSessions()
+      .single()
   ])
 
   if (confessionsRes.error) {
@@ -72,7 +75,6 @@ async function ConfessionsLoader({
   return (
     <InboxClient
       initialConfessions={confessionsRes.data || []}
-      initialSessions={sessionsRes.success ? (sessionsRes.data as any) : []}
       userId={userId}
       username={username}
       restrictedWords={restrictedWords}
