@@ -23,7 +23,8 @@ export async function sendAnonymousAction(profileId: string, formData: FormData)
   const messageLength = message ? Array.from(message).length : 0
 
   if (!message || messageLength < 1 || messageLength > 1000) {
-    return { error: 'Message must be between 1 and 1000 characters.' }
+    // TEMP DEBUG — remove once the mismatch is found
+    return { error: `Message must be between 1 and 1000 characters. [debug raw=${message?.length ?? 0} points=${messageLength}]` }
   }
 
   const headersList = await headers()
@@ -151,7 +152,7 @@ export default async function AnonymousPage({ params }: PageProps) {
         </div>
 
         <p className="mt-6 text-white/50 text-xs font-medium uppercase tracking-widest text-center">
-          Powered by Say App
+          Powered by linkslobby
         </p>
       </div>
 
@@ -181,4 +182,5 @@ export default async function AnonymousPage({ params }: PageProps) {
       `}</style>
     </div>
   )
-}
+    }
+              
