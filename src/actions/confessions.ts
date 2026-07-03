@@ -4,8 +4,27 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { graphemeLength } from '@/lib/graphemes'
 
-export async function sendAmaQuestion(profileId: string, message: string) {
+export type AmaActionResponse = { error?: string; success?: boolean }
+
+const AMA_MAX_CHARS = 100
+
+export async function sendAmaQuestion(profileId: string, rawMessage: string): Promise<AmaActionResponse> {
+  const message = rawMessage?.trim()
+
+  // Count by grapheme cluster (Intl.Segmenter) — same function the client
+  // uses for its live counter — so this can never reject a message the
+  // client's counter already showed as within the limit, or vice versa.
+  const messageLength = message ? graphemeLength(message) : 0
+
+  if (!message || messageLength < 1) {
+    return { error: 'Write something before sending.' }
+  }
+  if (messageLength > AMA_MAX_CHARS) {
+    return { error: `Question is too long by ${messageLength - AMA_MAX_CHARS} characters.` }
+  }
+
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -21,14 +40,14 @@ export async function sendAmaQuestion(profileId: string, message: string) {
   // 1. IP Block check
   const ipBlocked = await isAnonymousBlocked(profileId, ip)
   if (ipBlocked) {
-    throw new Error('Unable to deliver your message.')
+    return { error: 'Unable to deliver your message.' }
   }
 
   // 2. User ID Block check (if authenticated)
   if (user) {
     const userBlocked = await isUserBlocked(profileId, user.id)
     if (userBlocked) {
-      throw new Error('Unable to deliver your message.')
+      return { error: 'Unable to deliver your message.' }
     }
   }
 
@@ -44,7 +63,11 @@ export async function sendAmaQuestion(profileId: string, message: string) {
       message_type: 'ama'
     })
 
-  if (error) throw error
+  if (error) {
+    console.error('sendAmaQuestion insert error:', error)
+    return { error: 'Failed to send your question. Please try again.' }
+  }
+
   return { success: true }
 }
 
@@ -134,4 +157,4 @@ export async function deleteMessage(confessionId: string) {
     console.error('Delete Message Error:', error)
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
-}
+      }
