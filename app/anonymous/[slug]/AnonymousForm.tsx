@@ -254,7 +254,7 @@ export default function AnonymousForm({ profileId, action, isBlocked = false }: 
       </button>
 
       <p className="text-center text-xs text-gray-400 pt-1">
-        Your identity stays hidden. IP is never stored.
+        Your identity stays hidden.
       </p>
 
       <style jsx>{`
