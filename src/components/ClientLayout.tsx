@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import NavbarWrapper from "./NavbarWrapper";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { PresenceProvider } from "@/context/PresenceContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { XPNotificationProvider } from "@/components/XPNotificationProvider";
 import { Toaster } from "sonner";
@@ -71,18 +72,31 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <AuthProvider>
-      <NotificationProvider profileId={profileId}>
-        <XPNotificationProvider>
-          <div className="min-h-screen transition-all">
-            <main>{children}</main>
-            <Suspense fallback={null}>
-              <NavbarWrapper />
-            </Suspense>
-            <Toaster position="top-center" richColors />
-            <PWAInstallPrompt />
-          </div>
-        </XPNotificationProvider>
-      </NotificationProvider>
+      {/*
+        PresenceProvider goes here — same level as NotificationProvider,
+        wrapping everything, using the same profileId already fetched
+        above. This is the ONE persistent client boundary in the whole app
+        (ClientLayout itself never remounts across navigations, since
+        RootLayout renders it once), so mounting the presence channel here
+        is what makes "online" actually mean "anywhere in the app" instead
+        of "on this specific page." It was previously never mounted at all,
+        which is why status always read Offline regardless of what the
+        DM header logic did with it.
+      */}
+      <PresenceProvider userId={profileId}>
+        <NotificationProvider profileId={profileId}>
+          <XPNotificationProvider>
+            <div className="min-h-screen transition-all">
+              <main>{children}</main>
+              <Suspense fallback={null}>
+                <NavbarWrapper />
+              </Suspense>
+              <Toaster position="top-center" richColors />
+              <PWAInstallPrompt />
+            </div>
+          </XPNotificationProvider>
+        </NotificationProvider>
+      </PresenceProvider>
     </AuthProvider>
   );
 }
