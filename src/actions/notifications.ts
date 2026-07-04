@@ -3,6 +3,17 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+// TEMPORARY DIAGNOSTIC — safe to delete once the realtime counter issue is confirmed
+// fixed. console.log in a 'use client' component only reaches the browser console,
+// which isn't visible when developing on a phone with no devtools. Routing the same
+// message through a server action makes it show up in Vercel's function logs instead
+// (Vercel dashboard → your project → Logs, or `vercel logs` from a machine that has
+// the CLI). Called fire-and-forget from the client — errors here are swallowed on
+// purpose so a logging call can never itself break the notification flow.
+export async function logDebug(message: string, data?: unknown) {
+  console.log(`[notif-debug] ${message}`, data !== undefined ? JSON.stringify(data) : '')
+}
+
 export type NotificationType =
   | 'message'
   | 'dykm'
