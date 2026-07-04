@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react'
 
 export default function BottomNavbar() {
   const pathname = usePathname()
-  const { unreadCount, unreadMessagesCount } = useNotifications()
+  const { unreadCount, unreadMessagesCount, friendRequestCount } = useNotifications()
   const [mounted, setMounted] = useState(false)
   const [pendingPathname, setPendingPathname] = useState<string | null>(null)
 
@@ -25,7 +25,7 @@ export default function BottomNavbar() {
     { name: 'Home', href: '/dashboard', icon: Home },
     { name: 'Messages', href: '/inbox', icon: MessageSquare, badge: unreadMessagesCount },
     { name: 'Notifications', href: '/notifications', icon: Bell, badge: unreadCount },
-    { name: 'Profile', href: '/profile', icon: User },
+    { name: 'Profile', href: '/profile', icon: User, badge: friendRequestCount },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
