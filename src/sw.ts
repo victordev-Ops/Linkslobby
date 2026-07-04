@@ -1,4 +1,3 @@
-import { defaultCache } from "@serwist/next/worker";
 import { Serwist, NetworkOnly, StaleWhileRevalidate, CacheFirst } from "serwist";
 import { ExpirationPlugin } from "serwist";
 
@@ -58,7 +57,37 @@ const serwist = new Serwist({
       },
       handler: new NetworkOnly(),
     },
-    ...defaultCache,
+    {
+      // SAFETY NET: Next.js 16 is recent enough that the RSC/prefetch
+      // signals defaultCache and our own detection above were built
+      // against (`_rsc` param, `RSC` header) may not be the complete
+      // picture anymore. Rather than trust every relevant request gets
+      // correctly identified upstream, force NetworkOnly for anything that
+      // smells like a document or a router prefetch BEFORE it can reach
+      // any fallback caching behavior. This is what was almost certainly
+      // slipping through and getting cached as a stale/mid-stream response
+      // in Chrome — appearing to load, then getting swapped back to a
+      // stuck loading state on the next navigation.
+      matcher: ({ request }) => {
+        const dest = request.headers.get('sec-fetch-dest');
+        const accept = request.headers.get('accept') || '';
+        const isPrefetch = request.headers.get('next-router-prefetch') === '1'
+          || request.headers.get('purpose') === 'prefetch';
+        return dest === 'document' || accept.includes('text/html') || isPrefetch;
+      },
+      handler: new NetworkOnly(),
+    },
+    // defaultCache intentionally removed: every category it would
+    // otherwise catch for this app (pages, RSC/data, prefetches) is now
+    // explicitly NetworkOnly above, and static assets/images are already
+    // covered by the _next/static CacheFirst rule + globPatterns
+    // precaching in serwist.config.mjs. For a realtime chat app, "never
+    // accidentally cache anything dynamic" is worth more than whatever
+    // offline-page benefit defaultCache provided — especially while its
+    // Next-16 compatibility is unverified. If @serwist/next later confirms
+    // full Next 16 support and you want it back, re-add `...defaultCache`
+    // as the LAST entry here (so it stays lowest priority) and specifically
+    // re-test in Chrome with a hard SW re-registration.
   ],
 });
 
