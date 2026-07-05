@@ -1,7 +1,9 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import DirectMessageClient from '@/components/tod/DirectMessageClient'
-import { findExistingSession } from '@/actions/chat'
+import { findExistingSession, getSessionMessages } from '@/actions/chat'
+
+const INITIAL_MESSAGE_PAGE_SIZE = 20
 
 export const dynamic = 'force-dynamic'
 
@@ -49,17 +51,27 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
     // Try it as a session id first, and confirm the current user is actually
     // a participant (read-only, RLS-safe).
-    const { data: fullSessionData } = await supabase
-        .from('chat_sessions')
-        .select(`
-            id,
-            chat_participants (
-                user_id,
-                profiles ( id, username, slug, xp_balance, avatar_url, is_pro, deactivated_at )
-            )
-        `)
-        .eq('id', id)
-        .maybeSingle()
+    //
+    // The message fetch is kicked off in parallel with the session/participant
+    // query instead of after it. If it turns out the user isn't a participant
+    // we discard the result below — that wasted query is far cheaper than the
+    // serial round trip it replaces, and RLS on chat_messages already scopes
+    // rows to actual participants via is_chat_participant(), so nothing more
+    // sensitive leaks by firing it speculatively.
+    const [{ data: fullSessionData }, messagesResult] = await Promise.all([
+        supabase
+            .from('chat_sessions')
+            .select(`
+                id,
+                chat_participants (
+                    user_id,
+                    profiles ( id, username, slug, xp_balance, avatar_url, is_pro, deactivated_at )
+                )
+            `)
+            .eq('id', id)
+            .maybeSingle(),
+        getSessionMessages(id, undefined, INITIAL_MESSAGE_PAGE_SIZE),
+    ])
 
     if (fullSessionData) {
         const isParticipant = fullSessionData.chat_participants.some((p: any) => p.user_id === user.id)
@@ -83,6 +95,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                     isDraft={false}
                     currentUser={user}
                     targetProfile={targetProfile}
+                    initialMessages={messagesResult.success ? messagesResult.data : []}
+                    initialHasMore={messagesResult.success ? (messagesResult.data?.length ?? 0) >= INITIAL_MESSAGE_PAGE_SIZE : false}
                 />
             )
         }
