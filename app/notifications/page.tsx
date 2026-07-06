@@ -175,7 +175,7 @@ export default async function NotificationsPage() {
         }))
     }
 
-    // Filter out hidden notifications (only applies to hideable types — the 4 new
+        // Filter out hidden notifications (only applies to hideable types — the 4 new
     // notification_reads types were never added to hidden_notifications, see isHideable()
     // in the client, so no filtering needed for them here)
     const confessions = (confessionsRes.data || []).filter(c => !isHidden(c.id, 'confession'))
@@ -185,6 +185,10 @@ export default async function NotificationsPage() {
     const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !isHidden(q.id, 'hot_seat_question'))
     const turnEvents = (turnEventsRes.data || []).filter(t => !isHidden(t.id, 'tod_turn_event'))
     const gameInvites = (gameInvitesRes.data || []).filter(i => !isHidden(i.id, 'game_invite'))
+    
+    // NEW: Filter out hidden friend requests and responses so they don't reappear on reload
+    const friendRequests = (friendRequestsRes.data || []).filter(f => !isHidden(f.id, 'friend_request'))
+    const friendResponses = (friendResponsesRes.data || []).filter(f => !isHidden(f.id, 'friend_request_response'))
 
     return (
         <NotificationsClient
@@ -194,8 +198,8 @@ export default async function NotificationsPage() {
             initialXpTransactions={xpTransactions}
             initialHotSeatQuestions={hotSeatQuestions}
             initialTurnEvents={turnEvents}
-            initialFriendRequests={friendRequestsRes.data || []}
-            initialFriendResponses={friendResponsesRes.data || []}
+            initialFriendRequests={friendRequests}
+            initialFriendResponses={friendResponses}
             initialLobbyJoinResponses={lobbyJoinResponsesRes.data || []}
             initialHotSeatAnswers={hotSeatAnswersRes.data || []}
             initialGameInvites={gameInvites}
@@ -205,5 +209,5 @@ export default async function NotificationsPage() {
             profileId={user.id}
         />
     )
-            }
-        
+        }
+               
