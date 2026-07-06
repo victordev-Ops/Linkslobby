@@ -61,5 +61,4 @@ export default function AuthForm({ children }: AuthFormProps) {
       </div>
     </div>
   )
-                                 }
-          
+}
