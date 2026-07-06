@@ -7,6 +7,11 @@ export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 export const alt = "Linkslobby — Play. Confess. Connect."
 
+// Must not be prerendered at build time: the Google Fonts fetch below needs
+// live network access, which Vercel's build sandbox doesn't have (only the
+// deployed serverless function does, at request time).
+export const dynamic = "force-dynamic"
+
 // Vercel's documented pattern for pulling a Google Font into an OG image:
 // ask Google's CSS endpoint for the @font-face src, then fetch that file.
 async function loadGoogleFont(font: string, weight: number, text: string) {
@@ -118,6 +123,9 @@ export default async function OpengraphImage() {
         { name: "Space Grotesk", data: spaceGrotesk, weight: 700, style: "normal" },
         { name: "Inter", data: inter, weight: 500, style: "normal" },
       ],
+      headers: {
+        "Cache-Control": "public, immutable, no-transform, max-age=86400, s-maxage=86400",
+      },
     }
   )
-          }
+}
