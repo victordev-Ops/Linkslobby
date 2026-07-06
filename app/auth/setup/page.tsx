@@ -142,9 +142,9 @@ function SetupUsernameContent() {
 
       if (result?.success) {
         const amount = result.xpAwarded ?? XP_REWARDS.PROFILE_CREATED
-        showXPNotification(amount, 'Welcome to Say! 🎉')
+        showXPNotification(amount, 'Welcome to Linkslobby! 🎉')
         setMessageKind('success')
-        setMessage('welcome to say! redirecting...')
+        setMessage('welcome to linkslobby')
 
         // Refresh profile context
         await refreshProfile()
