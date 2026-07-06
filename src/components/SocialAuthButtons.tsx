@@ -78,9 +78,11 @@ export default function SocialAuthButtons({ mode = 'login', next }: SocialAuthBu
     return (
         <div className="space-y-3">
             <div className="relative flex items-center">
-                <div className="flex-grow border-t border-white/10" />
-                <span className="mx-4 text-xs text-white/30 uppercase tracking-wider">or continue with</span>
-                <div className="flex-grow border-t border-white/10" />
+                <div className="flex-grow border-t border-slate-200 dark:border-white/10" />
+                <span className="mx-4 text-xs text-slate-400 dark:text-white/30 uppercase tracking-wider font-medium">
+                    or continue with
+                </span>
+                <div className="flex-grow border-t border-slate-200 dark:border-white/10" />
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -89,10 +91,11 @@ export default function SocialAuthButtons({ mode = 'login', next }: SocialAuthBu
                         key={provider.id}
                         onClick={() => handleSocialLogin(provider.id)}
                         disabled={loading !== null}
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white text-sm font-medium transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                        aria-label={`Continue with ${provider.label}`}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 hover:border-purple-500/50 rounded-xl text-slate-700 dark:text-white text-sm font-medium transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         {loading === provider.id ? (
-                            <Loader2 size={18} className="animate-spin" />
+                            <Loader2 size={18} className="animate-spin text-purple-500" />
                         ) : (
                             provider.icon
                         )}
@@ -101,4 +104,4 @@ export default function SocialAuthButtons({ mode = 'login', next }: SocialAuthBu
             </div>
         </div>
     )
-}
+        }
