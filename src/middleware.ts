@@ -66,7 +66,21 @@ export async function middleware(request: NextRequest) {
   }
 
   // 2. Define Public Routes
-  const publicPaths = ['/login', '/signup', '/manifest.webmanifest', '/sw.js']
+  //
+  // Includes the App Router's generated metadata-image routes
+  // (opengraph-image / icon / apple-icon). These are fetched by social
+  // crawlers (Facebook, Twitter, iMessage, etc.) and by browsers for
+  // favicons — neither carries a Supabase session cookie, so without this
+  // they were being redirected to /login and link previews broke.
+  const publicPaths = [
+    '/login',
+    '/signup',
+    '/manifest.webmanifest',
+    '/sw.js',
+    '/opengraph-image',
+    '/icon',
+    '/apple-icon',
+  ]
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
 
   const isPublicPrefix =
@@ -176,5 +190,4 @@ export const config = {
      */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
-      }
-      
+}
