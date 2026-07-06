@@ -73,6 +73,21 @@ export async function deleteAccount(): Promise<AuthResponse> {
         auth: { autoRefreshToken: false, persistSession: false }
       })
 
+      // Clear out rows in other tables that reference this profile via a
+      // foreign key before deleting the profile itself. `dm_pairs` has no
+      // ON DELETE CASCADE on user_a/user_b, so a leftover pairing row (even
+      // from a conversation the user never sent a message in) blocks the
+      // profile delete with a 23503 foreign key violation. Delete both
+      // sides explicitly rather than relying on the DB to cascade.
+      const { error: dmPairsErrorA } = await adminClient.from('dm_pairs').delete().eq('user_a', user.id)
+      if (dmPairsErrorA) {
+        console.error("Warning: dm_pairs (user_a) cleanup failed:", dmPairsErrorA)
+      }
+      const { error: dmPairsErrorB } = await adminClient.from('dm_pairs').delete().eq('user_b', user.id)
+      if (dmPairsErrorB) {
+        console.error("Warning: dm_pairs (user_b) cleanup failed:", dmPairsErrorB)
+      }
+
       // Delete the profile row first (will trigger cascades across the database)
       const { error: profileError } = await adminClient.from('profiles').delete().eq('id', user.id)
       if (profileError) {
@@ -101,5 +116,5 @@ export async function deleteAccount(): Promise<AuthResponse> {
     console.error('Delete Account Error:', error)
     return { success: false, message: error instanceof Error ? error.message : 'Failed to delete account' }
   }
-      }
-      
+        }
+    
