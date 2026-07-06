@@ -5,9 +5,21 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import LandingClient from '@/components/landing/LandingClient'
 
 export const metadata: Metadata = {
-  title: 'Linkslobby — Games, confessions & anonymous messages with friends',
+  title: "Linkslobby — Play. Confess. Connect.",
   description:
     "Send confessions, play Truth or Dare, host a Hot Seat, or drop an anonymous message — real games with the friends you already have. Earn stars as you play.",
+  openGraph: {
+    title: "Linkslobby — Play. Confess. Connect.",
+    description:
+      "Games, confessions & anonymous messages with your friends. Earn stars as you play.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Linkslobby — Play. Confess. Connect.",
+    description:
+      "Games, confessions & anonymous messages with your friends. Earn stars as you play.",
+  },
 }
 
 export default async function HomePage() {
@@ -32,4 +44,4 @@ export default async function HomePage() {
   }
 
   return <LandingClient />
-}
+    }
