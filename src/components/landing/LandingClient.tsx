@@ -327,18 +327,15 @@ export default function LandingClient() {
 
       {/* NAV */}
       <header className="relative z-10 max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center">
           <Image
             src="/linkslobby-logo.png"
             alt="Linkslobby"
-            width={32}
-            height={32}
-            className="rounded-lg"
+            width={1116}
+            height={316}
+            className="h-8 w-auto"
             priority
           />
-          <span className="font-bold text-lg text-slate-900 dark:text-white font-[family-name:var(--font-display)]">
-            Linkslobby
-          </span>
         </Link>
         <div className="flex items-center gap-2">
           <Link
@@ -508,7 +505,7 @@ export default function LandingClient() {
         </div>
       </section>
 
-      {/* FINAL CTA */}
+            {/* FINAL CTA */}
       <section className="relative z-10 max-w-6xl mx-auto px-6 py-20 text-center">
         <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white tracking-tight font-[family-name:var(--font-display)]">
           Your friends are already in the lobby.
@@ -528,18 +525,13 @@ export default function LandingClient() {
       {/* FOOTER */}
       <footer className="relative z-10 border-t border-slate-100 dark:border-white/10">
         <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/linkslobby-logo.png"
-              alt="Linkslobby"
-              width={22}
-              height={22}
-              className="rounded-md"
-            />
-            <span className="font-bold text-sm text-slate-700 dark:text-white/80 font-[family-name:var(--font-display)]">
-              Linkslobby
-            </span>
-          </div>
+          <Image
+            src="/linkslobby-logo.png"
+            alt="Linkslobby"
+            width={1116}
+            height={316}
+            className="h-6 w-auto opacity-80"
+          />
           <div className="flex items-center gap-6 text-xs font-bold text-slate-500 dark:text-white/50">
             <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white transition-colors">
               Privacy
@@ -558,4 +550,4 @@ export default function LandingClient() {
       </footer>
     </div>
   )
-}
+        }
