@@ -1,5 +1,7 @@
 // app/opengraph-image.tsx
 import { ImageResponse } from "next/og"
+import { readFile } from "node:fs/promises"
+import path from "node:path"
 
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
@@ -29,16 +31,12 @@ export default async function OpengraphImage() {
   const subtext = "Games, confessions & anonymous messages with your friends."
 
   const [logoData, spaceGrotesk, inter] = await Promise.all([
-    fetch(new URL("../public/linkslobby-logo-og.png", import.meta.url)).then(
-      (r) => r.arrayBuffer()
-    ),
+    readFile(path.join(process.cwd(), "public/linkslobby-logo-og.png")),
     loadGoogleFont("Space+Grotesk", 700, tagline),
     loadGoogleFont("Inter", 500, subtext),
   ])
 
-  const logoSrc = `data:image/png;base64,${Buffer.from(logoData).toString(
-    "base64"
-  )}`
+  const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`
 
   return new ImageResponse(
     (
@@ -122,4 +120,4 @@ export default async function OpengraphImage() {
       ],
     }
   )
-        }
+          }
