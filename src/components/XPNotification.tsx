@@ -31,7 +31,7 @@ let activeNotificationState: XPNotification | null = null
  * Replaces the old portal logic with Sonner's native notification mount context.
  */
 export function XPNotificationToast({ show, amount, reason, type, onComplete }: XPNotificationProps) {
-  return <Toaster position="top-right" contextMenuVisible={false} gap={8} />
+  return <Toaster position="top-right" gap={8} />
 }
 
 /**
