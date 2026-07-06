@@ -17,9 +17,7 @@ import { deleteNotification, markNotificationAsRead, markAllNotificationsAsRead 
 import { revealDYKMRespondent } from "@/actions/reveal"
 import { useRouter } from "next/navigation"
 import { db } from '@/lib/db'
-import { queueOfflineAction } from '@/lib/sync'
 import { useNotifications } from "@/context/NotificationContext"
-import VerifiedBadge from "@/components/VerifiedBadge"
 
 interface NotificationsClientProps {
     initialConfessions: any[]
@@ -33,7 +31,7 @@ interface NotificationsClientProps {
     initialLobbyJoinResponses: any[]
     initialHotSeatAnswers: any[]
     initialGameInvites: any[]
-    initialReadIds: string[] // pre-computed "${notification_type}:${notification_id}" keys, from server
+    initialReadIds: string[]
     isPro: boolean
     username: string
     profileId: string
@@ -42,19 +40,16 @@ interface NotificationsClientProps {
 type Tab = "All" | "Messages" | "Games" | "Lobbies" | "XP" | "Hot Seat" | "Friends"
 
 function stripMetadata(message: string): string {
+    if (!message) return ""
     return message.replace(/\n\n\[META:.*\]$/s, '').trim()
 }
 
-// Game invites live in their own game_invites table (inviter_id, invitee_id,
-// game_type, game_label, game_url, is_read). The invite URL is stored as an
-// absolute URL (window.location.href at send time) — route with the path only
-// so navigation stays within the app / current origin.
 function getInvitePath(gameUrl: string): string {
     try {
         const u = new URL(gameUrl)
         return `${u.pathname}${u.search}`
     } catch {
-        return gameUrl
+        return gameUrl || "/notifications"
     }
 }
 
@@ -76,25 +71,27 @@ export default function NotificationsClient({
     profileId
 }: NotificationsClientProps) {
     const { refreshUnreadCount, setUnreadCount } = useNotifications()
-    const [confessions, setConfessions] = useState(initialConfessions)
-    const [dykmScores, setDykmScores] = useState(initialDykmScores)
-    const [lobbyEvents, setLobbyEvents] = useState(initialLobbyEvents)
-    const [xpTransactions, setXpTransactions] = useState(initialXpTransactions)
-    const [hotSeatQuestions, setHotSeatQuestions] = useState(initialHotSeatQuestions)
-    const [turnEvents, setTurnEvents] = useState(initialTurnEvents)
-    const [friendRequests, setFriendRequests] = useState(initialFriendRequests)
-    const [friendResponses, setFriendResponses] = useState(initialFriendResponses)
-    const [lobbyJoinResponses, setLobbyJoinResponses] = useState(initialLobbyJoinResponses)
-    const [hotSeatAnswers, setHotSeatAnswers] = useState(initialHotSeatAnswers)
-    const [gameInvites, setGameInvites] = useState(initialGameInvites)
-    const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set(initialReadIds))
+    const [confessions, setConfessions] = useState(initialConfessions || [])
+    const [dykmScores, setDykmScores] = useState(initialDykmScores || [])
+    const [lobbyEvents, setLobbyEvents] = useState(initialLobbyEvents || [])
+    const [xpTransactions, setXpTransactions] = useState(initialXpTransactions || [])
+    const [hotSeatQuestions, setHotSeatQuestions] = useState(initialHotSeatQuestions || [])
+    const [turnEvents, setTurnEvents] = useState(initialTurnEvents || [])
+    const [friendRequests, setFriendRequests] = useState(initialFriendRequests || [])
+    const [friendResponses, setFriendResponses] = useState(initialFriendResponses || [])
+    const [lobbyJoinResponses, setLobbyJoinResponses] = useState(initialLobbyJoinResponses || [])
+    const [hotSeatAnswers, setHotSeatAnswers] = useState(initialHotSeatAnswers || [])
+    const [gameInvites, setGameInvites] = useState(initialGameInvites || [])
+    const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set(initialReadIds || []))
     const [activeTab, setActiveTab] = useState<Tab>("All")
-    // Pre-populate revealed state from server data
+    
     const [revealedScores, setRevealedScores] = useState<Record<string, boolean>>(() => {
         const initial: Record<string, boolean> = {}
-        initialDykmScores.forEach((s: any) => {
-            if (s.responder_revealed) initial[s.id] = true
-        })
+        if (initialDykmScores) {
+            initialDykmScores.forEach((s: any) => {
+                if (s?.responder_revealed) initial[s.id] = true
+            })
+        }
         return initial
     })
     const [isRevealing, setIsRevealing] = useState<string | null>(null)
@@ -109,7 +106,6 @@ export default function NotificationsClient({
     const supabase = createClient()
     const router = useRouter()
 
-    // Close the tab filter dropdown on outside click
     useEffect(() => {
         if (!isFilterOpen) return
         const handleClickOutside = (e: MouseEvent) => {
@@ -121,24 +117,22 @@ export default function NotificationsClient({
         return () => document.removeEventListener("mousedown", handleClickOutside)
     }, [isFilterOpen])
 
-    // Cache all initial data in Dexie on mount for offline access
     useEffect(() => {
         const now = Date.now()
-
         const syncDexie = async () => {
-            // 1. Mark existing cached notifications as hidden if they aren't in the server props
+            if (!db?.notifications) return
             const allInitialIds = new Set([
-                ...initialConfessions.map(c => c.id),
-                ...initialDykmScores.map(s => s.id),
-                ...initialLobbyEvents.map(e => e.id),
-                ...initialXpTransactions.map(x => x.id),
-                ...initialHotSeatQuestions.map(q => q.id),
-                ...initialTurnEvents.map(t => t.id),
-                ...initialFriendRequests.map(f => f.id),
-                ...initialFriendResponses.map(f => f.id),
-                ...initialLobbyJoinResponses.map(p => p.id),
-                ...initialHotSeatAnswers.map(q => q.id),
-                ...initialGameInvites.map(i => i.id),
+                ...confessions.map(c => c.id),
+                ...dykmScores.map(s => s.id),
+                ...lobbyEvents.map(e => e.id),
+                ...xpTransactions.map(x => x.id),
+                ...hotSeatQuestions.map(q => q.id),
+                ...turnEvents.map(t => t.id),
+                ...friendRequests.map(f => f.id),
+                ...friendResponses.map(f => f.id),
+                ...lobbyJoinResponses.map(p => p.id),
+                ...hotSeatAnswers.map(q => q.id),
+                ...gameInvites.map(i => i.id),
             ])
 
             try {
@@ -146,40 +140,26 @@ export default function NotificationsClient({
                 const toHide = cachedVisible.filter(c => !allInitialIds.has(c.id)).map(c => c.id)
 
                 if (toHide.length > 0) {
-                    console.log('Syncing Dexie: Marking as hidden:', toHide)
                     await db.notifications.bulkUpdate(toHide.map(id => ({ key: id, changes: { is_hidden: true } })))
                 }
             } catch (err) {
                 console.error('Dexie sync failed:', err)
             }
 
-            // 2. Cache/Update fresh data
-            if (initialConfessions.length > 0) {
-                db.confessions.bulkPut(
-                    initialConfessions.map((c: any) => ({ ...c, cached_at: now }))
-                ).catch(() => { })
-            }
-            if (initialXpTransactions.length > 0) {
-                db.xpTransactions.bulkPut(
-                    initialXpTransactions.map((x: any) => ({ ...x, cached_at: now }))
-                ).catch(() => { })
-            }
             const allItems = [
-                ...initialConfessions.map((c: any) => ({ id: c.id, type: 'confession' as const, data: c, created_at: c.created_at, is_hidden: false, cached_at: now })),
-                ...initialDykmScores.map((s: any) => ({ id: s.id, type: 'dykm_score' as const, data: s, created_at: s.created_at, is_hidden: false, cached_at: now })),
-                ...initialLobbyEvents.map((e: any) => ({ id: e.id, type: 'lobby_event' as const, data: e, created_at: e.created_at, is_hidden: false, cached_at: now })),
-                ...initialXpTransactions.map((x: any) => ({ id: x.id, type: 'xp_transaction' as const, data: x, created_at: x.created_at, is_hidden: false, cached_at: now })),
-                ...initialHotSeatQuestions.map((q: any) => ({ id: q.id, type: 'hot_seat_question' as const, data: q, created_at: q.created_at, is_hidden: false, cached_at: now })),
+                ...confessions.map((c: any) => ({ id: c.id, type: 'confession' as const, data: c, created_at: c.created_at, is_hidden: false, cached_at: now })),
+                ...dykmScores.map((s: any) => ({ id: s.id, type: 'dykm_score' as const, data: s, created_at: s.created_at, is_hidden: false, cached_at: now })),
+                ...lobbyEvents.map((e: any) => ({ id: e.id, type: 'lobby_event' as const, data: e, created_at: e.created_at, is_hidden: false, cached_at: now })),
+                ...xpTransactions.map((x: any) => ({ id: x.id, type: 'xp_transaction' as const, data: x, created_at: x.created_at, is_hidden: false, cached_at: now })),
+                ...hotSeatQuestions.map((q: any) => ({ id: q.id, type: 'hot_seat_question' as const, data: q, created_at: q.created_at, is_hidden: false, cached_at: now })),
             ]
             if (allItems.length > 0) {
                 db.notifications.bulkPut(allItems).catch(() => { })
             }
         }
-
         syncDexie()
-    }, []) // Only on mount
+    }, [confessions, dykmScores, lobbyEvents, xpTransactions, hotSeatQuestions, turnEvents, friendRequests, friendResponses, lobbyJoinResponses, hotSeatAnswers, gameInvites])
 
-    // Fetch hosted sessions for realtime filtering
     useEffect(() => {
         const fetchSessions = async () => {
             const { data } = await supabase
@@ -188,204 +168,84 @@ export default function NotificationsClient({
                 .eq('host_id', profileId)
             if (data) setHotSeatSessionIds(data.map(s => s.id))
         }
-        fetchSessions()
+        if (profileId) fetchSessions()
     }, [profileId])
 
-    // Real-time updates for the list
     useEffect(() => {
         if (!profileId) return
 
         const channel = supabase
             .channel(`notifications-list-${profileId}`)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'confessions',
-                filter: `profile_id=eq.${profileId}`
-            }, (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    setConfessions(prev => [payload.new, ...prev])
-                } else if (payload.eventType === 'UPDATE') {
-                    setConfessions(prev => prev.map(c => c.id === payload.new.id ? payload.new : c))
-                } else if (payload.eventType === 'DELETE') {
-                    setConfessions(prev => prev.filter(c => c.id !== payload.old.id))
-                }
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'confessions', filter: `profile_id=eq.${profileId}` }, (payload) => {
+                if (payload.eventType === 'INSERT') setConfessions(prev => [payload.new, ...prev])
+                else if (payload.eventType === 'UPDATE') setConfessions(prev => prev.map(c => c.id === payload.new.id ? payload.new : c))
+                else if (payload.eventType === 'DELETE') setConfessions(prev => prev.filter(c => c.id !== payload.old.id))
             })
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'dykm_scores',
-                filter: `quiz_owner_id=eq.${profileId}`
-            }, (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    setDykmScores(prev => [payload.new, ...prev])
-                } else if (payload.eventType === 'UPDATE') {
-                    setDykmScores(prev => prev.map(s => s.id === payload.new.id ? payload.new : s))
-                } else if (payload.eventType === 'DELETE') {
-                    setDykmScores(prev => prev.filter(s => s.id !== payload.old.id))
-                }
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'dykm_scores', filter: `quiz_owner_id=eq.${profileId}` }, (payload) => {
+                if (payload.eventType === 'INSERT') setDykmScores(prev => [payload.new, ...prev])
+                else if (payload.eventType === 'UPDATE') setDykmScores(prev => prev.map(s => s.id === payload.new.id ? payload.new : s))
+                else if (payload.eventType === 'DELETE') setDykmScores(prev => prev.filter(s => s.id !== payload.old.id))
                 refreshUnreadCount()
             })
-            // XP Transactions
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'xp_transactions',
-                filter: `user_id=eq.${profileId}`
-            }, (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    setXpTransactions(prev => [payload.new, ...prev])
-                } else if (payload.eventType === 'UPDATE') {
-                    setXpTransactions(prev => prev.map(x => x.id === payload.new.id ? payload.new : x))
-                }
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'xp_transactions', filter: `user_id=eq.${profileId}` }, (payload) => {
+                if (payload.eventType === 'INSERT') setXpTransactions(prev => [payload.new, ...prev])
+                else if (payload.eventType === 'UPDATE') setXpTransactions(prev => prev.map(x => x.id === payload.new.id ? payload.new : x))
                 refreshUnreadCount()
             })
-            // Hot Seat Questions (host view — new question + asker view — answer resolved)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'hot_seat_questions'
-            }, async (payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'hot_seat_questions' }, async (payload) => {
                 const q = payload.new
-                // New question we host
-                if (payload.eventType === 'INSERT' && hotSeatSessionIds.includes(q.session_id)) {
-                    const { data } = await supabase
-                        .from('hot_seat_questions')
-                        .select('*, session:hot_seat_sessions(name, slug)')
-                        .eq('id', q.id)
-                        .single()
+                if (payload.eventType === 'INSERT' && hotSeatSessionIds.includes(q?.session_id)) {
+                    const { data } = await supabase.from('hot_seat_questions').select('*, session:hot_seat_sessions(name, slug)').eq('id', q.id).single()
                     if (data) setHotSeatQuestions(prev => [data, ...prev])
                 }
-                // My question got resolved
-                if (
-                    payload.eventType === 'UPDATE' &&
-                    q.asker_id === profileId &&
-                    ['answered', 'skipped', 'timed_out'].includes(q.status)
-                ) {
-                    const { data } = await supabase
-                        .from('hot_seat_questions')
-                        .select('*, session:hot_seat_sessions(name, slug)')
-                        .eq('id', q.id)
-                        .single()
-                    if (data) {
-                        setHotSeatAnswers(prev =>
-                            prev.some(a => a.id === data.id) ? prev.map(a => a.id === data.id ? data : a) : [data, ...prev]
-                        )
-                    }
+                if (payload.eventType === 'UPDATE' && q?.asker_id === profileId && ['answered', 'skipped', 'timed_out'].includes(q?.status)) {
+                    const { data } = await supabase.from('hot_seat_questions').select('*, session:hot_seat_sessions(name, slug)').eq('id', q.id).single()
+                    if (data) setHotSeatAnswers(prev => prev.some(a => a.id === data.id) ? prev.map(a => a.id === data.id ? data : a) : [data, ...prev])
                 }
                 refreshUnreadCount()
             })
-            // Lobby turn events
-            .on('postgres_changes', {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'tod_turn_events',
-                filter: `user_id=eq.${profileId}`
-            }, async (payload) => {
-                const { data } = await supabase
-                    .from('tod_turn_events')
-                    .select('*, lobby:tod_lobbies(name, slug)')
-                    .eq('id', payload.new.id)
-                    .single()
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tod_turn_events', filter: `user_id=eq.${profileId}` }, async (payload) => {
+                const { data } = await supabase.from('tod_turn_events').select('*, lobby:tod_lobbies(name, slug)').eq('id', payload.new.id).single()
                 if (data) setTurnEvents(prev => [data, ...prev])
                 refreshUnreadCount()
             })
-            .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'tod_turn_events',
-                filter: `user_id=eq.${profileId}`
-            }, (payload) => {
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tod_turn_events', filter: `user_id=eq.${profileId}` }, (payload) => {
                 setTurnEvents(prev => prev.map(t => t.id === payload.new.id ? payload.new : t))
                 refreshUnreadCount()
             })
-            // Lobby join responses (rejected/banned)
-            .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'tod_participants',
-                filter: `user_id=eq.${profileId}`
-            }, async (payload) => {
-                if (!['rejected', 'banned'].includes(payload.new.status)) return
-                const { data } = await supabase
-                    .from('tod_participants')
-                    .select('*, lobby:tod_lobbies(name, slug)')
-                    .eq('id', payload.new.id)
-                    .single()
-                if (data) {
-                    setLobbyJoinResponses(prev =>
-                        prev.some(p => p.id === data.id) ? prev.map(p => p.id === data.id ? data : p) : [data, ...prev]
-                    )
-                }
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tod_participants', filter: `user_id=eq.${profileId}` }, async (payload) => {
+                if (!['rejected', 'banned'].includes(payload.new?.status)) return
+                const { data } = await supabase.from('tod_participants').select('*, lobby:tod_lobbies(name, slug)').eq('id', payload.new.id).single()
+                if (data) setLobbyJoinResponses(prev => prev.some(p => p.id === data.id) ? prev.map(p => p.id === data.id ? data : p) : [data, ...prev])
                 refreshUnreadCount()
             })
-            // Friend requests (incoming)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'friendships',
-                filter: `addressee_id=eq.${profileId}`
-            }, async (payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `addressee_id=eq.${profileId}` }, async (payload) => {
                 if (payload.eventType === 'DELETE') {
                     setFriendRequests(prev => prev.filter(f => f.id !== payload.old.id))
                     return
                 }
-                if (payload.new.status !== 'pending') {
+                if (payload.new?.status !== 'pending') {
                     setFriendRequests(prev => prev.filter(f => f.id !== payload.new.id))
                     refreshUnreadCount()
                     return
                 }
-                const { data } = await supabase
-                    .from('friendships')
-                    .select('*, profile:profiles!friendships_requester_id_fkey(username, slug, avatar_url)')
-                    .eq('id', payload.new.id)
-                    .single()
-                if (data) {
-                    setFriendRequests(prev =>
-                        prev.some(f => f.id === data.id) ? prev.map(f => f.id === data.id ? data : f) : [data, ...prev]
-                    )
-                }
+                const { data } = await supabase.from('friendships').select('*, profile:profiles!friendships_requester_id_fkey(username, slug, avatar_url)').eq('id', payload.new.id).single()
+                if (data) setFriendRequests(prev => prev.some(f => f.id === data.id) ? prev.map(f => f.id === data.id ? data : f) : [data, ...prev])
                 refreshUnreadCount()
             })
-            // Friend request responses (I'm requester, accepted)
-            .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'friendships',
-                filter: `requester_id=eq.${profileId}`
-            }, async (payload) => {
-                if (payload.new.status !== 'accepted') return
-                const { data } = await supabase
-                    .from('friendships')
-                    .select('*, profile:profiles!friendships_addressee_id_fkey(username, slug, avatar_url)')
-                    .eq('id', payload.new.id)
-                    .single()
-                if (data) {
-                    setFriendResponses(prev => prev.some(f => f.id === data.id) ? prev : [data, ...prev])
-                }
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'friendships', filter: `requester_id=eq.${profileId}` }, async (payload) => {
+                if (payload.new?.status !== 'accepted') return
+                const { data } = await supabase.from('friendships').select('*, profile:profiles!friendships_addressee_id_fkey(username, slug, avatar_url)').eq('id', payload.new.id).single()
+                if (data) setFriendResponses(prev => prev.some(f => f.id === data.id) ? prev : [data, ...prev])
                 refreshUnreadCount()
             })
-            // Game invites (dedicated table)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'game_invites',
-                filter: `invitee_id=eq.${profileId}`
-            }, async (payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'game_invites', filter: `invitee_id=eq.${profileId}` }, async (payload) => {
                 if (payload.eventType === 'DELETE') {
                     setGameInvites(prev => prev.filter(i => i.id !== payload.old.id))
                     return
                 }
-                const { data } = await supabase
-                    .from('game_invites')
-                    .select('*, inviter:profiles!game_invites_inviter_id_fkey(username, slug, avatar_url)')
-                    .eq('id', payload.new.id)
-                    .single()
-                if (data) {
-                    setGameInvites(prev =>
-                        prev.some(i => i.id === data.id) ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]
-                    )
-                }
+                const { data } = await supabase.from('game_invites').select('*, inviter:profiles!game_invites_inviter_id_fkey(username, slug, avatar_url)').eq('id', payload.new.id).single()
+                if (data) setGameInvites(prev => prev.some(i => i.id === data.id) ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev])
                 refreshUnreadCount()
             })
             .subscribe()
@@ -396,9 +256,8 @@ export default function NotificationsClient({
     }, [profileId, supabase, hotSeatSessionIds, refreshUnreadCount])
 
     const handleSelectMessage = async (item: any) => {
-        // Mark as read if unread
+        if (!item) return
         if (!item.is_read) {
-            // Optimistic UI update
             if (item.type === 'message') setConfessions(prev => prev.map(c => c.id === item.id ? { ...c, is_read: true } : c))
             else if (item.type === 'dykm') setDykmScores(prev => prev.map(s => s.id === item.id ? { ...s, is_read: true } : s))
             else if (item.type === 'xp') setXpTransactions(prev => prev.map(x => x.id === item.id ? { ...x, is_read: true } : x))
@@ -407,7 +266,6 @@ export default function NotificationsClient({
             else if (item.type === 'tod_turn') setTurnEvents(prev => prev.map(t => t.id === item.id ? { ...t, is_read: true } : t))
             else if (item.type === 'game_invite') setGameInvites(prev => prev.map(i => i.id === item.id ? { ...i, is_read: true } : i))
             else {
-                // notification_reads-backed types: track read state in the Set
                 setReadNotificationIds(prev => new Set(prev).add(`${item.type}:${item.id}`))
             }
 
@@ -417,13 +275,9 @@ export default function NotificationsClient({
 
         if (item.type === 'message') {
             if (item.is_dm) {
-                const match = item.message.match(/^\[DM:[a-f0-9-]+:?([^\]]*)\]/)
+                const match = item.message?.match(/^\[DM:[a-f0-9-]+:?([^\]]*)\]/)
                 const senderUsername = match ? match[1] : null
-                if (senderUsername) {
-                    router.push(`/messages/${senderUsername}`)
-                } else {
-                    router.push(`/inbox/${item.id}`)
-                }
+                router.push(senderUsername ? `/messages/${senderUsername}` : `/inbox/${item.id}`)
             } else {
                 router.push(`/inbox/${item.id}`)
             }
@@ -447,7 +301,6 @@ export default function NotificationsClient({
     }
 
     const handleMarkAllRead = async () => {
-        // Optimistic UI update
         setConfessions(prev => prev.map(c => ({ ...c, is_read: true })))
         setDykmScores(prev => prev.map(s => ({ ...s, is_read: true })))
         setXpTransactions(prev => prev.map(x => ({ ...x, is_read: true })))
@@ -466,7 +319,7 @@ export default function NotificationsClient({
         setUnreadCount(0)
 
         const result = await markAllNotificationsAsRead()
-        if (result.success) {
+        if (result?.success) {
             toast.success("All notifications marked as read")
             await refreshUnreadCount()
         } else {
@@ -476,9 +329,8 @@ export default function NotificationsClient({
 
     const handleDelete = async (e: React.MouseEvent, item: any) => {
         e.stopPropagation()
-        console.log('handleDelete triggered for:', { id: item.id, type: item.type })
+        if (!item) return
 
-        // Optimistic update
         const originalConfessions = [...confessions]
         const originalDykmScores = [...dykmScores]
         const originalLobbyEvents = [...lobbyEvents]
@@ -489,35 +341,15 @@ export default function NotificationsClient({
         const originalFriendRequests = [...friendRequests]
         const originalFriendResponses = [...friendResponses]
 
-        if (item.type === 'message') {
-            setConfessions(prev => prev.filter(c => c.id !== item.id))
-        } else if (item.type === 'dykm') {
-            setDykmScores(prev => prev.filter(s => s.id !== item.id))
-        } else if (item.type === 'lobby') {
-            setLobbyEvents(prev => prev.filter(l => l.id !== item.id))
-        } else if (item.type === 'xp') {
-            setXpTransactions(prev => prev.filter(x => x.id !== item.id))
-        } else if (item.type === 'hot_seat') {
-            setHotSeatQuestions(prev => prev.filter(q => q.id !== item.id))
-        } else if (item.type === 'tod_turn') {
-            setTurnEvents(prev => prev.filter(t => t.id !== item.id))
-        } else if (item.type === 'game_invite') {
-            setGameInvites(prev => prev.filter(i => i.id !== item.id))
-        } else if (item.type === 'friend_request') {
-            setFriendRequests(prev => prev.filter(f => f.id !== item.id))
-        } else if (item.type === 'friend_request_response') {
-            setFriendResponses(prev => prev.filter(f => f.id !== item.id))
-        }
-        // Note: dismissing a friend_request / friend_request_response only clears the
-        // notification (via hidden_notifications) — it does NOT accept/decline the
-        // underlying friend request, which lives in the `friendships` table and stays
-        // untouched here. Accepting/declining is a separate action (see actions/friends.ts).
-        //
-        // lobby_join_response / hot_seat_answer still can't be deleted here — they're
-        // derived from shared/relationship rows (a participant status, a question's
-        // resolution) and resolve themselves (status changes) rather than needing a
-        // manual delete. Delete button is conditionally hidden for those two types below
-        // (see isHideable).
+        if (item.type === 'message') setConfessions(prev => prev.filter(c => c.id !== item.id))
+        else if (item.type === 'dykm') setDykmScores(prev => prev.filter(s => s.id !== item.id))
+        else if (item.type === 'lobby') setLobbyEvents(prev => prev.filter(l => l.id !== item.id))
+        else if (item.type === 'xp') setXpTransactions(prev => prev.filter(x => x.id !== item.id))
+        else if (item.type === 'hot_seat') setHotSeatQuestions(prev => prev.filter(q => q.id !== item.id))
+        else if (item.type === 'tod_turn') setTurnEvents(prev => prev.filter(t => t.id !== item.id))
+        else if (item.type === 'game_invite') setGameInvites(prev => prev.filter(i => i.id !== item.id))
+        else if (item.type === 'friend_request') setFriendRequests(prev => prev.filter(f => f.id !== item.id))
+        else if (item.type === 'friend_request_response') setFriendResponses(prev => prev.filter(f => f.id !== item.id))
 
         if (db?.notifications) {
             db.notifications.update(item.id, { is_hidden: true }).catch(() => { })
@@ -525,10 +357,9 @@ export default function NotificationsClient({
 
         try {
             const result = await deleteNotification(item.id, item.type as any)
-            if (result.success) {
+            if (result?.success) {
                 refreshUnreadCount().catch(console.error)
             } else {
-                console.error('Server delete failed:', result)
                 if (item.type === 'message') setConfessions(originalConfessions)
                 else if (item.type === 'dykm') setDykmScores(originalDykmScores)
                 else if (item.type === 'lobby') setLobbyEvents(originalLobbyEvents)
@@ -539,7 +370,7 @@ export default function NotificationsClient({
                 else if (item.type === 'friend_request') setFriendRequests(originalFriendRequests)
                 else if (item.type === 'friend_request_response') setFriendResponses(originalFriendResponses)
 
-                db.notifications.update(item.id, { is_hidden: false }).catch(() => { })
+                if (db?.notifications) db.notifications.update(item.id, { is_hidden: false }).catch(() => { })
                 toast.error("Failed to delete notification")
             }
         } catch {
@@ -570,11 +401,8 @@ export default function NotificationsClient({
         const key = itemKey(item)
         setSelectedItems(prev => {
             const next = new Set(prev)
-            if (next.has(key)) {
-                next.delete(key)
-            } else {
-                next.add(key)
-            }
+            if (next.has(key)) next.delete(key)
+            else next.add(key)
             if (next.size === 0) setSelectionMode(false)
             return next
         })
@@ -596,7 +424,6 @@ export default function NotificationsClient({
             return
         }
 
-        // Optimistic updates
         setConfessions(prev => prev.map(c => selectedItems.has(`message-${c.id}`) ? { ...c, is_read: true } : c))
         setDykmScores(prev => prev.map(s => selectedItems.has(`dykm-${s.id}`) ? { ...s, is_read: true } : s))
         setXpTransactions(prev => prev.map(x => selectedItems.has(`xp-${x.id}`) ? { ...x, is_read: true } : x))
@@ -633,7 +460,6 @@ export default function NotificationsClient({
             return
         }
 
-        // Optimistic updates
         setConfessions(prev => prev.filter(c => !selectedItems.has(`message-${c.id}`)))
         setDykmScores(prev => prev.filter(s => !selectedItems.has(`dykm-${s.id}`)))
         setLobbyEvents(prev => prev.filter(l => !selectedItems.has(`lobby-${l.id}`)))
@@ -655,7 +481,7 @@ export default function NotificationsClient({
 
         try {
             const results = await Promise.all(itemsToDelete.map(item => deleteNotification(item.id, item.type as any)))
-            const failedCount = results.filter(r => !r.success).length
+            const failedCount = results.filter(r => !r?.success).length
             if (failedCount > 0) {
                 toast.error(`Failed to delete ${failedCount} notification${failedCount > 1 ? 's' : ''}`)
             } else {
@@ -667,9 +493,6 @@ export default function NotificationsClient({
         }
     }
 
-    // Game invites come from their own table now — map them straight into item
-    // shape (still tagged isInvite/inviteMeta so the render/handler code below
-    // that keys off those fields doesn't need to change).
     const gameInviteItems = gameInvites.map(inv => ({
         ...inv,
         type: 'game_invite' as const,
@@ -683,72 +506,45 @@ export default function NotificationsClient({
         category: inv.game_type === 'tod' ? 'Lobbies' : 'Hot Seat',
     }))
 
-    // Combine and sort notifications
     const allNotifications = [
-        ...confessions.map(c => ({
-            ...c,
-            type: 'message',
-            category: 'Messages',
-            is_dm: c.message.startsWith('[DM:')
-        })),
+        ...confessions.map(c => ({ ...c, type: 'message', category: 'Messages', is_dm: c.message?.startsWith('[DM:') || false })),
         ...dykmScores.map(s => ({ ...s, type: 'dykm', category: 'Games' })),
         ...lobbyEvents.map(e => ({ ...e, type: 'lobby', category: 'Lobbies' })),
         ...xpTransactions.map(x => ({ ...x, xpType: x.type, type: 'xp', category: 'XP' })),
         ...gameInviteItems,
         ...hotSeatQuestions.map(q => ({ ...q, type: 'hot_seat', category: 'Hot Seat' })),
         ...turnEvents.map(t => ({ ...t, type: 'tod_turn', category: 'Lobbies' })),
-        ...friendRequests.map(f => ({
-            ...f,
-            type: 'friend_request',
-            category: 'Friends',
-            is_read: readNotificationIds.has(`friend_request:${f.id}`)
-        })),
-        ...friendResponses.map(f => ({
-            ...f,
-            type: 'friend_request_response',
-            category: 'Friends',
-            is_read: readNotificationIds.has(`friend_request_response:${f.id}`)
-        })),
-        ...lobbyJoinResponses.map(p => ({
-            ...p,
-            type: 'lobby_join_response',
-            category: 'Lobbies',
-            is_read: readNotificationIds.has(`lobby_join_response:${p.id}`)
-        })),
-        ...hotSeatAnswers.map(q => ({
-            ...q,
-            type: 'hot_seat_answer',
-            category: 'Hot Seat',
-            is_read: readNotificationIds.has(`hot_seat_answer:${q.id}`)
-        })),
-    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        ...friendRequests.map(f => ({ ...f, type: 'friend_request', category: 'Friends', is_read: readNotificationIds.has(`friend_request:${f.id}`) })),
+        ...friendResponses.map(f => ({ ...f, type: 'friend_request_response', category: 'Friends', is_read: readNotificationIds.has(`friend_request_response:${f.id}`) })),
+        ...lobbyJoinResponses.map(p => ({ ...p, type: 'lobby_join_response', category: 'Lobbies', is_read: readNotificationIds.has(`lobby_join_response:${p.id}`) })),
+        ...hotSeatAnswers.map(q => ({ ...q, type: 'hot_seat_answer', category: 'Hot Seat', is_read: readNotificationIds.has(`hot_seat_answer:${q.id}`) })),
+    ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
 
-    const filteredNotifications = allNotifications.filter(n =>
-        activeTab === "All" || n.category === activeTab
-    )
+    const filteredNotifications = allNotifications.filter(n => activeTab === "All" || n.category === activeTab)
 
     const handleJoinInvite = (e: React.MouseEvent, item: any) => {
         e.stopPropagation()
+        if (!item) return
         if (!item.is_read) {
             setGameInvites(prev => prev.map(i => i.id === item.id ? { ...i, is_read: true } : i))
             markNotificationAsRead(item.id, 'game_invite').catch(() => { })
             refreshUnreadCount().catch(() => { })
         }
-        router.push(getInvitePath(item.inviteMeta.gameUrl))
+        router.push(getInvitePath(item.inviteMeta?.gameUrl))
     }
 
     const handleReveal = async (scoreId: string) => {
         setIsRevealing(scoreId)
         try {
             const result = await revealDYKMRespondent(scoreId)
-            if (result.success) {
+            if (result?.success) {
                 setRevealedScores(prev => ({ ...prev, [scoreId]: true }))
                 toast.success("Identity revealed!")
                 router.refresh()
             } else {
-                toast.error(result.message || "Failed to reveal")
+                toast.error(result?.message || "Failed to reveal")
             }
-        } catch (error) {
+        } catch {
             toast.error("Something went wrong")
         } finally {
             setIsRevealing(null)
@@ -756,6 +552,7 @@ export default function NotificationsClient({
     }
 
     const getIcon = (item: any) => {
+        if (!item) return <Bell className="text-gray-500" size={18} />
         switch (item.type) {
             case 'message':
                 if (item.is_dm) return <MessageSquare className="text-blue-500" size={18} />
@@ -771,7 +568,7 @@ export default function NotificationsClient({
                     ? <TrendingUp className="text-green-600 dark:text-green-400" size={18} />
                     : <TrendingDown className="text-red-600 dark:text-red-400" size={18} />
             case 'game_invite':
-                return item.inviteMeta.gameType === 'tod'
+                return item.inviteMeta?.gameType === 'tod'
                     ? <Dices className="text-indigo-500" size={18} />
                     : <Flame className="text-amber-500" size={18} />
             case 'hot_seat':
@@ -779,9 +576,7 @@ export default function NotificationsClient({
             case 'tod_turn':
                 return <Users className="text-green-500" size={18} />
             case 'lobby_join_response':
-                return item.status === 'banned'
-                    ? <Ban className="text-red-500" size={18} />
-                    : <X className="text-orange-500" size={18} />
+                return item.status === 'banned' ? <Ban className="text-red-500" size={18} /> : <X className="text-orange-500" size={18} />
             case 'friend_request':
                 return <Users className="text-blue-500" size={18} />
             case 'friend_request_response':
@@ -793,7 +588,8 @@ export default function NotificationsClient({
         }
     }
 
-    const getTitle = (item: any) => {
+    const getTitle = (item: any): React.ReactNode => {
+        if (!item) return "Notification"
         switch (item.type) {
             case 'message':
                 if (item.is_dm) return "New Direct Message"
@@ -801,7 +597,7 @@ export default function NotificationsClient({
                 if (item.message_type === 'anonymous') return "New Anonymous Message"
                 return "New Confession"
             case 'dykm':
-                return `Quiz: ${item.responder_name} scored ${item.score}/${item.total_questions}`
+                return `Quiz: ${item.responder_name || 'Someone'} scored ${item.score || 0}/${item.total_questions || 0}`
             case 'lobby': {
                 const lobbyName = item.tod_lobbies?.name ? ` in ${item.tod_lobbies.name}` : ''
                 const content = (item.content || '').toLowerCase()
@@ -809,16 +605,22 @@ export default function NotificationsClient({
                 if (content.includes('your turn') && content.includes('target')) return `🎯 It's your turn as target${lobbyName}!`
                 if (content.includes('your turn') && content.includes('ask')) return `🎲 It's your turn to ask${lobbyName}!`
                 if (content.includes('your turn')) return `🎯 It's your turn${lobbyName}!`
-                return item.content + (lobbyName ? ` ${lobbyName}` : '')
+                return (item.content || '') + (lobbyName ? ` ${lobbyName}` : '')
             }
             case 'xp': {
                 const sign = item.xpType === 'earn' ? '+' : '-'
-                return `${sign}${Math.abs(item.amount)} Stars — ${item.reason}`
+                return (
+                    <span className="inline-flex items-center gap-1 flex-wrap">
+                        <span>{sign}{Math.abs(item.amount || 0)}</span>
+                        <Star size={14} className="fill-amber-400 text-amber-500 shrink-0 inline-block align-middle select-none" />
+                        <span className="opacity-80">— {item.reason || 'Activity Update'}</span>
+                    </span>
+                )
             }
             case 'game_invite':
-                return item.inviteMeta.gameType === 'tod'
-                    ? `🎲 @${item.inviteMeta.inviterUsername} invited you to play Truth or Dare`
-                    : `🔥 @${item.inviteMeta.inviterUsername} invited you to Hot Seat`
+                return item.inviteMeta?.gameType === 'tod'
+                    ? `🎲 @${item.inviteMeta?.inviterUsername || 'Someone'} invited you to play Truth or Dare`
+                    : `🔥 @${item.inviteMeta?.inviterUsername || 'Someone'} invited you to Hot Seat`
             case 'hot_seat':
                 return `Hot Seat: New Question! 🔥`
             case 'tod_turn': {
@@ -844,12 +646,11 @@ export default function NotificationsClient({
         }
     }
 
-    const isHideable = (type: string) =>
-        !['lobby_join_response', 'hot_seat_answer'].includes(type)
+    const isHideable = (type: string) => {
+        if (!type) return false
+        return !['lobby_join_response', 'hot_seat_answer'].includes(type)
+    }
 
-    // Clear per-type wording for the delete button — dismissing a friend request only
-    // clears the notification, it doesn't decline the request itself, so the label and
-    // tooltip say so explicitly rather than implying the request goes away too.
     const getDeleteLabel = (type: string) => {
         switch (type) {
             case 'friend_request':
@@ -863,25 +664,14 @@ export default function NotificationsClient({
 
     return (
         <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24">
-            {/* Header */}
             <div className="bg-white/80 dark:bg-[#1a1429]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 sticky top-0 z-30 px-4 py-4 flex items-center gap-4">
                 {selectionMode ? (
                     <>
-                        <button
-                            onClick={handleCancelSelection}
-                            className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors"
-                        >
+                        <button onClick={handleCancelSelection} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
                             <XCircle size={20} className="text-slate-600 dark:text-slate-300" />
                         </button>
-                        <h1 className="text-sm font-bold text-slate-900 dark:text-white flex-1">
-                            {selectedItems.size} selected
-                        </h1>
-                        <button
-                            onClick={handleSelectAll}
-                            className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 px-3 py-2 rounded-xl transition-colors"
-                        >
-                            Select all
-                        </button>
+                        <h1 className="text-sm font-bold text-slate-900 dark:text-white flex-1">{selectedItems.size} selected</h1>
+                        <button onClick={handleSelectAll} className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 px-3 py-2 rounded-xl transition-colors">Select all</button>
                     </>
                 ) : (
                     <>
@@ -891,31 +681,15 @@ export default function NotificationsClient({
                         <h1 className="text-xl font-bold text-slate-900 dark:text-white flex-1">Notifications</h1>
 
                         <div className="relative" ref={filterRef}>
-                            <button
-                                onClick={() => setIsFilterOpen(prev => !prev)}
-                                className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 px-3 py-2 rounded-xl transition-colors"
-                            >
+                            <button onClick={() => setIsFilterOpen(prev => !prev)} className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 px-3 py-2 rounded-xl transition-colors">
                                 {activeTab}
                                 <ChevronDown size={14} className={`transition-transform ${isFilterOpen ? "rotate-180" : ""}`} />
                             </button>
                             <AnimatePresence>
                                 {isFilterOpen && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -6, scale: 0.97 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: -6, scale: 0.97 }}
-                                        transition={{ duration: 0.15 }}
-                                        className="absolute right-0 mt-2 w-40 bg-white dark:bg-[#1a1429] rounded-xl border border-slate-200 dark:border-white/10 shadow-xl z-50 overflow-hidden py-1"
-                                    >
+                                    <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.15 }} className="absolute right-0 mt-2 w-40 bg-white dark:bg-[#1a1429] rounded-xl border border-slate-200 dark:border-white/10 shadow-xl z-50 overflow-hidden py-1">
                                         {(["All", "Messages", "Games", "Lobbies", "XP", "Hot Seat", "Friends"] as Tab[]).map((tab) => (
-                                            <button
-                                                key={tab}
-                                                onClick={() => { setActiveTab(tab); setIsFilterOpen(false) }}
-                                                className={`w-full text-left px-3 py-2 text-xs font-bold transition-colors ${activeTab === tab
-                                                    ? "bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                                                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
-                                                    }`}
-                                            >
+                                            <button key={tab} onClick={() => { setActiveTab(tab); setIsFilterOpen(false) }} className={`w-full text-left px-3 py-2 text-xs font-bold transition-colors ${activeTab === tab ? "bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400" : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"}`}>
                                                 {tab}
                                             </button>
                                         ))}
@@ -924,11 +698,7 @@ export default function NotificationsClient({
                             </AnimatePresence>
                         </div>
 
-                        <button
-                            onClick={handleMarkAllRead}
-                            title="Mark all as read"
-                            className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-xl transition-colors"
-                        >
+                        <button onClick={handleMarkAllRead} title="Mark all as read" className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-xl transition-colors">
                             <CheckCircle2 size={18} />
                         </button>
                     </>
@@ -936,7 +706,6 @@ export default function NotificationsClient({
             </div>
 
             <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
-                {/* Notifications List */}
                 <div className="space-y-3">
                     <AnimatePresence mode="popLayout">
                         {filteredNotifications.length > 0 ? (
@@ -952,11 +721,8 @@ export default function NotificationsClient({
                                             longPressTriggered.current = false
                                             return
                                         }
-                                        if (selectionMode) {
-                                            toggleSelectItem(item)
-                                        } else {
-                                            handleSelectMessage(item)
-                                        }
+                                        if (selectionMode) toggleSelectItem(item)
+                                        else handleSelectMessage(item)
                                     }}
                                     onMouseDown={() => handlePressStart(item)}
                                     onMouseUp={handlePressEnd}
@@ -970,21 +736,13 @@ export default function NotificationsClient({
                                 >
                                     {selectionMode ? (
                                         <div className="absolute top-4 left-2 z-10">
-                                            {selectedItems.has(itemKey(item)) ? (
-                                                <CheckCircle2 size={18} className="text-purple-600 dark:text-purple-400" />
-                                            ) : (
-                                                <Circle size={18} className="text-slate-300 dark:text-slate-600" />
-                                            )}
+                                            {selectedItems.has(itemKey(item)) ? <CheckCircle2 size={18} className="text-purple-600 dark:text-purple-400" /> : <Circle size={18} className="text-slate-300 dark:text-slate-600" />}
                                         </div>
                                     ) : !item.is_read && (
                                         <div className="absolute top-4 left-2 w-1.5 h-1.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
                                     )}
                                     {isHideable(item.type) && !selectionMode && (
-                                        <button
-                                            onClick={(e) => handleDelete(e, item)}
-                                            className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 z-10"
-                                            title={getDeleteLabel(item.type)}
-                                        >
+                                        <button onClick={(e) => handleDelete(e, item)} className="absolute top-2 right-2 p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 z-10" title={getDeleteLabel(item.type)}>
                                             <Trash2 size={16} />
                                         </button>
                                     )}
@@ -993,24 +751,20 @@ export default function NotificationsClient({
                                         <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center border ${item.type === 'dykm'
                                             ? 'bg-blue-100 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/30'
                                             : item.type === 'game_invite'
-                                                ? item.inviteMeta.gameType === 'tod'
-                                                    ? 'bg-indigo-500/10 border-slate-100 dark:border-white/5'
-                                                    : 'bg-amber-500/10 border-slate-100 dark:border-white/5'
+                                                ? item.inviteMeta?.gameType === 'tod' ? 'bg-indigo-500/10 border-slate-100 dark:border-white/5' : 'bg-amber-500/10 border-slate-100 dark:border-white/5'
                                                 : item.type === 'xp'
-                                                    ? item.xpType === 'earn'
-                                                        ? 'bg-green-100/50 dark:bg-green-500/20 border-slate-100 dark:border-white/5'
-                                                        : 'bg-red-100/50 dark:bg-red-500/20 border-slate-100 dark:border-white/5'
+                                                    ? item.xpType === 'earn' ? 'bg-green-100/50 dark:bg-green-500/20 border-slate-100 dark:border-white/5' : 'bg-red-100/50 dark:bg-red-500/20 border-slate-100 dark:border-white/5'
                                                     : ['hot_seat', 'hot_seat_answer'].includes(item.type) ? 'bg-amber-500/10 border-slate-100 dark:border-white/5' : 'bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/5'
                                             }`}>
                                             {getIcon(item)}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-start gap-2">
-                                                <h3 className="font-bold text-slate-900 dark:text-white text-sm line-clamp-1">
+                                                <div className="font-bold text-slate-900 dark:text-white text-sm line-clamp-1">
                                                     {getTitle(item)}
-                                                </h3>
+                                                </div>
                                                 <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap pt-0.5">
-                                                    {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                                                    {formatDistanceToNow(new Date(item.created_at || 0), { addSuffix: true })}
                                                 </span>
                                             </div>
 
@@ -1022,36 +776,27 @@ export default function NotificationsClient({
 
                                             {item.type === 'hot_seat' && (
                                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                                    In session: <span className="text-amber-500 font-bold">{item.session?.name}</span>
+                                                    In session: <span className="text-amber-500 font-bold">{item.session?.name || 'Active Session'}</span>
                                                 </p>
                                             )}
 
                                             {item.type === 'hot_seat_answer' && (
                                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                                    In session: <span className="text-amber-500 font-bold">{item.session?.name}</span>
+                                                    In session: <span className="text-amber-500 font-bold">{item.session?.name || 'Active Session'}</span>
                                                 </p>
                                             )}
 
                                             {item.type === 'game_invite' && (
                                                 <>
                                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                                        {item.inviteMeta.gameType === 'tod' ? '🎲' : '🔥'} Play "{item.inviteMeta.gameLabel}"
+                                                        {item.inviteMeta?.gameType === 'tod' ? '🎲' : '🔥'} Play "{item.inviteMeta?.gameLabel}"
                                                     </p>
                                                     <div className="mt-3 flex items-center gap-2">
-                                                        <button
-                                                            onClick={(e) => handleJoinInvite(e, item)}
-                                                            className={`flex-1 flex items-center justify-center gap-1.5 text-[11px] font-bold text-white px-3 py-2 rounded-xl transition-all active:scale-95 shadow-sm ${item.inviteMeta.gameType === 'tod'
-                                                                ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200/50'
-                                                                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200/50'
-                                                                }`}
-                                                        >
-                                                            {item.inviteMeta.gameType === 'tod' ? <Dices size={13} /> : <Flame size={13} />}
+                                                        <button onClick={(e) => handleJoinInvite(e, item)} className={`flex-1 flex items-center justify-center gap-1.5 text-[11px] font-bold text-white px-3 py-2 rounded-xl transition-all active:scale-95 shadow-sm ${item.inviteMeta?.gameType === 'tod' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200/50' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200/50'}`}>
+                                                            {item.inviteMeta?.gameType === 'tod' ? <Dices size={13} /> : <Flame size={13} />}
                                                             Join Now
                                                         </button>
-                                                        <button
-                                                            onClick={(e) => handleDelete(e, item)}
-                                                            className="px-3 py-2 rounded-xl text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
-                                                        >
+                                                        <button onClick={(e) => handleDelete(e, item)} className="px-3 py-2 rounded-xl text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors">
                                                             Dismiss
                                                         </button>
                                                     </div>
@@ -1072,23 +817,16 @@ export default function NotificationsClient({
                                                     </div>
 
                                                     {!revealedScores[item.id] && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleReveal(item.id); }}
-                                                            disabled={isRevealing === item.id}
-                                                            className={`text-[10px] font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${isPro
-                                                                ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm shadow-blue-200/50"
-                                                                : "bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                                                                }`}
-                                                        >
+                                                        <button onClick={(e) => { e.stopPropagation(); handleReveal(item.id); }} disabled={isRevealing === item.id} className={`text-[10px] font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${isPro ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm shadow-blue-200/50" : "bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10"}`}>
                                                             {isRevealing === item.id ? (
                                                                 <Loader2 size={12} className="animate-spin" />
                                                             ) : isPro ? (
                                                                 <><Eye size={12} /> Reveal Identity</>
                                                             ) : (
-                                                                <>
+                                                                <span className="inline-flex items-center gap-1">
                                                                     <Lock size={12} />
-                                                                    Reveal (5 <Star size={11} className="inline fill-current" />)
-                                                                </>
+                                                                    Reveal (5 <Star size={11} className="fill-amber-400 text-amber-500 inline shrink-0" />)
+                                                                </span>
                                                             )}
                                                         </button>
                                                     )}
@@ -1096,9 +834,7 @@ export default function NotificationsClient({
                                             )}
 
                                             {(item.type === 'message' || item.type === 'hot_seat' || item.type === 'hot_seat_answer') && (
-                                                <span
-                                                    className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-purple-600 dark:text-purple-400"
-                                                >
+                                                <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-purple-600 dark:text-purple-400">
                                                     View Details <ChevronRight size={12} />
                                                 </span>
                                             )}
@@ -1139,22 +875,12 @@ export default function NotificationsClient({
             {selectionMode && (
                 <div className="fixed bottom-24 left-4 right-4 max-w-xl mx-auto z-40">
                     <div className="bg-white dark:bg-[#1a1429] p-3 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 pl-2">
-                            {selectedItems.size} selected
-                        </span>
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 pl-2">{selectedItems.size} selected</span>
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={handleBatchMarkRead}
-                                disabled={selectedItems.size === 0}
-                                className="flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 px-3 py-2 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
+                            <button onClick={handleBatchMarkRead} disabled={selectedItems.size === 0} className="flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 px-3 py-2 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                                 <CheckCircle2 size={14} /> Mark read
                             </button>
-                            <button
-                                onClick={handleBatchDelete}
-                                disabled={selectedItems.size === 0}
-                                className="flex items-center gap-1.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-2 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
+                            <button onClick={handleBatchDelete} disabled={selectedItems.size === 0} className="flex items-center gap-1.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-2 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                                 <Trash2 size={14} /> Delete
                             </button>
                         </div>
@@ -1165,10 +891,7 @@ export default function NotificationsClient({
             {!isPro && showProCard && !selectionMode && (
                 <div className="fixed bottom-28 left-4 right-4 max-w-xl mx-auto">
                     <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-xl shadow-blue-500/20 text-white flex items-center justify-between gap-4 relative">
-                        <button
-                            onClick={() => setShowProCard(false)}
-                            className="absolute -top-2 -right-2 w-8 h-8 bg-white dark:bg-[#1a1429] text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center shadow-lg border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                        >
+                        <button onClick={() => setShowProCard(false)} className="absolute -top-2 -right-2 w-8 h-8 bg-white dark:bg-[#1a1429] text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center shadow-lg border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
                             <X size={16} />
                         </button>
                         <div className="flex items-center gap-3">
@@ -1188,5 +911,4 @@ export default function NotificationsClient({
             )}
         </div>
     )
-                                              }
-                
+}
