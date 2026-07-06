@@ -41,13 +41,18 @@ const NOTIFICATION_READS_TYPES: NotificationType[] = [
 // without touching the underlying data (the message, the game history, the XP ledger
 // all stay intact — only the notification entry disappears).
 //
-// Types that are *derived* from shared/relationship rows (friend_request,
-// friend_request_response, lobby_join_response, hot_seat_answer, lobby) are NOT
-// deletable here: the underlying row (a friendship, a participant status, a
-// question's resolution state) is shared with another user and represents real
-// app state, not just a notification. Deleting it would corrupt that state.
+// friend_request and friend_request_response are ALSO deletable here: even though
+// they're derived from the shared `friendships` row, hiding one only writes to
+// `hidden_notifications` (a per-user table) — it never touches `friendships` itself,
+// so dismissing the notification can't corrupt or resolve the actual friend request.
+// Accepting/declining the request is still a separate action (see actions/friends.ts).
+//
+// lobby_join_response and hot_seat_answer stay NOT deletable: their underlying row
+// (a participant status, a question's resolution state) is shared with another user
+// and represents real app state, not just a notification.
 const DELETABLE_TYPES: NotificationType[] = [
-  'message', 'dykm', 'xp', 'hot_seat', 'tod_turn', 'game_invite'
+  'message', 'dykm', 'xp', 'hot_seat', 'tod_turn', 'game_invite',
+  'friend_request', 'friend_request_response'
 ]
 
 // Maps a notification type to the value stored in hidden_notifications.notification_type.
@@ -63,6 +68,8 @@ const NOTIFICATION_TYPE_KEY: Record<string, string> = {
   hot_seat: 'hot_seat_question',
   tod_turn: 'tod_turn_event',
   game_invite: 'game_invite',
+  friend_request: 'friend_request',
+  friend_request_response: 'friend_request_response',
 }
 
 function notificationTypeKey(type: NotificationType): string {
