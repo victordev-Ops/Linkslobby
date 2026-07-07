@@ -1,5 +1,5 @@
 "use client"
-
+import { showXPNotification } from '@/components/XPNotification'
 import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -277,11 +277,14 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     }, [currentQuestion, status])
 
     const handleTimeout = async () => {
-        if (timerRef.current) clearInterval(timerRef.current)
-        if (!isHost || !currentQuestionRef.current) return
+    if (timerRef.current) clearInterval(timerRef.current)
+    if (!isHost || !currentQuestionRef.current) return
 
-        // Call server action for penalty — same path the Skip button uses
-        await penalizeHotSeatTimeout(session.id, currentQuestionRef.current.id)
+    // Call server action for penalty 
+    await penalizeHotSeatTimeout(session.id, currentQuestionRef.current.id)[span_2](start_span)[span_2](end_span)
+    
+    // NEW: Trigger the toast directly
+    showXPNotification(10, "Time Ran Out!", "spend", "XP Lost")
     }
 
     // Host Actions
@@ -316,16 +319,19 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     }
 
     const skipQuestion = async () => {
-        if (!currentQuestion || isSkipping || isAnswering) return
-        setIsSkipping(true)
-        try {
-            // Reuses the same penalty path handleTimeout calls on expiry,
-            // so a manual skip and a timeout behave identically.
-            await penalizeHotSeatTimeout(session.id, currentQuestion.id)
-        } finally {
-            setIsSkipping(false)
-        }
+    if (!currentQuestion || isSkipping || isAnswering) return[span_3](start_span)[span_3](end_span)
+    setIsSkipping(true)[span_4](start_span)[span_4](end_span)
+    try {
+        // Reuses the same penalty path handleTimeout calls on expiry
+        await penalizeHotSeatTimeout(session.id, currentQuestion.id)[span_5](start_span)[span_5](end_span)
+        
+        // NEW: Trigger the toast directly
+        showXPNotification(10, "Question Skipped", "spend", "XP Spent")
+    } finally {
+        setIsSkipping(false)[span_6](start_span)[span_6](end_span)
     }
+    }
+    
 
     const handleBan = (userId: string, username: string) => {
         setMenuOpen(null)
