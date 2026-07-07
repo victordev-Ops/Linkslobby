@@ -3,13 +3,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// TEMPORARY DIAGNOSTIC — safe to delete once the realtime counter issue is confirmed
-// fixed. console.log in a 'use client' component only reaches the browser console,
-// which isn't visible when developing on a phone with no devtools. Routing the same
-// message through a server action makes it show up in Vercel's function logs instead
-// (Vercel dashboard → your project → Logs, or `vercel logs` from a machine that has
-// the CLI). Called fire-and-forget from the client — errors here are swallowed on
-// purpose so a logging call can never itself break the notification flow.
 export async function logDebug(message: string, data?: unknown) {
   console.log(`[notif-debug] ${message}`, data !== undefined ? JSON.stringify(data) : '')
 }
@@ -27,7 +20,6 @@ export type NotificationType =
   | 'hot_seat_answer'
   | 'game_invite'
 
-// Types that live in notification_reads (no dedicated is_read column on the source table)
 const NOTIFICATION_READS_TYPES: NotificationType[] = [
   'lobby',
   'friend_request',
@@ -36,31 +28,11 @@ const NOTIFICATION_READS_TYPES: NotificationType[] = [
   'hot_seat_answer',
 ]
 
-// Types backed by a real per-user row (message/dykm/xp/hot_seat/tod_turn/game_invite)
-// can be permanently removed from the notification feed via `hidden_notifications`
-// without touching the underlying data (the message, the game history, the XP ledger
-// all stay intact — only the notification entry disappears).
-//
-// friend_request and friend_request_response are ALSO deletable here: even though
-// they're derived from the shared `friendships` row, hiding one only writes to
-// `hidden_notifications` (a per-user table) — it never touches `friendships` itself,
-// so dismissing the notification can't corrupt or resolve the actual friend request.
-// Accepting/declining the request is still a separate action (see actions/friends.ts).
-//
-// lobby_join_response and hot_seat_answer stay NOT deletable: their underlying row
-// (a participant status, a question's resolution state) is shared with another user
-// and represents real app state, not just a notification.
 const DELETABLE_TYPES: NotificationType[] = [
   'message', 'dykm', 'xp', 'hot_seat', 'tod_turn', 'game_invite',
   'friend_request', 'friend_request_response'
 ]
 
-// Maps a notification type to the value stored in hidden_notifications.notification_type.
-// Keeping this map in sync with the identical NOTIFICATION_TYPE_KEY in
-// NotificationContext.tsx (it can't be imported directly — everything exported from a
-// 'use server' file must be an async function) is what makes the write side (here) and
-// the count-read side (there) agree on the same keys, fixing the original bug where a
-// "hidden" notification kept counting toward the unread badge.
 const NOTIFICATION_TYPE_KEY: Record<string, string> = {
   message: 'confession',
   dykm: 'dykm_score',
@@ -87,20 +59,29 @@ export async function deleteNotification(id: string, type: NotificationType) {
       throw new Error(`Notifications of type "${type}" can't be deleted directly — they resolve on their own.`)
     }
 
-    const notificationType = notificationTypeKey(type)
+    // FIX: Game invites aren't part of the hidden_notifications check constraint.
+    // So we just delete the actual invite directly.
+    if (type === 'game_invite') {
+      const { error } = await supabase
+        .from('game_invites')
+        .delete()
+        .eq('id', id)
+        .eq('invitee_id', user.id)
 
-    // Permanently record that this user has removed this notification from their feed.
-    // This is checked everywhere the unread count and the notification list are computed,
-    // so a deleted notification can never resurface or be double-counted again.
-    const { error } = await supabase
-      .from('hidden_notifications')
-      .upsert({
-        user_id: user.id,
-        notification_id: id,
-        notification_type: notificationType
-      }, { onConflict: 'user_id, notification_id, notification_type' })
+      if (error) throw error
+    } else {
+      const notificationType = notificationTypeKey(type)
+      
+      const { error } = await supabase
+        .from('hidden_notifications')
+        .upsert({
+          user_id: user.id,
+          notification_id: id,
+          notification_type: notificationType
+        }, { onConflict: 'user_id, notification_id, notification_type' })
 
-    if (error) throw error
+      if (error) throw error
+    }
 
     revalidatePath('/notifications')
     return { success: true }
@@ -111,8 +92,6 @@ export async function deleteNotification(id: string, type: NotificationType) {
   }
 }
 
-// Backward-compatible alias — old callers/imports still work while everything
-// migrates over to the clearer "delete" naming.
 export const hideNotification = deleteNotification
 
 export async function markNotificationAsRead(id: string, type: NotificationType) {
@@ -168,16 +147,10 @@ export async function markAllNotificationsAsRead() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
 
-    // 1. Confessions
     await supabase.from('confessions').update({ is_read: true }).eq('profile_id', user.id).eq('is_read', false)
-
-    // 2. DYKM scores
     await supabase.from('dykm_scores').update({ is_read: true }).eq('quiz_owner_id', user.id).eq('is_read', false)
-
-    // 3. XP transactions
     await supabase.from('xp_transactions').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
 
-    // 4. Hot Seat questions (host view — "new question asked")
     const { data: sessions } = await supabase
       .from('hot_seat_sessions')
       .select('id')
@@ -193,21 +166,9 @@ export async function markAllNotificationsAsRead() {
         .eq('is_read', false)
     }
 
-    // 5. Lobby turn events (own is_read column)
-    await supabase
-      .from('tod_turn_events')
-      .update({ is_read: true })
-      .eq('user_id', user.id)
-      .eq('is_read', false)
+    await supabase.from('tod_turn_events').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+    await supabase.from('game_invites').update({ is_read: true }).eq('invitee_id', user.id).eq('is_read', false)
 
-    // 5b. Game invites (own is_read column)
-    await supabase
-      .from('game_invites')
-      .update({ is_read: true })
-      .eq('invitee_id', user.id)
-      .eq('is_read', false)
-
-    // 6. Legacy lobby system messages (tod_messages, type='lobby')
     const { data: joinedLobbies } = await supabase
       .from('tod_participants')
       .select('lobby_id')
@@ -233,7 +194,6 @@ export async function markAllNotificationsAsRead() {
       }
     }
 
-    // 7. Friend requests (incoming, pending)
     const { data: friendRequests } = await supabase
       .from('friendships')
       .select('id')
@@ -249,10 +209,6 @@ export async function markAllNotificationsAsRead() {
         )
     }
 
-    // 8. Friend request responses (I'm the requester, status resolved)
-    // Note: declined requests are deleted by declineFriendRequest, not status-flipped —
-    // so in practice this only ever catches 'accepted'. Kept as 'in' for forward-compat
-    // in case that delete-on-decline behavior changes later.
     const { data: friendResponses } = await supabase
       .from('friendships')
       .select('id')
@@ -268,7 +224,6 @@ export async function markAllNotificationsAsRead() {
         )
     }
 
-    // 9. Lobby join responses (my participant status was rejected or banned)
     const { data: lobbyResponses } = await supabase
       .from('tod_participants')
       .select('id')
@@ -284,7 +239,6 @@ export async function markAllNotificationsAsRead() {
         )
     }
 
-    // 10. Hot Seat answers (I'm the asker, my question got resolved)
     const { data: myAnsweredQuestions } = await supabase
       .from('hot_seat_questions')
       .select('id')
@@ -306,5 +260,4 @@ export async function markAllNotificationsAsRead() {
     console.error('Server Action Error:', error)
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
-    }
-      
+}
