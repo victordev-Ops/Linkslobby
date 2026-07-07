@@ -282,7 +282,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     if (!isHost || !currentQuestionRef.current) return
 
     // Call server action for penalty 
-    await penalizeHotSeatTimeout(session.id, currentQuestionRef.current.id)[span_2](start_span)[span_2](end_span)
+    await penalizeHotSeatTimeout(session.id, currentQuestionRef.current.id)
     
     // NEW: Trigger the toast directly
     showXPNotification(10, "Time Ran Out!", "spend", "XP Lost")
