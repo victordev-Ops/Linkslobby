@@ -88,6 +88,40 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  // 4. Global Server-Side XP Listener
+  //    Listens to the xp_transactions table for the current user and 
+  //    fires the imperative toast notification whenever a row is inserted.
+  useEffect(() => {
+    if (!profileId) return;
+
+    const channel = supabase.channel('global-xp-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'xp_transactions',
+          filter: `user_id=eq.${profileId}`
+        },
+        (payload) => {
+          const tx = payload.new;
+          // Determine if it's an earning or spending transaction based on amount
+          const type = tx.amount > 0 ? 'earn' : 'spend';
+          
+          showXPNotification(
+            Math.abs(tx.amount), 
+            tx.reason || 'XP Updated', 
+            type
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profileId, supabase]);
+
   return (
     <AuthProvider>
       {/*
