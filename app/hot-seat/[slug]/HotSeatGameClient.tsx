@@ -281,7 +281,7 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     if (!isHost || !currentQuestionRef.current) return
 
     // Call server action for penalty 
-    await penalizeHotSeatTimeout(session.id, currentQuestionRef.current.id)[span_2](start_span)[span_2](end_span)
+    await penalizeHotSeatTimeout(session.id, currentQuestionRef.current.id)
     
     // NEW: Trigger the toast directly
     showXPNotification(10, "Time Ran Out!", "spend", "XP Lost")
@@ -319,16 +319,16 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
     }
 
     const skipQuestion = async () => {
-    if (!currentQuestion || isSkipping || isAnswering) return[span_3](start_span)[span_3](end_span)
-    setIsSkipping(true)[span_4](start_span)[span_4](end_span)
+    if (!currentQuestion || isSkipping || isAnswering) return
+    setIsSkipping(true)
     try {
         // Reuses the same penalty path handleTimeout calls on expiry
-        await penalizeHotSeatTimeout(session.id, currentQuestion.id)[span_5](start_span)[span_5](end_span)
+        await penalizeHotSeatTimeout(session.id, currentQuestion.id)
         
         // NEW: Trigger the toast directly
         showXPNotification(10, "Question Skipped", "spend", "XP Spent")
     } finally {
-        setIsSkipping(false)[span_6](start_span)[span_6](end_span)
+        setIsSkipping(false)
     }
     }
     
