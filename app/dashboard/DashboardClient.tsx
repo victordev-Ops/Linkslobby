@@ -171,11 +171,11 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
     )
   }
 
-  const amaUrl = `https://say-app.vercel.app/ama/${profile.slug}`
-  const confessUrl = `https://say-app.vercel.app/confess/${profile.slug}`
-  const dykmUrl = `https://say-app.vercel.app/dykm/${profile.slug}`
-  const anonymousUrl = `https://say-app.vercel.app/anonymous/${profile.slug}`
-  const hotSeatUrl = `https://say-app.vercel.app/hot-seat/${profile.slug}`
+  const amaUrl = `https://www.linkslobby.com/ama/${profile.slug}`
+  const confessUrl = `https://www.linkslobby.com/confess/${profile.slug}`
+  const dykmUrl = `https://www.linkslobby.com/dykm/${profile.slug}`
+  const anonymousUrl = `https://www.linkslobby.com/anonymous/${profile.slug}`
+  const hotSeatUrl = `https://www.linkslobby.com/hot-seat/${profile.slug}`
 
   const handleCopy = async (text: string, type: 'hero' | 'ama' | 'confess' | 'dykm' | 'hotSeat' | 'anonymous') => {
     try {
