@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { setupProfile, checkUsernameAvailability } from '@/actions/profile'
 import { useDebounce } from '@/hooks/use-debounce'
@@ -10,7 +10,18 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { showXPNotification } from '@/components/XPNotification'
 import { XP_REWARDS } from '@/hooks/xp'
-import { User, Loader2, Check, X, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react'
+import { User, Loader2, Check, X, ArrowRight, CheckCircle2, AlertCircle, Pencil } from 'lucide-react'
+
+// Mirrors the server-side slugify in actions/profile.ts exactly (same
+// [^a-z0-9]+ -> '-' collapse, same leading/trailing-dash trim) so the
+// live preview always matches what the server will actually validate.
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
 
 export default function SetupUsername() {
   return (
@@ -21,7 +32,16 @@ export default function SetupUsername() {
 }
 
 function SetupUsernameContent() {
+  // Display name — spaces allowed, not unique.
   const [username, setUsername] = useState('')
+  // URL handle — unique, strict charset. Auto-derived from username unless
+  // the person edits it directly, at which point it stops following
+  // username changes.
+  const [slug, setSlug] = useState('')
+  const [slugTouched, setSlugTouched] = useState(false)
+  const [isEditingSlug, setIsEditingSlug] = useState(false)
+  const slugInputRef = useRef<HTMLInputElement>(null)
+
   const [message, setMessage] = useState('')
   const [messageKind, setMessageKind] = useState<'success' | 'error' | null>(null)
   const searchParams = useSearchParams()
@@ -35,16 +55,30 @@ function SetupUsernameContent() {
   // using the real, server-verified session on every request, and redirects
   // to /login before this component ever mounts. If you're here, you have
   // a session — no race, no blank-page dead end.
-  const debouncedUsername = useDebounce(username, 500)
   const router = useRouter()
   const { refreshProfile } = useAuth()
 
-  // Validate username availability
+  // Keep the slug preview in sync with the display name as it's typed —
+  // instant, not debounced, since it's just a local preview. Stops the
+  // moment the person hand-edits the slug themselves, so their edit can't
+  // get silently overwritten by the next keystroke in the username field.
+  useEffect(() => {
+    if (slugTouched) return
+    setSlug(slugify(username))
+  }, [username, slugTouched])
+
+  const debouncedSlug = useDebounce(slug, 500)
+
+  // Check slug availability (this is the actual unique field — the display
+  // name isn't). checkUsernameAvailability() already slugifies whatever
+  // it's given and checks that, so passing the current slug directly here
+  // (rather than the raw username) checks exactly what will be saved,
+  // regardless of whether it was auto-derived or hand-edited.
   useEffect(() => {
     let cancelled = false
 
     async function validate() {
-      if (debouncedUsername.length < 3) {
+      if (debouncedSlug.length < 3) {
         setIsAvailable(null)
         setSuggestions([])
         return
@@ -52,25 +86,23 @@ function SetupUsernameContent() {
 
       setIsChecking(true)
       try {
-        const res = await checkUsernameAvailability(debouncedUsername)
+        const res = await checkUsernameAvailability(debouncedSlug)
         if (cancelled) return
         setIsAvailable(res.available)
         setSuggestions(res.suggestions)
         if (!res.available) {
           setMessageKind('error')
-          setMessage('username already taken')
+          setMessage('handle already taken')
         } else {
           setMessageKind(null)
           setMessage('')
         }
       } catch (err) {
         if (cancelled) return
-        // Previously uncaught: a thrown error here left isChecking stuck
-        // true forever, isAvailable stuck null, and the submit button
-        // (disabled={!isAvailable || loading || isChecking}) permanently
-        // unclickable — a silent dead end with no error shown. Now it
-        // resolves to a clear, retry-able state instead.
-        console.error('Username availability check failed:', err)
+        // A thrown error here used to leave isChecking stuck true forever
+        // and the submit button permanently disabled with no explanation.
+        // Now it resolves to a clear, retry-able state instead.
+        console.error('Handle availability check failed:', err)
         setIsAvailable(null)
         setSuggestions([])
         setMessageKind('error')
@@ -84,7 +116,29 @@ function SetupUsernameContent() {
     return () => {
       cancelled = true
     }
-  }, [debouncedUsername])
+  }, [debouncedSlug])
+
+  const openSlugEditor = () => {
+    setIsEditingSlug(true)
+    // Focus happens after the input mounts
+    setTimeout(() => slugInputRef.current?.focus(), 0)
+  }
+
+  const closeSlugEditor = () => {
+    setIsEditingSlug(false)
+  }
+
+  const handleSlugChange = (raw: string) => {
+    setSlugTouched(true)
+    // Slugify live as they type so what's shown is always exactly what
+    // will be submitted — no surprises between preview and save.
+    setSlug(slugify(raw))
+  }
+
+  const applySuggestion = (s: string) => {
+    setSlug(s)
+    setSlugTouched(true)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,7 +149,7 @@ function SetupUsernameContent() {
     setMessageKind(null)
 
     try {
-      const result = await setupProfile(username)
+      const result = await setupProfile(username, slug)
 
       if (result?.error) {
         setMessageKind('error')
@@ -139,7 +193,7 @@ function SetupUsernameContent() {
           claim handle 🏷️
         </h1>
         <p className="text-slate-500 dark:text-white/40 text-sm font-medium lowercase">
-          pick a username to get started
+          pick a name to get started
         </p>
       </div>
 
@@ -149,40 +203,70 @@ function SetupUsernameContent() {
             Username
           </label>
           <div className="relative group">
-            <User
-              className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-200
-                ${isAvailable === false ? 'text-rose-400' :
-                  isAvailable === true ? 'text-emerald-500 dark:text-emerald-400' :
-                    'text-slate-300 dark:text-white/20 group-focus-within:text-purple-500 dark:group-focus-within:text-purple-400'}`}
-            />
+            <User className="absolute left-4 top-3.5 h-5 w-5 text-slate-300 dark:text-white/20 transition-colors duration-200 group-focus-within:text-purple-500 dark:group-focus-within:text-purple-400" />
             <input
-              className={`w-full bg-slate-50 dark:bg-white/5 pl-11 pr-10 py-3 border rounded-2xl outline-none transition-all duration-200 placeholder:text-slate-300 dark:placeholder:text-white/20 text-sm font-medium text-slate-900 dark:text-white
-                ${isAvailable === true
-                  ? 'border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-500/5 focus:border-emerald-500'
-                  : isAvailable === false
-                    ? 'border-rose-500/50 focus:border-rose-500'
-                    : 'border-slate-200 dark:border-white/10 focus:border-purple-500/50 focus:bg-white dark:focus:bg-white/10'}`}
-              placeholder="username"
+              className="w-full bg-slate-50 dark:bg-white/5 pl-11 pr-4 py-3 border border-slate-200 dark:border-white/10 rounded-2xl outline-none transition-all duration-200 placeholder:text-slate-300 dark:placeholder:text-white/20 text-sm font-medium text-slate-900 dark:text-white focus:border-purple-500/50 focus:bg-white dark:focus:bg-white/10"
+              placeholder="your name"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
               autoFocus
             />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+          </div>
+
+          {/* Live slug preview — this is the field that's actually unique.
+              Tap the pencil to hand-edit it independently of the name above. */}
+          {slug.length > 0 && (
+            <div className="flex items-center gap-1.5 ml-2 mt-1.5">
+              {isEditingSlug ? (
+                <div className="relative flex items-center">
+                  <span className="text-xs font-medium text-slate-400 dark:text-white/30 mr-0.5">@</span>
+                  <input
+                    ref={slugInputRef}
+                    value={slug}
+                    onChange={(e) => handleSlugChange(e.target.value)}
+                    onBlur={closeSlugEditor}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        closeSlugEditor()
+                      }
+                    }}
+                    disabled={loading}
+                    className={`text-xs font-bold bg-transparent border-b outline-none px-0.5 py-0.5 min-w-[80px]
+                      ${isAvailable === false ? 'border-rose-400 text-rose-500' :
+                        isAvailable === true ? 'border-emerald-400 text-emerald-600 dark:text-emerald-400' :
+                          'border-purple-400 text-slate-700 dark:text-white/80'}`}
+                    style={{ width: `${Math.max(slug.length, 4)}ch` }}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openSlugEditor}
+                  className="flex items-center gap-1 text-xs font-medium text-slate-400 dark:text-white/40 hover:text-purple-600 dark:hover:text-purple-300 transition-colors"
+                >
+                  <span>
+                    @<span className="font-bold text-slate-500 dark:text-white/60">{slug}</span>
+                  </span>
+                  <Pencil className="w-3 h-3 shrink-0" />
+                </button>
+              )}
+
               {isChecking && (
-                <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
+                <Loader2 className="w-3 h-3 text-purple-500 animate-spin shrink-0" />
               )}
               {!isChecking && isAvailable === true && (
-                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                <Check className="w-3 h-3 text-emerald-500 dark:text-emerald-400 shrink-0" />
               )}
               {!isChecking && isAvailable === false && (
-                <X className="w-4 h-4 text-rose-400" />
+                <X className="w-3 h-3 text-rose-400 shrink-0" />
               )}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Username Suggestions */}
+        {/* Handle Suggestions */}
         <AnimatePresence>
           {!isAvailable && suggestions.length > 0 && (
             <motion.div
@@ -199,7 +283,7 @@ function SetupUsernameContent() {
                   <button
                     key={s}
                     type="button"
-                    onClick={() => setUsername(s)}
+                    onClick={() => applySuggestion(s)}
                     className="px-3 py-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-medium text-slate-500 dark:text-white/60
                       hover:border-purple-500/50 hover:text-purple-600 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 transition-all"
                   >
