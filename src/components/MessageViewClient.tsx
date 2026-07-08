@@ -449,7 +449,7 @@ export default function MessageViewClient({ confession, username, onClose, restr
                 {showWatermark && (
                   <div className="flex-shrink-0 pt-4 flex items-center gap-1.5 opacity-70">
                     <span className="text-xs font-black text-gray-500 uppercase tracking-[0.2em]">
-                      say-app.com
+                    www.linkslobby.com
                     </span>
                   </div>
                 )}
