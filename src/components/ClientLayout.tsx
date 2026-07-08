@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { setXPNotificationHandler } from "@/hooks/xp";
 import { showXPNotification } from "@/components/XPNotification";
 import PWAInstallPrompt from "./PWAInstallPrompt";
+import NotificationRegister from "./NotificationRegister";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -88,40 +89,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // 4. Global Server-Side XP Listener
-  //    Listens to the xp_transactions table for the current user and 
-  //    fires the imperative toast notification whenever a row is inserted.
-  useEffect(() => {
-    if (!profileId) return;
-
-    const channel = supabase.channel('global-xp-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'xp_transactions',
-          filter: `user_id=eq.${profileId}`
-        },
-        (payload) => {
-          const tx = payload.new;
-          // Determine if it's an earning or spending transaction based on amount
-          const type = tx.amount > 0 ? 'earn' : 'spend';
-          
-          showXPNotification(
-            Math.abs(tx.amount), 
-            tx.reason || 'XP Updated', 
-            type
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [profileId, supabase]);
-
   return (
     <AuthProvider>
       {/*
@@ -143,7 +110,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <Suspense fallback={null}>
                 <NavbarWrapper />
               </Suspense>
-              <Toaster position="top-center" richColors />
+              {/*
+                The ONE and ONLY <Toaster> in the app. Every showAppToast()/
+                showXPNotification() call renders through this single mount.
+                Previously XPNotificationProvider also rendered its own
+                <Toaster>, so every toast was rendered twice — that's what
+                caused toasts to visually stack and overlap. Do not add
+                another <Toaster> anywhere else in the tree.
+              */}
+              <Toaster position="top-center" richColors gap={10} />
+              <NotificationRegister />
               <PWAInstallPrompt />
             </div>
           </XPNotificationProvider>
@@ -151,4 +127,4 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       </PresenceProvider>
     </AuthProvider>
   );
-}
+    }
