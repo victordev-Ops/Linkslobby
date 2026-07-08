@@ -10,7 +10,6 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { showXPNotification } from '@/components/XPNotification'
 import { XP_REWARDS } from '@/hooks/xp'
-import { createClient } from '@/lib/supabase/client'
 import { User, Loader2, Check, X, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react'
 
 export default function SetupUsername() {
@@ -32,70 +31,23 @@ function SetupUsernameContent() {
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
 
-  // Fast session check - doesn't wait for profile
-  const [sessionChecked, setSessionChecked] = useState(false)
-  const [hasSession, setHasSession] = useState(false)
-
+  // No client-side session polling here anymore. middleware.ts is the single
+  // source of truth for whether you're allowed on this page: it checks the
+  // real, server-verified session (supabase.auth.getUser()) on every
+  // request and redirects to /login *before* this component ever mounts.
+  // (Previously this component re-checked the session itself via a raced
+  // getSession()/onAuthStateChange poll with a 1.5s grace timeout — on a
+  // false negative it rendered nothing at all, which is the "setup page
+  // loads but the form never shows" bug. Since the route is now gated
+  // server-side, if you're here, you have a session.)
+  //
+  // Session expiry between page load and form submit (rare, but possible if
+  // someone leaves the tab open for a long time) is still handled — see
+  // handleSubmit below, which surfaces setupProfile's "Session expired"
+  // response instead of failing silently.
   const debouncedUsername = useDebounce(username, 500)
   const router = useRouter()
   const { refreshProfile } = useAuth()
-
-  // Quick session check on mount - much faster than waiting for full AuthContext
-  //
-  // This used to do a single synchronous getSession() check and bounce to
-  // a bare '/login' if it came back empty. That raced with the auth cookies
-  // set by the /auth/confirm redirect (especially on Safari/mobile), and on
-  // a false negative it dropped the `next`/`returnTo` destination entirely,
-  // stranding people who came from a deep link (e.g. quiz results) back on
-  // the dashboard after re-logging in. This version gives the session a
-  // short grace period to arrive via onAuthStateChange before giving up,
-  // and always preserves `next` on the eventual redirect if it does fail.
-  useEffect(() => {
-    const supabase = createClient()
-    let resolved = false
-
-    const redirectToLogin = () => {
-      if (resolved) return
-      resolved = true
-      const loginUrl = next
-        ? `/login?returnTo=${encodeURIComponent(next)}`
-        : '/login'
-      router.replace(loginUrl)
-    }
-
-    const confirmSession = (session: unknown) => {
-      if (resolved || !session) return
-      resolved = true
-      setHasSession(true)
-      setSessionChecked(true)
-    }
-
-    // 1. Immediate check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      confirmSession(session)
-      // If null here, don't bail yet — cookies from the /auth/confirm
-      // redirect may still be propagating to the browser client.
-    })
-
-    // 2. Catch a session that arrives just after mount
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      confirmSession(session)
-    })
-
-    // 3. Only conclude "no session" after a short grace period
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        setSessionChecked(true)
-        setHasSession(false)
-        redirectToLogin()
-      }
-    }, 1500)
-
-    return () => {
-      subscription.unsubscribe()
-      clearTimeout(timeout)
-    }
-  }, [router, next])
 
   // Validate username availability
   useEffect(() => {
@@ -137,6 +89,10 @@ function SetupUsernameContent() {
         setMessageKind('error')
         setMessage(result.error)
         setLoading(false)
+        if (result.error.startsWith('Session expired')) {
+          const loginUrl = next ? `/login?next=${encodeURIComponent(next)}` : '/login'
+          setTimeout(() => router.push(loginUrl), 1800)
+        }
         return
       }
 
@@ -167,21 +123,6 @@ function SetupUsernameContent() {
       setLoading(false)
     }
   }
-
-  // Show loading only until session is checked (fast)
-  if (!sessionChecked) {
-    return (
-      <AuthForm>
-        <div className="text-center py-8">
-          <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-4" />
-          <p className="text-slate-400 dark:text-white/40 text-sm font-medium lowercase">loading...</p>
-        </div>
-      </AuthForm>
-    )
-  }
-
-  // No session guard
-  if (!hasSession) return null
 
   return (
     <AuthForm>
