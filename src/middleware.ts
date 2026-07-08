@@ -83,8 +83,18 @@ export async function middleware(request: NextRequest) {
   ]
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
 
+  // NOTE: '/auth/setup' is intentionally NOT public. It requires a real
+  // session, same as any other protected route — that's what lets middleware
+  // (not a racy client-side getSession()/onAuthStateChange poll) decide
+  // whether to show it or bounce to /login. Only the endpoints that are
+  // *meant* to be hit while logged out (the magic-link exchange, and any
+  // future error/callback routes) go here explicitly.
+  const isPublicAuthPath =
+    pathname === '/auth/confirm' ||
+    pathname === '/auth/error'
+
   const isPublicPrefix =
-    pathname.startsWith('/auth/') ||
+    isPublicAuthPath ||
     pathname.startsWith('/confess/') ||
     pathname.startsWith('/ama/') ||
     pathname.startsWith('/anonymous/') ||
@@ -190,4 +200,4 @@ export const config = {
      */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
-}
+      }
