@@ -2,10 +2,9 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { XPNotificationToast, useXPNotifications, showXPNotification } from './XPNotification'
+import { showXPNotification } from './XPNotification'
 
 export function XPNotificationProvider({ children }: { children: React.ReactNode }) {
-  const notification = useXPNotifications()
   const supabase = createClient()
 
   useEffect(() => {
@@ -146,15 +145,5 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
     }
   }, [supabase])
 
-  return (
-    <>
-      {children}
-      <XPNotificationToast
-        show={!!notification}
-        amount={notification?.amount || 0}
-        reason={notification?.reason || ''}
-        type={notification?.type || 'earn'}
-      />
-    </>
-  )
-}
+  return <>{children}</>
+                  }
