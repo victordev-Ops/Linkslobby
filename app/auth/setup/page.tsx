@@ -31,26 +31,18 @@ function SetupUsernameContent() {
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
 
-  // No client-side session polling here anymore. middleware.ts is the single
-  // source of truth for whether you're allowed on this page: it checks the
-  // real, server-verified session (supabase.auth.getUser()) on every
-  // request and redirects to /login *before* this component ever mounts.
-  // (Previously this component re-checked the session itself via a raced
-  // getSession()/onAuthStateChange poll with a 1.5s grace timeout — on a
-  // false negative it rendered nothing at all, which is the "setup page
-  // loads but the form never shows" bug. Since the route is now gated
-  // server-side, if you're here, you have a session.)
-  //
-  // Session expiry between page load and form submit (rare, but possible if
-  // someone leaves the tab open for a long time) is still handled — see
-  // handleSubmit below, which surfaces setupProfile's "Session expired"
-  // response instead of failing silently.
+  // No client-side session polling here. middleware.ts gates /auth/setup
+  // using the real, server-verified session on every request, and redirects
+  // to /login before this component ever mounts. If you're here, you have
+  // a session — no race, no blank-page dead end.
   const debouncedUsername = useDebounce(username, 500)
   const router = useRouter()
   const { refreshProfile } = useAuth()
 
   // Validate username availability
   useEffect(() => {
+    let cancelled = false
+
     async function validate() {
       if (debouncedUsername.length < 3) {
         setIsAvailable(null)
@@ -59,19 +51,39 @@ function SetupUsernameContent() {
       }
 
       setIsChecking(true)
-      const res = await checkUsernameAvailability(debouncedUsername)
-      setIsAvailable(res.available)
-      setSuggestions(res.suggestions)
-      if (!res.available) {
+      try {
+        const res = await checkUsernameAvailability(debouncedUsername)
+        if (cancelled) return
+        setIsAvailable(res.available)
+        setSuggestions(res.suggestions)
+        if (!res.available) {
+          setMessageKind('error')
+          setMessage('username already taken')
+        } else {
+          setMessageKind(null)
+          setMessage('')
+        }
+      } catch (err) {
+        if (cancelled) return
+        // Previously uncaught: a thrown error here left isChecking stuck
+        // true forever, isAvailable stuck null, and the submit button
+        // (disabled={!isAvailable || loading || isChecking}) permanently
+        // unclickable — a silent dead end with no error shown. Now it
+        // resolves to a clear, retry-able state instead.
+        console.error('Username availability check failed:', err)
+        setIsAvailable(null)
+        setSuggestions([])
         setMessageKind('error')
-        setMessage('username already taken')
-      } else {
-        setMessageKind(null)
-        setMessage('')
+        setMessage("couldn't check availability — try typing again")
+      } finally {
+        if (!cancelled) setIsChecking(false)
       }
-      setIsChecking(false)
     }
     validate()
+
+    return () => {
+      cancelled = true
+    }
   }, [debouncedUsername])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,10 +101,6 @@ function SetupUsernameContent() {
         setMessageKind('error')
         setMessage(result.error)
         setLoading(false)
-        if (result.error.startsWith('Session expired')) {
-          const loginUrl = next ? `/login?next=${encodeURIComponent(next)}` : '/login'
-          setTimeout(() => router.push(loginUrl), 1800)
-        }
         return
       }
 
