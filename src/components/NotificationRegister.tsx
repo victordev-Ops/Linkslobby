@@ -2,57 +2,70 @@
 
 import { useEffect, useRef } from 'react'
 
+const REGISTER_ATTEMPT_KEY = 'say-app:push-register-attempted-v1'
+
+const VAPID_PUBLIC_KEY =
+  'BK1hA4tirxSR5qWYmkikKbl4QxHHwg-nGU1zIhThqA4wSAy3Fi65xR4DV-_CyYHyOqxDEviOQPtO3c0HuClqzm0'
+
 export default function NotificationRegister() {
-  const hasPrompted = useRef(false)
+  const attemptedRef = useRef(false)
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       return
     }
 
-    const subscribe = async () => {
-      // Don't re-prompt if handled in a previous session or if already decided
-      if (hasPrompted.current || localStorage.getItem('push_prompted') || Notification.permission !== 'default') {
-        return
-      }
+    if (Notification.permission === 'denied') return
+    if (typeof window !== 'undefined' && localStorage.getItem(REGISTER_ATTEMPT_KEY) === 'granted') return
+
+    const attemptSubscribe = async () => {
+      if (attemptedRef.current) return
+      attemptedRef.current = true
 
       try {
-        hasPrompted.current = true
-        localStorage.setItem('push_prompted', 'true')
-
         const registration = await navigator.serviceWorker.ready
+
+        const existing = await registration.pushManager.getSubscription()
+        if (existing) {
+          localStorage.setItem(REGISTER_ATTEMPT_KEY, 'granted')
+          return
+        }
+
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          // Replace with your actual Public VAPID Key
-          applicationServerKey: 'BK1hA4tirxSR5qWYmkikKbl4QxHHwg-nGU1zIhThqA4wSAy3Fi65xR4DV-_CyYHyOqxDEviOQPtO3c0HuClqzm0' 
+          applicationServerKey: VAPID_PUBLIC_KEY,
         })
 
         await fetch('/api/save-subscription', {
           method: 'POST',
           body: JSON.stringify(subscription),
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         })
+
+        localStorage.setItem(
+          REGISTER_ATTEMPT_KEY,
+          Notification.permission === 'granted' ? 'granted' : 'declined'
+        )
       } catch (error) {
-        console.error('Push registration failed:', error)
+        console.error('[push] auto-subscribe failed:', error)
+        localStorage.setItem(REGISTER_ATTEMPT_KEY, 'declined')
+      } finally {
+        cleanup()
       }
     }
 
-    const handleGesture = () => {
-      if (Notification.permission === 'default') {
-        subscribe()
-      }
+    const cleanup = () => {
+      document.removeEventListener('click', attemptSubscribe)
+      document.removeEventListener('touchstart', attemptSubscribe)
+      document.removeEventListener('keydown', attemptSubscribe)
     }
 
-    // Bind to the first natural user interaction to ensure browser compliance
-    document.addEventListener('click', handleGesture, { once: true })
-    document.addEventListener('touchstart', handleGesture, { once: true })
+    document.addEventListener('click', attemptSubscribe, { once: true })
+    document.addEventListener('touchstart', attemptSubscribe, { once: true })
+    document.addEventListener('keydown', attemptSubscribe, { once: true })
 
-    return () => {
-      document.removeEventListener('click', handleGesture)
-      document.removeEventListener('touchstart', handleGesture)
-    }
+    return cleanup
   }, [])
 
-  // Component acts silently in the background, no manual UI required.
   return null
-}
+          }
