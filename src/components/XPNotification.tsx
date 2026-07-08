@@ -26,15 +26,18 @@ interface XPNotificationProps {
 let queueListeners: Array<(notification: XPNotification | null) => void> = []
 let activeNotificationState: XPNotification | null = null
 
-const XP_TOAST_ID = 'global-xp-notification-toast'
-
 /**
- * Global Toaster Component Bridge
- * We return null here because ClientLayout.tsx ALREADY mounts a global <Toaster />.
- * Mounting a second one here was causing the literal visual overlap/double-rendering bug.
+ * NOTE: This used to render its own <Toaster>. That's what caused every
+ * realtime toast in the app to appear twice, stacked and overlapping —
+ * ClientLayout.tsx already mounts the ONE app-wide <Toaster>, and every
+ * mounted <Toaster> independently renders whatever's in Sonner's shared
+ * queue. Having two Toasters meant two renders of every single toast.
+ * There must only ever be one <Toaster> in the tree. This component is
+ * kept (as a no-op) only so existing imports of XPNotificationToast don't
+ * break; it can be removed entirely once nothing renders it anymore.
  */
-export function XPNotificationToast({ show, amount, reason, type, onComplete }: XPNotificationProps) {
-  return null 
+export function XPNotificationToast(_props: XPNotificationProps) {
+  return null
 }
 
 /**
@@ -44,9 +47,10 @@ export function showXPNotification(amount: number, reason: string, type: 'earn' 
   const isEarning = type === 'earn'
   const displayLabel = label || (isEarning ? "Stars Earned!" : "Stars Spent")
   const displayAmount = Math.abs(amount)
-  
+  const toastId = Math.random().toString(36).substring(2, 9)
+
   const payload: XPNotification = {
-    id: XP_TOAST_ID,
+    id: toastId,
     amount: displayAmount,
     reason,
     type,
@@ -55,9 +59,6 @@ export function showXPNotification(amount: number, reason: string, type: 'earn' 
 
   activeNotificationState = payload
   queueListeners.forEach(fn => fn(payload))
-
-  // Dismiss any existing XP toast before firing a new one to keep it perfectly clean
-  toast.dismiss(XP_TOAST_ID)
 
   toast.custom((t) => (
     <div className="relative flex items-start gap-2.5 py-2 px-3 rounded-lg border shadow-md bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 border-amber-500/20 dark:border-amber-500/30 w-[306px]">
@@ -98,7 +99,7 @@ export function showXPNotification(amount: number, reason: string, type: 'earn' 
       </button>
     </div>
   ), {
-    id: XP_TOAST_ID, // Use fixed ID to prevent stacking overlap
+    id: toastId,
     duration: 4000,
     onAutoClose: () => {
       activeNotificationState = null
@@ -122,5 +123,4 @@ export function useXPNotifications() {
   }, [])
 
   return notification
-    }
-        
+          }
