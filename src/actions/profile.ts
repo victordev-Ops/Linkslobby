@@ -50,8 +50,16 @@ export async function checkUsernameAvailability(username: string) {
 
 /**
  * Creates or updates the user profile in the database.
+ *
+ * `username` is a display name — spaces are fine, it's not unique.
+ * `slug` is the URL-safe handle — this is the field with the unique
+ * constraint, so it gets the strict validation. The setup page auto-derives
+ * a slug from the username as a starting point, but the user can hand-edit
+ * it, so the two are validated and trusted independently here rather than
+ * re-deriving slug from username server-side (that would silently discard
+ * any manual edit).
  */
-export async function setupProfile(username: string) {
+export async function setupProfile(username: string, slug: string) {
     const supabase = await createSupabaseServerClient()
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -59,22 +67,32 @@ export async function setupProfile(username: string) {
         return { error: 'Session expired. Please sign in again.' }
     }
 
-    // Server-side validation — never trust the client
-    const trimmed = username.trim()
-    if (!trimmed || trimmed.length < 3) {
+    // Server-side validation — never trust the client.
+    // Collapse repeated internal whitespace and trim; single spaces between
+    // words are allowed since this is just a display name.
+    const trimmedUsername = username.trim().replace(/\s+/g, ' ')
+    if (!trimmedUsername || trimmedUsername.length < 3) {
         return { error: 'Username must be at least 3 characters.' }
     }
-    if (trimmed.length > 30) {
+    if (trimmedUsername.length > 30) {
         return { error: 'Username must be at most 30 characters.' }
     }
-    if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
-        return { error: 'Username can only contain letters, numbers, hyphens, and underscores.' }
+    if (!/^[a-zA-Z0-9_\- ]+$/.test(trimmedUsername)) {
+        return { error: 'Username can only contain letters, numbers, spaces, hyphens, and underscores.' }
     }
 
-    const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-
-    if (slug.length < 3) {
-        return { error: 'Username produces an invalid URL slug. Try a different name.' }
+    const trimmedSlug = slug.trim().toLowerCase()
+    if (!trimmedSlug || trimmedSlug.length < 3) {
+        return { error: 'Handle must be at least 3 characters.' }
+    }
+    if (trimmedSlug.length > 30) {
+        return { error: 'Handle must be at most 30 characters.' }
+    }
+    // Slug is what shows up in URLs, so it stays strict: lowercase
+    // letters/numbers/hyphens only, no spaces, no leading/trailing/double
+    // hyphens.
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(trimmedSlug)) {
+        return { error: 'Handle can only contain lowercase letters, numbers, and single hyphens between words.' }
     }
 
     // Determine if first setup
@@ -96,8 +114,8 @@ export async function setupProfile(username: string) {
         .upsert({
             id: user.id,
             email: user.email,
-            username: trimmed,
-            slug: slug,
+            username: trimmedUsername,
+            slug: trimmedSlug,
             ...(isFirstTimeSetup && { xp_balance: 0 }),
             updated_at: new Date().toISOString(),
         }, {
@@ -106,7 +124,7 @@ export async function setupProfile(username: string) {
 
     if (error) {
         console.error("Profile Setup Error:", error.message)
-        if (error.code === '23505') return { error: 'That username is already taken. Please try another.' }
+        if (error.code === '23505') return { error: 'That handle is already taken. Please try another.' }
         return { error: 'Could not save profile. Please try again.' }
     }
 
@@ -122,7 +140,7 @@ export async function setupProfile(username: string) {
                 p_user_id: user.id,
                 p_amount: amount,
                 p_reason: reason,
-                p_metadata: { action: 'profile_created', username: trimmed }
+                p_metadata: { action: 'profile_created', username: trimmedUsername }
             })
             xpAwarded = amount
         } catch (xpError) {
