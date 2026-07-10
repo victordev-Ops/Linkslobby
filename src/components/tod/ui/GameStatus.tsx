@@ -1,4 +1,4 @@
-import { ArrowRight, Skull, Flame, Clock, Megaphone, Crosshair } from 'lucide-react';
+import { ArrowRight, Skull, Flame, Clock, Megaphone, Crosshair, Dices } from 'lucide-react';
 
 interface GameStatusProps {
   status: 'waiting' | 'active' | 'finished';
@@ -54,6 +54,7 @@ export const GameStatus = ({
           </>
         ) : (
           <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-800/50 border border-slate-700/30 animate-pulse text-[8px] sm:text-[10px] text-slate-400 uppercase tracking-wider font-black italic">
+            <Dices size={10} className="text-orange-400" />
             Pick
           </div>
         )}
