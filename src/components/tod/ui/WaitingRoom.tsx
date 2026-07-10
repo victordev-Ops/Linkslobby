@@ -1,7 +1,8 @@
 // src/components/tod/ui/WaitingRoom.tsx
-import { Play, Users, Clock, UserPlus, Check, Loader2, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { Play, Users, Clock, UserPlus, Check, Loader2, ChevronDown, ChevronUp, Search, X, Dices } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import type { FriendshipWithProfile, FriendSearchResult } from '@/actions/friends';
+import VerifiedBadge from '@/components/VerifiedBadge';
 
 interface WaitingRoomProps {
   isHost: boolean;
@@ -109,7 +110,7 @@ export const WaitingRoom = ({
         <div className="relative w-24 h-24 mx-auto mb-6">
           <div className="absolute inset-0 bg-gradient-to-br from-red-500 to-orange-500 rounded-full animate-pulse opacity-50" />
           <div className="absolute inset-2 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center shadow-2xl">
-            <Users size={40} className="text-white" />
+            <Dices size={40} className="text-white" />
           </div>
         </div>
 
@@ -139,9 +140,9 @@ export const WaitingRoom = ({
               <button
                 onClick={onStartGame}
                 disabled={playersCount < 2}
-                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full min-h-[52px] bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-red-500/50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Play size={20} />
+                {playersCount < 2 ? <Clock size={20} /> : <Dices size={20} />}
                 {playersCount < 2 ? 'Need 2+ Players' : 'Start Game'}
               </button>
             </div>
@@ -208,11 +209,16 @@ export const WaitingRoom = ({
                                 return (
                                   <div key={r.id} className="flex items-center justify-between py-2.5">
                                     <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                        {r.username?.[0]?.toUpperCase() || '?'}
+                                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden">
+                                        {(r as any).avatar_url ? (
+                                          <img src={(r as any).avatar_url} alt={r.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                          r.username?.[0]?.toUpperCase() || '?'
+                                        )}
                                       </div>
-                                      <span className="text-sm text-white font-medium truncate">
+                                      <span className="text-sm text-white font-medium truncate flex items-center gap-1">
                                         @{r.username}
+                                        {(r as any).is_pro && <VerifiedBadge size={11} />}
                                       </span>
                                     </div>
                                     {isFriend ? (
@@ -262,11 +268,16 @@ export const WaitingRoom = ({
                           return (
                             <div key={f.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-700/20 transition-colors">
                               <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                  {f.profile.username?.[0]?.toUpperCase() || '?'}
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden">
+                                  {(f.profile as any).avatar_url ? (
+                                    <img src={(f.profile as any).avatar_url} alt={f.profile.username} className="w-full h-full object-cover" />
+                                  ) : (
+                                    f.profile.username?.[0]?.toUpperCase() || '?'
+                                  )}
                                 </div>
-                                <span className="text-sm text-white font-medium truncate">
+                                <span className="text-sm text-white font-medium truncate flex items-center gap-1">
                                   {f.profile.username}
+                                  {(f.profile as any).is_pro && <VerifiedBadge size={11} />}
                                 </span>
                               </div>
                               <button
