@@ -65,11 +65,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <meta
-  name="impact-site-verification"
-  content="9e928605-4a95-4d9b-a310-0b24e21e12f7"
-/>
-        <script
+ 
+   <meta name='impact-site-verification' value='1ce85299-f0a8-4603-89ae-2dc158179031'>  
+     
+     <script
           dangerouslySetInnerHTML={{
             __html: `
               try {
