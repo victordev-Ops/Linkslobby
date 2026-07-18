@@ -130,9 +130,9 @@ export async function createLobbyAction(name: string, category: string) {
         const isPro = profile?.is_pro ?? false
         const maxLobbies = isPro ? PRO_LOBBY_LIMIT : FREE_LOBBY_LIMIT
 
-        const { count, error: countError } = await supabase
+        const { data: existingLobbies, error: countError } = await supabase
             .from('tod_lobbies')
-            .select('id', { count: 'exact', head: true })
+            .select('id')
             .eq('host_id', user.id)
 
         if (countError) {
@@ -145,6 +145,8 @@ export async function createLobbyAction(name: string, category: string) {
             })
             throw countError
         }
+
+        const count = existingLobbies?.length ?? 0
 
         if ((count ?? 0) >= maxLobbies) {
             return { success: false, limitReached: true, message: `You've reached your limit of ${maxLobbies} lobby${maxLobbies > 1 ? 'ies' : ''}.` }
