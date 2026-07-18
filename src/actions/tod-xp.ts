@@ -130,7 +130,10 @@ export async function createLobbyAction(name: string, category: string) {
             .select('id', { count: 'exact', head: true })
             .eq('host_id', user.id)
 
-        if (countError) throw countError
+        if (countError) {
+            console.error('Lobby count check error:', countError)
+            throw countError
+        }
 
         if ((count ?? 0) >= maxLobbies) {
             return { success: false, limitReached: true, message: `You've reached your limit of ${maxLobbies} lobby${maxLobbies > 1 ? 'ies' : ''}.` }
@@ -162,8 +165,14 @@ export async function createLobbyAction(name: string, category: string) {
 
         return { success: true, lobby }
     } catch (error: any) {
-        console.error('Create lobby error:', error)
-        return { success: false, message: error.message || 'Failed to create lobby' }
+        console.error('Create lobby error:', {
+            message: error?.message,
+            details: error?.details,
+            hint: error?.hint,
+            code: error?.code,
+        })
+        const readable = error?.message || error?.details || error?.hint || 'Failed to create lobby'
+        return { success: false, message: readable }
     }
 }
 
@@ -302,4 +311,5 @@ export async function getUserLobbies() {
         return []
     }
             }
-        
+
+                        
