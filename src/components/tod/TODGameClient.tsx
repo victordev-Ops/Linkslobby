@@ -81,7 +81,9 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     onlineUsers,
     typingUsers,
     setTypingIndicator,
-    removeParticipant
+    removeParticipant,
+    banParticipant,
+    unbanParticipant
   } = useGameLogic(lobbyId, profile?.id);
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
