@@ -34,45 +34,24 @@ export default async function TODLobbyList() {
   if (user?.id) {
     // Only lobbies this user is actually part of (host or participant) —
     // there's no more browsing a public/private directory.
-    const { data: participantRows } = await supabase
-      .from('tod_participants')
-      .select(`
-        status,
-        tod_lobbies (
-          id, host_id, name, slug, category, status, created_at,
-          profiles:host_id (username)
-        )
-      `)
-      .eq('user_id', user.id)
-      .eq('status', 'joined');
-
-    const rows = (participantRows || []).filter(r => (r as any).tod_lobbies);
-    const lobbyIds = rows.map(r => (r as any).tod_lobbies.id);
-
-    let participantCounts: Record<string, number> = {};
-    if (lobbyIds.length > 0) {
-      const { data: countRows } = await supabase
-        .from('tod_participants')
-        .select('lobby_id')
-        .eq('status', 'joined')
-        .in('lobby_id', lobbyIds);
-
-      participantCounts = (countRows || []).reduce((acc, p) => {
-        acc[p.lobby_id] = (acc[p.lobby_id] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-    }
-
-    lobbiesWithDetails = rows.map(r => {
-      const lobby = (r as any).tod_lobbies;
-      return {
-        ...lobby,
-        host_profile: lobby.profiles,
-        participant_count: participantCounts[lobby.id] || 0,
-        is_participant: true,
-        user_status: (r as any).status,
-      } as Lobby;
+    // Single RPC round trip instead of a join query + separate count query.
+    const { data: rpcRows } = await supabase.rpc('get_user_tod_lobbies', {
+      p_user_id: user.id,
     });
+
+    lobbiesWithDetails = (rpcRows || []).map((r: any) => ({
+      id: r.id,
+      host_id: r.host_id,
+      name: r.name,
+      slug: r.slug,
+      category: r.category,
+      status: r.status,
+      created_at: r.created_at,
+      host_profile: r.host_username ? { username: r.host_username } : undefined,
+      participant_count: r.participant_count || 0,
+      is_participant: true,
+      user_status: r.user_status,
+    })) as Lobby[];
   }
 
   return (
