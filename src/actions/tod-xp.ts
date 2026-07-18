@@ -109,6 +109,11 @@ export async function createLobbyAction(name: string, category: string) {
     const supabase = await createSupabaseServerClient()
 
     try {
+        console.log('Supabase env check:', {
+            hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+            hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        })
+
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { success: false, message: 'Not authenticated' }
 
@@ -131,7 +136,13 @@ export async function createLobbyAction(name: string, category: string) {
             .eq('host_id', user.id)
 
         if (countError) {
-            console.error('Lobby count check error:', countError)
+            console.error('Lobby count check error (raw):', countError)
+            console.error('Lobby count check error (name/stack):', {
+                name: (countError as any)?.name,
+                constructor: (countError as any)?.constructor?.name,
+                stack: (countError as any)?.stack,
+                keys: Object.keys(countError as any),
+            })
             throw countError
         }
 
@@ -311,5 +322,4 @@ export async function getUserLobbies() {
         return []
     }
             }
-
-                        
+        
