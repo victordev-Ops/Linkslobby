@@ -80,6 +80,9 @@ export async function middleware(request: NextRequest) {
     '/opengraph-image',
     '/icon',
     '/apple-icon',
+    '/policy',
+    '/terms',
+    '/safety'
   ]
   const isExactPublic = publicPaths.includes(pathname) || pathname === '/'
 
