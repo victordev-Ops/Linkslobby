@@ -271,10 +271,10 @@ export const PlayersSidebar = ({
                           >
                             <button
                               onClick={() => {
-                                const identifier = participant.profiles?.username || participant.user_id;
-                                router.push(`/profile/${identifier}`);
-                                setActiveMenuId(null);
-                              }}
+                              const identifier = participant.profiles?.username || participant.user_id;
+                              router.push(`/u/${identifier}`);
+                              setActiveMenuId(null);
+                           }}
                               className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
                             >
                               <Users size={14} className="text-blue-400" />
