@@ -251,7 +251,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
     const url = window.location.href;
     const shareData = {
       title: `Join my Truth or Dare game! 🔥`,
-      text: `Come play Truth or Dare with me on Say! 🎉`,
+      text: `Come play Truth or Dare with me on Linkslobby! 🎉`,
       url,
     };
     try {
@@ -467,7 +467,7 @@ export default function TODGameClient({ lobbyId }: TODGameClientProps) {
         if (replyingTo?.id === currentQuestionMsg?.id) {
           return "Type your official answer...";
         }
-        return "👈 Swipe the question card to answer!";
+        return " Swipe the question card to answer!";
       }
       if (lobby?.current_question && !isTarget) {
         const currentQuestionMsg = [...messages].reverse().find(m =>
