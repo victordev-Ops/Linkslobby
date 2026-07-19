@@ -134,7 +134,7 @@ export async function setupProfile(username: string, slug: string) {
             const isPro = existingProfile?.is_pro ?? false
             const hasBonus = isBonusActive(existingProfile?.bonus_2x_started_at)
             const amount = applyRewardMultiplier(XP_REWARDS.PROFILE_CREATED, isPro, hasBonus)
-            const reason = formatRewardReason('Welcome to Say! 🎉', isPro, hasBonus)
+            const reason = formatRewardReason('Welcome to Linkslobby! 🎉', isPro, hasBonus)
 
             await supabase.rpc('add_xp', {
                 p_user_id: user.id,
