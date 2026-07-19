@@ -80,7 +80,7 @@ export async function middleware(request: NextRequest) {
     '/opengraph-image',
     '/icon',
     '/apple-icon',
-    '/policy',
+    '/privacy',
     '/terms',
     '/safety'
   ]
