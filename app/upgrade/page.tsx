@@ -62,7 +62,7 @@ const benefits = [
   },
   {
     icon: Users,
-    title: "5 Truth or Dare lobbies",
+    title: "3 Truth or Dare lobbies",
     desc: "3× more lobbies than the free plan",
     color: "text-purple-400",
     bg: "bg-purple-500/10",
@@ -70,7 +70,7 @@ const benefits = [
   {
     icon: Zap,
     title: "2× star earnings",
-    desc: "Double XP on every activity you complete",
+    desc: "Double Stars on every activity you complete",
     color: "text-amber-400",
     bg: "bg-amber-500/10",
   },
@@ -84,7 +84,7 @@ const benefits = [
   {
     icon: MessageCircle,
     title: "No watermark",
-    desc: "Clean shares — no Say branding on exports",
+    desc: "Clean shares — no Linkslobby branding on exports",
     color: "text-emerald-400",
     bg: "bg-emerald-500/10",
   },
@@ -98,7 +98,7 @@ const benefits = [
   {
     icon: Star,
     title: "Ad-free experience",
-    desc: "No ads, ever — just the full Say experience",
+    desc: "No ads, ever — just the full Linkslobby experience",
     color: "text-yellow-400",
     bg: "bg-yellow-500/10",
   },
@@ -237,7 +237,7 @@ function UpgradeContent() {
         >
           <h1 className="text-4xl font-black tracking-tight leading-tight mb-2">
             Upgrade to<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Say Pro</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Linkslobby Pro</span>
           </h1>
           <p className="text-white/45 text-sm font-medium">Everything unlocked. Nothing held back.</p>
         </motion.div>
@@ -325,7 +325,7 @@ function UpgradeContent() {
           className="mb-6 text-center"
         >
           <p className="text-[11px] text-white/25 font-medium">
-            Join thousands of verified Say users
+            Join thousands of verified Linkslobby users
           </p>
         </motion.div>
 
