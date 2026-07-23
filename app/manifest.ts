@@ -13,16 +13,28 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#7C3AED",
     icons: [
       {
-        src: "/logo.png",
+        src: "/android-chrome-192x192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/android-chrome-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/maskable-icon-192x192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "/logo.png",
+        src: "/maskable-icon-512x512.png",
         sizes: "512x512",
         type: "image/png",
-        purpose: "any",
+        purpose: "maskable",
       },
     ],
     categories: ["social", "entertainment", "lifestyle"],
@@ -34,7 +46,7 @@ export default function manifest(): MetadataRoute.Manifest {
         url: "/inbox",
         icons: [
           {
-            src: "/logo.png",
+            src: "/android-chrome-192x192.png",
             sizes: "192x192",
             type: "image/png",
           },
@@ -47,7 +59,7 @@ export default function manifest(): MetadataRoute.Manifest {
         url: "/send",
         icons: [
           {
-            src: "/logo.png",
+            src: "/android-chrome-192x192.png",
             sizes: "192x192",
             type: "image/png",
           },
@@ -60,7 +72,7 @@ export default function manifest(): MetadataRoute.Manifest {
         url: "/link",
         icons: [
           {
-            src: "/logo.png",
+            src: "/android-chrome-192x192.png",
             sizes: "192x192",
             type: "image/png",
           },
