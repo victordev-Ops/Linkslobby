@@ -5,7 +5,7 @@ import path from "node:path"
 
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
-export const alt = "Linkslobby — Play. Confess. Connect."
+export const alt = "Linkslobby — Connect and Play"
 
 // Must not be prerendered at build time: the Google Fonts fetch below needs
 // live network access, which Vercel's build sandbox doesn't have (only the
@@ -32,11 +32,11 @@ async function loadGoogleFont(font: string, weight: number, text: string) {
 }
 
 export default async function OpengraphImage() {
-  const tagline = "Play. Confess. Connect."
-  const subtext = "Games, confessions & anonymous messages with your friends."
+  const tagline = "Connect and Play"
+  const subtext = "Play Games, confessions & anonymous messages with your friends."
 
   const [logoData, spaceGrotesk, inter] = await Promise.all([
-    readFile(path.join(process.cwd(), "public/linkslobby-logo-og.png")),
+    readFile(path.join(process.cwd(), "public/linkslobby-logo-dark.png")),
     loadGoogleFont("Space+Grotesk", 700, tagline),
     loadGoogleFont("Inter", 500, subtext),
   ])
@@ -86,7 +86,7 @@ export default async function OpengraphImage() {
         <img
           src={logoSrc}
           width={520}
-          height={147}
+          height={144}
           style={{ marginBottom: 40 }}
         />
 
