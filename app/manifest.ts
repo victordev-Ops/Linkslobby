@@ -2,15 +2,16 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Say - Anonymous Confessions",
-    short_name: "Say",
-    description: "Share and receive anonymous confessions. Get instant notifications when someone confesses to you.",
+    name: "Linkslobby — Connect and Play",
+    short_name: "Linkslobby",
+    description:
+      "Linkslobby is a social gaming application. Connect with friends, send confessions, play Truth or Dare, host a Hot Seat, or drop an anonymous message — real games with the friends you already have.",
     start_url: "/",
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#8B5CF6",
-    theme_color: "#7C3AED",
+    background_color: "#0f0a1e",
+    theme_color: "#9333EA",
     icons: [
       {
         src: "/android-chrome-192x192.png",
@@ -40,10 +41,10 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["social", "entertainment", "lifestyle"],
     shortcuts: [
       {
-        name: "Inbox",
-        short_name: "Inbox",
-        description: "View your confessions",
-        url: "/inbox",
+        name: "Play Games",
+        short_name: "Play",
+        description: "Jump into your dashboard and pick a game",
+        url: "/dashboard",
         icons: [
           {
             src: "/android-chrome-192x192.png",
@@ -53,10 +54,10 @@ export default function manifest(): MetadataRoute.Manifest {
         ],
       },
       {
-        name: "Send Confession",
-        short_name: "Send",
-        description: "Send anonymous confession",
-        url: "/send",
+        name: "Truth or Dare",
+        short_name: "Truth or Dare",
+        description: "Host or join a Truth or Dare lobby",
+        url: "/tod",
         icons: [
           {
             src: "/android-chrome-192x192.png",
@@ -66,10 +67,10 @@ export default function manifest(): MetadataRoute.Manifest {
         ],
       },
       {
-        name: "My Link",
-        short_name: "Link",
-        description: "Share your confession link",
-        url: "/link",
+        name: "Hot Seat",
+        short_name: "Hot Seat",
+        description: "Host a live Hot Seat session",
+        url: "/hot-seat",
         icons: [
           {
             src: "/android-chrome-192x192.png",
