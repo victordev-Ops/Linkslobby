@@ -26,21 +26,28 @@ export const metadata: Metadata = {
   description: BRAND_DESCRIPTION,
   applicationName: BRAND_NAME,
   icons: {
-    icon: "/linkslobby-logo.png",
-    apple: "/linkslobby-logo.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-48x48.png", sizes: "48x48", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
   openGraph: {
     title: `${BRAND_NAME} — ${BRAND_TAGLINE}`,
     description: BRAND_DESCRIPTION,
     siteName: BRAND_NAME,
-    images: ["/linkslobby-logo.png"],
+    images: ["/linkslobby-logo-light.png"],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: `${BRAND_NAME} — ${BRAND_TAGLINE}`,
     description: BRAND_DESCRIPTION,
-    images: ["/linkslobby-logo.png"],
+    images: ["/linkslobby-logo-light.png"],
   },
   // ... rest of metadata
 }
