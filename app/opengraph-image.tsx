@@ -32,13 +32,23 @@ async function loadGoogleFont(font: string, weight: number, text: string) {
 }
 
 export default async function OpengraphImage() {
-  const tagline = "Connect and Play"
+  // Three real actions, not one slogan — the tagline is a literal 3-step
+  // sequence (play a game → confess something → connect with a friend), so
+  // giving each word its own weight/color step makes the typography carry
+  // that structure instead of just repeating it as plain bold text.
+  const words = [
+    { text: "Connect.", color: "#ffffff" },
+    { text: "Play.", color: "#c084fc" },
+  ]
+  const tagline = words.map((w) => w.text).join(" ")
   const subtext = "Play Games, confessions & anonymous messages with your friends."
+  const byline = "linkslobby.com"
 
-  const [logoData, spaceGrotesk, inter] = await Promise.all([
-    readFile(path.join(process.cwd(), "public/linkslobby-logo-dark.png")),
+  const [logoData, spaceGroteskBold, interMedium, interSemibold] = await Promise.all([
+    readFile(path.join(process.cwd(), "public/linkslobby-logo-og.png")),
     loadGoogleFont("Space+Grotesk", 700, tagline),
     loadGoogleFont("Inter", 500, subtext),
+    loadGoogleFont("Inter", 600, byline),
   ])
 
   const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`
@@ -83,45 +93,64 @@ export default async function OpengraphImage() {
           }}
         />
 
-        <img
-          src={logoSrc}
-          width={520}
-          height={144}
-          style={{ marginBottom: 40 }}
-        />
+        <img src={logoSrc} width={480} height={136} style={{ marginBottom: 36 }} />
 
         <div
           style={{
             display: "flex",
-            fontSize: 54,
+            fontSize: 58,
             fontFamily: "Space Grotesk",
             fontWeight: 700,
-            color: "#ffffff",
-            letterSpacing: "-0.02em",
+            letterSpacing: "-0.03em",
           }}
         >
-          {tagline}
+          {words.map((w, i) => (
+            <span key={w.text} style={{ color: w.color, marginRight: i < words.length - 1 ? 18 : 0 }}>
+              {w.text}
+            </span>
+          ))}
         </div>
 
         <div
           style={{
             display: "flex",
-            marginTop: 20,
-            fontSize: 26,
+            marginTop: 22,
+            maxWidth: 620,
+            textAlign: "center",
+            fontSize: 25,
+            lineHeight: 1.5,
             fontFamily: "Inter",
             fontWeight: 500,
-            color: "rgba(255,255,255,0.6)",
+            letterSpacing: "-0.005em",
+            color: "rgba(255,255,255,0.55)",
           }}
         >
           {subtext}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            position: "absolute",
+            bottom: 40,
+            fontSize: 18,
+            fontFamily: "Inter",
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "rgba(255,255,255,0.32)",
+          }}
+        >
+          {byline}
         </div>
       </div>
     ),
     {
       ...size,
       fonts: [
-        { name: "Space Grotesk", data: spaceGrotesk, weight: 700, style: "normal" },
-        { name: "Inter", data: inter, weight: 500, style: "normal" },
+        { name: "Space Grotesk", data: spaceGroteskBold, weight: 700, style: "normal" },
+        { name: "Inter", data: interMedium, weight: 500, style: "normal" },
+        { name: "Inter", data: interSemibold, weight: 600, style: "normal" },
       ],
       headers: {
         "Cache-Control": "public, immutable, no-transform, max-age=86400, s-maxage=86400",
