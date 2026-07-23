@@ -846,7 +846,7 @@ export default function DashboardClient({ initialDykmQuestions, serverProfile }:
   </h3>
   
   <p className="text-slate-600 dark:text-slate-400 text-sm mb-8 max-w-[280px] mx-auto leading-relaxed">
-    Get your badge, unlock the full games catalog, and stand out with Say Pro.
+    Get your badge, unlock the full games catalog, and stand out with Linkslobby Pro.
   </p>
   
   <Link
