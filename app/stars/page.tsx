@@ -280,7 +280,7 @@ export default function StarsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24">
+        <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24 font-sans">
             {/* Background Ambience */}
             <div className="fixed inset-0 pointer-events-none hidden dark:block">
                 <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-orange-900/10 rounded-full blur-[120px]" />
@@ -306,10 +306,11 @@ export default function StarsPage() {
                                 </h1>
                             </div>
 
-                            <div className="px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 shadow-md">
+                            <div className="px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 shadow-md flex items-center gap-1">
                                 <span className="text-xs font-black text-orange-900 drop-shadow-sm">
-                                    {loading ? '...' : <AnimatedCounter value={balance} />} ⭐
+                                    {loading ? '...' : <AnimatedCounter value={balance} />}
                                 </span>
+                                <Star className="w-3 h-3 text-orange-900 fill-orange-900 drop-shadow-sm" />
                             </div>
                         </div>
 
