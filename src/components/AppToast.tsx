@@ -3,7 +3,7 @@
 import { toast } from 'sonner'
 import { X, type LucideIcon } from 'lucide-react'
 
-export type AppToastVariant = 'default' | 'success' | 'error' | 'info' | 'warning'
+export type AppToastVariant = 'default' | 'success' | 'error' | 'info' | 'warning' | 'xp'
 
 interface ShowAppToastOptions {
   /**
@@ -30,6 +30,7 @@ const VARIANT_STYLES: Record<AppToastVariant, string> = {
   error: 'text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400',
   info: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400',
   warning: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400',
+  xp: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400',
 }
 
 /**
