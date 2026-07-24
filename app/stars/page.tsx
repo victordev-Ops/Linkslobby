@@ -3,8 +3,10 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Star, TrendingUp, TrendingDown, Loader2, Flame, ArrowLeft } from "lucide-react"
-import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion"
+import { StarAmount } from "@/components/StarAmount"
+import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
+import XPBalance from "@/components/XPBalance"
 
 interface XPTransaction {
     id: string
@@ -15,30 +17,9 @@ interface XPTransaction {
     metadata?: any
 }
 
-// Animated counter component
-function AnimatedCounter({ value }: { value: number }) {
-    const spring = useSpring(value, {
-        stiffness: 100,
-        damping: 30,
-        duration: 1000
-    })
-    const display = useTransform(spring, (current) =>
-        Math.round(current).toLocaleString()
-    )
-
-    useEffect(() => {
-        spring.set(value)
-    }, [spring, value])
-
-    return <motion.span>{display}</motion.span>
-}
-
 export default function StarsPage() {
     const router = useRouter()
-    const [balance, setBalance] = useState<number>(0)
-    const [prevBalance, setPrevBalance] = useState<number>(0)
     const [transactions, setTransactions] = useState<XPTransaction[]>([])
-    const [loading, setLoading] = useState(true)
     const [page, setPage] = useState(0)
     const [hasMore, setHasMore] = useState(true)
     const [loadingHistory, setLoadingHistory] = useState(false)
@@ -52,43 +33,11 @@ export default function StarsPage() {
 
     useEffect(() => {
         let mounted = true
-        let profileChannel: ReturnType<typeof supabase.channel> | null = null
         let transactionChannel: ReturnType<typeof supabase.channel> | null = null
 
         const setupSubscription = async () => {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user || !mounted) return
-
-            // Subscribe to XP changes on profiles table
-            profileChannel = supabase
-                .channel(`xp-changes-${user.id}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: 'UPDATE',
-                        schema: 'public',
-                        table: 'profiles',
-                        filter: `id=eq.${user.id}`
-                    },
-                    (payload) => {
-                        if (!mounted) return
-                        if (payload.new && 'xp_balance' in payload.new) {
-                            const newBalance = payload.new.xp_balance as number
-                            const oldBalance = payload.old?.xp_balance as number
-
-                            if (oldBalance !== undefined) {
-                                setPrevBalance(oldBalance)
-                                setBalance(newBalance)
-                            } else {
-                                setBalance(currentBalance => {
-                                    setPrevBalance(currentBalance)
-                                    return newBalance
-                                })
-                            }
-                        }
-                    }
-                )
-                .subscribe()
 
             // Subscribe to new transactions
             transactionChannel = supabase
@@ -110,14 +59,12 @@ export default function StarsPage() {
                 .subscribe()
         }
 
-        fetchBalance()
         fetchStreak()
         fetchTransactions(0, true)
         setupSubscription()
 
         return () => {
             mounted = false
-            if (profileChannel) supabase.removeChannel(profileChannel)
             if (transactionChannel) supabase.removeChannel(transactionChannel)
         }
     }, [])
@@ -141,29 +88,6 @@ export default function StarsPage() {
 
         return () => observer.disconnect()
     }, [hasMore, loadingHistory])
-
-    const fetchBalance = async () => {
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('xp_balance')
-                .eq('id', user.id)
-                .single()
-
-            if (profile) {
-                const newBalance = profile.xp_balance || 0
-                setBalance(newBalance)
-                setPrevBalance(newBalance)
-            }
-            setLoading(false)
-        } catch (error) {
-            console.error('Error fetching XP balance:', error)
-            setLoading(false)
-        }
-    }
 
     // Fetch login streak from xp_transactions
     const fetchStreak = async () => {
@@ -280,7 +204,7 @@ export default function StarsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24 font-sans">
+        <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#0f0a1e] transition-colors duration-300 pb-24" style={{ fontFamily: 'var(--font-geist-sans)' }}>
             {/* Background Ambience */}
             <div className="fixed inset-0 pointer-events-none hidden dark:block">
                 <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-orange-900/10 rounded-full blur-[120px]" />
@@ -306,12 +230,7 @@ export default function StarsPage() {
                                 </h1>
                             </div>
 
-                            <div className="px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 shadow-md flex items-center gap-1">
-                                <span className="text-xs font-black text-orange-900 drop-shadow-sm">
-                                    {loading ? '...' : <AnimatedCounter value={balance} />}
-                                </span>
-                                <Star className="w-3 h-3 text-orange-900 fill-orange-900 drop-shadow-sm" />
-                            </div>
+                            <XPBalance size="lg" />
                         </div>
 
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
@@ -417,11 +336,8 @@ export default function StarsPage() {
                                             <p className="text-sm font-semibold text-slate-900 dark:text-slate-200 leading-tight">
                                                 {transaction.reason}
                                             </p>
-                                            <span className={`font-bold text-sm shrink-0 ${transaction.type === 'earn'
-                                                ? 'text-green-600 dark:text-green-400'
-                                                : 'text-red-600 dark:text-red-400'
-                                                }`}>
-                                                {transaction.type === 'earn' ? '+' : '-'}{Math.abs(transaction.amount).toLocaleString()}
+                                            <span className="shrink-0">
+                                                <StarAmount amount={transaction.amount} type={transaction.type} />
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2 mt-1.5">
