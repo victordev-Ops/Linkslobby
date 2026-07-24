@@ -1,11 +1,53 @@
 "use client"
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { showXPNotification } from './XPNotification'
 
+// How long to wait for more XP events before flushing what's buffered into a
+// single toast. This is the fix for XP toasts specifically stacking during a
+// burst — e.g. finishing several turns back to back can insert 3-4
+// xp_transactions rows within a second, which previously fired 3-4 separate
+// toasts on top of each other. Earn and spend are buffered separately since
+// they're different colors/meanings and shouldn't be summed together.
+const XP_BATCH_WINDOW_MS = 700
+
+type PendingXP = { id: string; amount: number; reason: string }
+
 export function XPNotificationProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
+  const bufferRef = useRef<Record<'earn' | 'spend', PendingXP[]>>({ earn: [], spend: [] })
+  const flushTimerRef = useRef<Record<'earn' | 'spend', ReturnType<typeof setTimeout> | null>>({ earn: null, spend: null })
+
+  const flushXP = (type: 'earn' | 'spend') => {
+    const items = bufferRef.current[type]
+    bufferRef.current[type] = []
+    flushTimerRef.current[type] = null
+    if (items.length === 0) return
+
+    if (items.length === 1) {
+      const only = items[0]
+      showXPNotification(only.amount, only.reason, type, undefined, only.id)
+      return
+    }
+
+    // Multiple events landed within the batch window — show one combined
+    // toast instead of one per event. Use the last item's id for dedup
+    // (with a batch prefix so it never collides with a later single-event
+    // toast that happens to reuse the same underlying row id).
+    const total = items.reduce((sum, i) => sum + i.amount, 0)
+    const label = type === 'earn' ? 'Stars Earned!' : 'Stars Spent'
+    const reason = `${items.length} events`
+    const batchId = `xp-batch:${type}:${items[items.length - 1].id}`
+    showXPNotification(total, reason, type, label, batchId)
+  }
+
+  const enqueueXP = (type: 'earn' | 'spend', item: PendingXP) => {
+    bufferRef.current[type].push(item)
+    if (!flushTimerRef.current[type]) {
+      flushTimerRef.current[type] = setTimeout(() => flushXP(type), XP_BATCH_WINDOW_MS)
+    }
+  }
 
   useEffect(() => {
     let transactionChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -40,17 +82,20 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
           },
           (payload) => {
             try {
-              const newRecord = payload.new as { amount: number, reason: string, type: 'earn' | 'spend' }
+              const newRecord = payload.new as { id: string, amount: number, reason: string, type: 'earn' | 'spend' }
               if (process.env.NODE_ENV === 'development') {
                 console.log('📊 XP Transaction detected:', newRecord)
               }
-              // Show notifications for all XP events (both earning and spending)
-              // Amount is always positive in the database, type indicates earn/spend
+              // Queue notifications for all XP events (both earning and spending).
+              // Amount is always positive in the database, type indicates earn/spend.
+              // Actual display is batched — see enqueueXP/flushXP above — so a
+              // burst of events renders as one toast, not a stack of them.
               if (newRecord && newRecord.amount > 0 && newRecord.reason) {
+                const type = newRecord.type || 'earn'
                 if (process.env.NODE_ENV === 'development') {
-                  console.log('🔔 Showing XP notification:', { amount: newRecord.amount, reason: newRecord.reason, type: newRecord.type || 'earn' })
+                  console.log('🔔 Queuing XP notification:', { amount: newRecord.amount, reason: newRecord.reason, type })
                 }
-                showXPNotification(newRecord.amount, newRecord.reason, newRecord.type || 'earn')
+                enqueueXP(type, { id: newRecord.id, amount: newRecord.amount, reason: newRecord.reason })
               }
             } catch (error) {
               console.error('Error processing XP transaction notification:', error)
@@ -142,6 +187,8 @@ export function XPNotificationProvider({ children }: { children: React.ReactNode
     return () => {
       if (transactionChannel) supabase.removeChannel(transactionChannel)
       if (profileChannel) supabase.removeChannel(profileChannel)
+      if (flushTimerRef.current.earn) clearTimeout(flushTimerRef.current.earn)
+      if (flushTimerRef.current.spend) clearTimeout(flushTimerRef.current.spend)
     }
   }, [supabase])
 
