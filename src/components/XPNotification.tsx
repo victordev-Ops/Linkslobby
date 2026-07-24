@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { Star, X } from 'lucide-react'
+import { Star } from 'lucide-react'
+import { showAppToast } from './AppToast'
 
 interface XPNotification {
   id: string
@@ -41,13 +41,29 @@ export function XPNotificationToast(_props: XPNotificationProps) {
 }
 
 /**
- * Triggers a sonner toast injection with an amber ascent profile
+ * Triggers an XP toast through showAppToast — the same card, spacing, and
+ * stacking behavior as every other toast in the app (messages, friend
+ * requests, Hot Seat, etc). This used to render its own bespoke toast.custom
+ * card (different width, different padding, hand-rolled close button), which
+ * is what made XP toasts look and stack differently from everything else.
+ *
+ * `id` should be the underlying xp_transactions row id when available (see
+ * XPNotificationProvider). Passing a stable id means a re-fired realtime
+ * event (reconnect replay, dual-tab) updates the existing toast in place
+ * instead of stacking a duplicate — the same dedup mechanism showAppToast
+ * already uses for every other notification type.
  */
-export function showXPNotification(amount: number, reason: string, type: 'earn' | 'spend' = 'earn', label?: string) {
+export function showXPNotification(
+  amount: number,
+  reason: string,
+  type: 'earn' | 'spend' = 'earn',
+  label?: string,
+  id?: string
+) {
   const isEarning = type === 'earn'
   const displayLabel = label || (isEarning ? "Stars Earned!" : "Stars Spent")
   const displayAmount = Math.abs(amount)
-  const toastId = Math.random().toString(36).substring(2, 9)
+  const toastId = id ? `xp:${id}` : Math.random().toString(36).substring(2, 9)
 
   const payload: XPNotification = {
     id: toastId,
@@ -60,52 +76,28 @@ export function showXPNotification(amount: number, reason: string, type: 'earn' 
   activeNotificationState = payload
   queueListeners.forEach(fn => fn(payload))
 
-  toast.custom((t) => (
-    <div className="relative flex items-start gap-2.5 py-2 px-3 rounded-lg border shadow-md bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 border-amber-500/20 dark:border-amber-500/30 w-[306px]">
-      
-      {/* Amber Ascent Star Branding */}
-      <div className="p-1.5 rounded-md shrink-0 bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400 mt-0.5">
-        <Star className="w-4 h-4 fill-current" />
-      </div>
+  const duration = 4000
 
-      {/* Content Layout */}
-      <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 truncate">
-          {displayLabel}
-        </p>
-        <div className="flex items-center gap-1 mt-0.5 leading-none">
-          <span className="text-sm font-bold">
-            {isEarning ? '+' : '-'}{displayAmount}
-          </span>
-          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500 shrink-0" />
-          <span className="text-xs text-zinc-400 dark:text-zinc-500 mx-1">•</span>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-[140px]">
-            {reason}
-          </p>
-        </div>
-      </div>
-
-      {/* Manual Dismiss Trigger */}
-      <button 
-        onClick={() => {
-          toast.dismiss(t)
-          activeNotificationState = null
-          queueListeners.forEach(fn => fn(null))
-        }}
-        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors p-0.5 rounded shrink-0 mt-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        aria-label="Close notification"
-      >
-        <X className="w-3.5 h-3.5" />
-      </button>
-    </div>
-  ), {
+  showAppToast(displayLabel, {
     id: toastId,
-    duration: 4000,
-    onAutoClose: () => {
+    icon: Star,
+    variant: 'xp',
+    description: `${isEarning ? '+' : '-'}${displayAmount} \u2605  ${reason}`,
+    duration,
+  })
+
+  // showAppToast doesn't expose an onAutoClose hook (sonner's toast.custom
+  // callback isn't threaded through it), so we mirror the toast's own
+  // duration here to keep useXPNotifications()'s legacy state in sync.
+  // Manual dismiss (the X button) isn't observable from here either — this
+  // listener state is a compatibility shim for old callers of the hook, not
+  // something the current toast UI depends on.
+  setTimeout(() => {
+    if (activeNotificationState?.id === toastId) {
       activeNotificationState = null
       queueListeners.forEach(fn => fn(null))
     }
-  })
+  }, duration)
 }
 
 /**
@@ -123,4 +115,4 @@ export function useXPNotifications() {
   }, [])
 
   return notification
-          }
+}
