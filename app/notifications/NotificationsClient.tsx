@@ -37,7 +37,7 @@ interface NotificationsClientProps {
     profileId: string
 }
 
-type Tab = "All" | "Messages" | "Games" | "Lobbies" | "XP" | "Hot Seat" | "Friends"
+type Tab = "All" | "Messages" | "Games" | "Lobbies" | "Stars" | "Hot Seat" | "Friends"
 
 function stripMetadata(message: string): string {
     if (!message) return ""
