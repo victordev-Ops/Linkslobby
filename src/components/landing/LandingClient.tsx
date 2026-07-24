@@ -38,8 +38,8 @@ const ROTATING_WORDS = [
   "a confession",
   "a dare",
   "a whisper",
-  "a hot take",
-  "a question",
+  "a hot question",
+  "a take",
 ]
 
 const GAMES = [
@@ -358,7 +358,7 @@ export default function LandingClient() {
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-500/20 text-xs font-bold text-purple-600 dark:text-purple-400 mb-6">
             <Sparkles size={13} />
-            Play. Confess. Connect.
+            Connect and Play.
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-slate-900 dark:text-white leading-[1.05] font-[family-name:var(--font-display)]">
             Send your friend
