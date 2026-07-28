@@ -28,7 +28,7 @@ const SOCIAL_PROVIDERS = [
         ),
     },
     {
-        id: 'twitter' as const,
+        id: 'X' as const,
         label: 'X',
         icon: (
             <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
@@ -46,7 +46,7 @@ interface SocialAuthButtonsProps {
 export default function SocialAuthButtons({ mode = 'login', next }: SocialAuthButtonsProps) {
     const [loading, setLoading] = useState<string | null>(null)
 
-    const handleSocialLogin = async (provider: 'google' | 'facebook' | 'twitter') => {
+    const handleSocialLogin = async (provider: 'google' | 'facebook' | 'X') => {
         setLoading(provider)
         try {
             const supabase = createClient()
