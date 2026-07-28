@@ -11,7 +11,7 @@ const geistMono = GeistMono
 // Keep in sync with LandingClient.tsx: purple-600 accent, #F8F9FD light /
 // #0f0a1e dark surfaces, "Linkslobby" brand name and logo.
 const BRAND_NAME = "Linkslobby"
-const BRAND_TAGLINE = "Play. Confess. Connect."
+const BRAND_TAGLINE = "Connect and Play"
 const BRAND_DESCRIPTION =
   "Confessions, Truth or Dare, Hot Seat, and more — real games with the friends you already have. Every round earns you stars."
 const BRAND_COLOR = "#9333EA" // Tailwind purple-600, matches CTA buttons on landing
@@ -69,7 +69,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
- 
+ <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6982582921064240"
+     crossorigin="anonymous"></script>
   <meta
   name="impact-site-verification"
   content="1ce85299-f0a8-4603-89ae-2dc158179031"
