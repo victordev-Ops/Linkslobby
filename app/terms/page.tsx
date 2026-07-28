@@ -372,8 +372,8 @@ export default function TermsPage() {
               even if advised of the possibility of such damages. Our total
               aggregate liability for any claim arising from these Terms or
               the Service will not exceed the greater of (a) the amount you
-              paid us in the twelve (12) months preceding the claim, or (b){" "}
-              [Insert Amount, e.g. NGN 10,000].
+              paid us in the twelve (12) months preceding the claim, or (b)
+             NGN 10,000.
             </Prose>
             <Prose>
               This section does not limit liability for death, personal
@@ -430,8 +430,8 @@ export default function TermsPage() {
               Any dispute arising out of or relating to these Terms or the
               Service shall first be addressed through good-faith
               negotiation. If unresolved within thirty (30) days, the
-              dispute shall be submitted to the exclusive jurisdiction of the
-              courts of [Insert State, e.g. Lagos State], Nigeria.
+              dispute shall be submitted to the exclusive jurisdiction of a
+              court in Nigeria.
             </Prose>
           </Section>
 
@@ -470,6 +470,7 @@ export default function TermsPage() {
               By using Linkslobby, you acknowledge that you have read,
               understood, and agree to be bound by these Terms of Service.
               Questions? Reach us at <EmailLink />.
+              <br/>
             </p>
           </div>
         </main>
