@@ -109,10 +109,7 @@ export default function PrivacyPage() {
           ))}
         </div>
 
-        <p className="text-[11px] text-gray-400 dark:text-white/25 text-center leading-relaxed px-2">
-          This policy is a working draft prepared for Linkslobby. Have it reviewed by qualified counsel
-          familiar with the Nigeria Data Protection Act before relying on it in production.
-        </p>
+    
       </div>
     </div>
   )
