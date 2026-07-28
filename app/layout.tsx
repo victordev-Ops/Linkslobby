@@ -70,7 +70,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6982582921064240"
-     crossorigin="anonymous"></script>
+     crossOrigin="anonymous"></script>
   <meta
   name="impact-site-verification"
   content="1ce85299-f0a8-4603-89ae-2dc158179031"
