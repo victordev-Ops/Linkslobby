@@ -1,4 +1,4 @@
-Single source of truth for "exactly 3 words" validation, used by both
+//Single source of truth for "exactly 3 words" validation, used by both
 // ThreeWordForm's live client-side check and submitThreeWordResponse's
 // server-side check — same role graphemeLength()/toGraphemes() play for
 // confessions, so the two can never disagree about what's valid.
