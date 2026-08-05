@@ -4,7 +4,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
-import { parseThreeWords } from '@/lib/three-word'
+import { parseThreeWords } from '@/hooks/three-word'
 
 export type ThreeWordActionResponse = { error?: string; success?: boolean }
 
