@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Type, CheckCircle, Sparkles, User } from 'lucide-react'
 import VerifiedBadge from '@/components/VerifiedBadge'
-import { countWords } from '@/lib/three-word'
+import { countWords } from '@/hooks/three-word'
 
 type ActionResponse = { error?: string; success?: boolean }
 
