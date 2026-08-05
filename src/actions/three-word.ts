@@ -91,7 +91,7 @@ export async function getActiveThreeWordSession() {
  */
 export async function submitThreeWordResponse(slug: string, rawWords: string): Promise<ThreeWordActionResponse> {
   const parsed = parseThreeWords(rawWords)
-  if (!parsed.valid) return { error: parsed.error }
+  if (parsed.error) return { error: parsed.error }
 
   const supabase = await createSupabaseServerClient()
 
@@ -252,4 +252,4 @@ export async function closeThreeWordSession(sessionId: string) {
 
   revalidatePath('/three-words')
   return { success: true }
-}
+    }
