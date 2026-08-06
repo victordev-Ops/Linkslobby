@@ -56,7 +56,7 @@ export default function ThreeWordsClient({
   const [isLoadingMore, startLoadingMore] = useTransition()
   const [pendingActionId, setPendingActionId] = useState<string | null>(null)
 
-  const shareUrl = session ? `https://www.linkslobby.com/three-word/${session.slug}` : null
+  const shareUrl = session ? `https://www.linkslobby.com/three-words/${session.slug}` : null
 
   const handleStart = () => {
     startStarting(async () => {
