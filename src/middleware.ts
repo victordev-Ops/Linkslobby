@@ -58,11 +58,7 @@ export async function middleware(request: NextRequest) {
     if (authError) {
       console.log(`[Middleware] Auth error for ${pathname}:`, authError.message)
     }
-    console.log(
-      user
-        ? `[Middleware] Authenticated: ${user.email} for ${pathname}`
-        : `[Middleware] Guest access for ${pathname}`
-    )
+ 
   }
 
   // 2. Define Public Routes
@@ -105,7 +101,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/tod/') ||
     pathname.startsWith('/hot-seat/') ||
     pathname.startsWith('/rps') ||
-    pathname.startWith('three-words/')
+    pathname.startsWith('three-words/')
 
   const isPublicRoute = isExactPublic || isPublicPrefix
 
