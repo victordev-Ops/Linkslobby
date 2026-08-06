@@ -101,7 +101,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/tod/') ||
     pathname.startsWith('/hot-seat/') ||
     pathname.startsWith('/rps') ||
-    pathname.startsWith('three-words/')
+    pathname.startsWith('/three-words/')
 
   const isPublicRoute = isExactPublic || isPublicPrefix
 
