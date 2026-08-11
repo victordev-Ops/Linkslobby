@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import AnonymousForm from './AnonymousForm'
 import VerifiedBadge from '@/components/VerifiedBadge'
+import AdsterraDelayedSlot from '@/components/ads/AdsterraDelayedSlot'
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
@@ -156,6 +157,11 @@ export default async function AnonymousPage({ params }: PageProps) {
               action={sendAnonymousAction}
             />
           </div>
+        </div>
+
+        {/* Adsterra native banner — mounts 6s after this page loads */}
+        <div className="mt-6">
+          <AdsterraDelayedSlot delayMs={6000} className="[&_span]:text-white/50" />
         </div>
 
         <p className="mt-6 text-white/50 text-xs font-medium uppercase tracking-widest text-center">
