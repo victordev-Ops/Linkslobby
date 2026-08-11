@@ -43,10 +43,31 @@ interface AdsterraNativeBannerProps {
    * slot. It never re-injects Adsterra's <script>, so it doesn't generate a
    * fresh ad request each cycle — repeatedly re-invoking the script on a
    * timer is what ad networks flag as refresh/impression abuse.
+   *
+   * Timing is randomized per cycle rather than fixed, and deliberately
+   * asymmetric: the visible phase is drawn from a longer range than the
+   * hidden phase. Ad viewability/RPM is roughly a function of dwell time,
+   * so keeping it on-screen longer than it's off-screen protects earnings,
+   * while randomization (vs. a metronomic fixed interval) reads as less
+   * mechanical to the user.
    */
   cycle?: boolean
-  /** Milliseconds visible before fading out (and vice versa). Default 3000. */
-  cycleMs?: number
+  /** Random visible-phase duration range in ms. Default [5000, 9000]. */
+  visibleRangeMs?: [number, number]
+  /** Random hidden-phase duration range in ms. Default [2000, 4000]. */
+  hiddenRangeMs?: [number, number]
+  /**
+   * Caps the slot's rendered height so a tall creative can't blow out the
+   * layout. This only crops via CSS — it can't force Adsterra to serve a
+   * smaller creative. For a reliably compact "just one image" result, pick
+   * a fixed-size ad format (e.g. 300x100 or 250x250 banner) in the Adsterra
+   * dashboard instead of Native Banner, which auto-fills its container.
+   */
+  maxHeightPx?: number
+}
+
+function randomBetween([min, max]: [number, number]) {
+  return min + Math.random() * (max - min)
 }
 
 export default function AdsterraNativeBanner({
@@ -54,7 +75,9 @@ export default function AdsterraNativeBanner({
   className = '',
   showLabel = true,
   cycle = false,
-  cycleMs = 3000,
+  visibleRangeMs = [5000, 9000],
+  hiddenRangeMs = [2000, 4000],
+  maxHeightPx = 100,
 }: AdsterraNativeBannerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const mountedForKey = useRef<string | null>(null)
@@ -62,9 +85,21 @@ export default function AdsterraNativeBanner({
 
   useEffect(() => {
     if (!cycle) return
-    const id = setInterval(() => setVisible((v) => !v), cycleMs)
-    return () => clearInterval(id)
-  }, [cycle, cycleMs])
+    let timer: ReturnType<typeof setTimeout>
+
+    const schedule = (isVisible: boolean) => {
+      const range = isVisible ? visibleRangeMs : hiddenRangeMs
+      timer = setTimeout(() => {
+        setVisible((v) => !v)
+      }, randomBetween(range))
+    }
+
+    schedule(visible)
+    return () => clearTimeout(timer)
+    // Re-fires each time `visible` flips, drawing a fresh random delay for
+    // the *next* phase — intentionally not memoized on visibleRangeMs alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cycle, visible])
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -96,8 +131,9 @@ export default function AdsterraNativeBanner({
   return (
     <div
       className={`w-full flex flex-col items-center overflow-hidden transition-[opacity,max-height] duration-500 ease-in-out ${
-        cycle && !visible ? 'opacity-0 max-h-0 pointer-events-none' : 'opacity-100 max-h-[600px]'
+        cycle && !visible ? 'opacity-0 pointer-events-none' : 'opacity-100'
       } ${className}`}
+      style={{ maxHeight: cycle && !visible ? 0 : maxHeightPx }}
       aria-hidden={cycle && !visible ? true : undefined}
     >
       {showLabel && (
@@ -105,7 +141,7 @@ export default function AdsterraNativeBanner({
           Advertisement
         </span>
       )}
-      <div ref={wrapperRef} className="w-full flex justify-center min-h-[1px]" />
+      <div ref={wrapperRef} className="w-full flex justify-center min-h-[1px] overflow-hidden" />
     </div>
   )
 }
