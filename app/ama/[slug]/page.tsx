@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import AmaPublicClient from '@/components/AmaPublicClient'
+import AdsterraDelayedSlot from '@/components/ads/AdsterraDelayedSlot'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,15 @@ export default async function PublicAmaPage({ params }: PageProps) {
         isPro={profile.is_pro}
         isBlocked={isBlocked}
       />
+
+      <div className="mt-6 w-full max-w-md">
+        <AdsterraDelayedSlot
+          delayMs={6000}
+          className="[&_span]:text-white/50"
+          cycle
+          maxHeightPx={155}
+        />
+      </div>
 
       <p className="mt-8 text-white/60 text-xs font-medium uppercase tracking-widest">
         Powered by Linkslobby
