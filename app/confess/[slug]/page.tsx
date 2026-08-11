@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import ConfessionForm from './ConfessionForm'
 import { graphemeLength } from '@/lib/graphemes'
+import AdsterraDelayedSlot from '@/components/ads/AdsterraDelayedSlot'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,6 +105,15 @@ export default async function ConfessPage({ params }: PageProps) {
         isBlocked={isBlocked}
         action={sendConfessionAction}
       />
+
+      <div className="mt-6 w-full max-w-md">
+        <AdsterraDelayedSlot
+          delayMs={6000}
+          className="[&_span]:text-white/50"
+          cycle
+          maxHeightPx={155}
+        />
+      </div>
 
       <p className="mt-8 text-white/60 text-xs font-medium uppercase tracking-widest">
         Powered by Linkslobby
