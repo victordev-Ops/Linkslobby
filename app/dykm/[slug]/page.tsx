@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import DykmGameClient from "./DykmGameClient"
 import { Metadata } from "next"
+import AdsterraDelayedSlot from '@/components/ads/AdsterraDelayedSlot'
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   // Await params first in Next.js 15+
@@ -43,5 +44,12 @@ export default async function DykmPage({ params }: { params: Promise<{ slug: str
     )
   }
 
-  return <DykmGameClient profile={profile} questions={quiz.questions} />
+  return (
+    <>
+      <DykmGameClient profile={profile} questions={quiz.questions} />
+      <div className="w-full max-w-md mx-auto px-4 pb-6">
+        <AdsterraDelayedSlot delayMs={6000} cycle maxHeightPx={155} />
+      </div>
+    </>
+  )
 }
