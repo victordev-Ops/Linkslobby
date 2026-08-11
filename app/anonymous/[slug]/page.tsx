@@ -161,7 +161,7 @@ export default async function AnonymousPage({ params }: PageProps) {
 
         {/* Adsterra native banner — mounts 6s after this page loads */}
         <div className="mt-6">
-          <AdsterraDelayedSlot delayMs={6000} className="[&_span]:text-white/50" cycle cycleMs={3000} />
+          <AdsterraDelayedSlot delayMs={6000} className="[&_span]:text-white/50" cycle />
         </div>
 
         <p className="mt-6 text-white/50 text-xs font-medium uppercase tracking-widest text-center">
@@ -196,4 +196,5 @@ export default async function AnonymousPage({ params }: PageProps) {
     </div>
   )
     }
-              
+
+    
