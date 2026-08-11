@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * Adsterra "Native Banner" ad unit.
@@ -33,15 +33,38 @@ interface AdsterraNativeBannerProps {
   className?: string
   /** Small "Advertisement" label above the slot, for clarity/compliance. */
   showLabel?: boolean
+  /**
+   * Cross-fades the slot in and out on a loop instead of leaving it
+   * statically visible — shrinks how much visual space the ad occupies at
+   * any given instant so a native banner reads as a passing element in the
+   * feed rather than a long fixed block.
+   *
+   * Important: this only toggles CSS opacity/height on the already-mounted
+   * slot. It never re-injects Adsterra's <script>, so it doesn't generate a
+   * fresh ad request each cycle — repeatedly re-invoking the script on a
+   * timer is what ad networks flag as refresh/impression abuse.
+   */
+  cycle?: boolean
+  /** Milliseconds visible before fading out (and vice versa). Default 3000. */
+  cycleMs?: number
 }
 
 export default function AdsterraNativeBanner({
   adKey = DEFAULT_AD_KEY,
   className = '',
   showLabel = true,
+  cycle = false,
+  cycleMs = 3000,
 }: AdsterraNativeBannerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const mountedForKey = useRef<string | null>(null)
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    if (!cycle) return
+    const id = setInterval(() => setVisible((v) => !v), cycleMs)
+    return () => clearInterval(id)
+  }, [cycle, cycleMs])
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -71,7 +94,12 @@ export default function AdsterraNativeBanner({
   }, [adKey])
 
   return (
-    <div className={`w-full flex flex-col items-center ${className}`}>
+    <div
+      className={`w-full flex flex-col items-center overflow-hidden transition-[opacity,max-height] duration-500 ease-in-out ${
+        cycle && !visible ? 'opacity-0 max-h-0 pointer-events-none' : 'opacity-100 max-h-[600px]'
+      } ${className}`}
+      aria-hidden={cycle && !visible ? true : undefined}
+    >
       {showLabel && (
         <span className="text-[9px] uppercase tracking-widest text-gray-300 dark:text-gray-600 font-bold mb-1 select-none">
           Advertisement
