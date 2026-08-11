@@ -11,8 +11,12 @@ interface AdsterraDelayedSlotProps {
   className?: string
   /** Fade the slot in/out on a loop once mounted, instead of staying static. */
   cycle?: boolean
-  /** Milliseconds visible before fading out (and vice versa). Default 3000. */
-  cycleMs?: number
+  /** Random visible-phase duration range in ms. Default [5000, 9000]. */
+  visibleRangeMs?: [number, number]
+  /** Random hidden-phase duration range in ms. Default [2000, 4000]. */
+  hiddenRangeMs?: [number, number]
+  /** Caps the slot's rendered height in px. Default 100. */
+  maxHeightPx?: number
 }
 
 /**
@@ -26,7 +30,9 @@ export default function AdsterraDelayedSlot({
   delayMs = 6000,
   className = '',
   cycle = false,
-  cycleMs = 3000,
+  visibleRangeMs,
+  hiddenRangeMs,
+  maxHeightPx,
 }: AdsterraDelayedSlotProps) {
   const [visible, setVisible] = useState(false)
 
@@ -37,5 +43,14 @@ export default function AdsterraDelayedSlot({
 
   if (!visible) return null
 
-  return <AdsterraNativeBanner adKey={adKey} className={className} cycle={cycle} cycleMs={cycleMs} />
+  return (
+    <AdsterraNativeBanner
+      adKey={adKey}
+      className={className}
+      cycle={cycle}
+      visibleRangeMs={visibleRangeMs}
+      hiddenRangeMs={hiddenRangeMs}
+      maxHeightPx={maxHeightPx}
+    />
+  )
 }
