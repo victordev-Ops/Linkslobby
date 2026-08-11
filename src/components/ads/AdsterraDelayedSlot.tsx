@@ -9,6 +9,10 @@ interface AdsterraDelayedSlotProps {
   /** Delay before the ad slot mounts, in milliseconds. Defaults to 6s. */
   delayMs?: number
   className?: string
+  /** Fade the slot in/out on a loop once mounted, instead of staying static. */
+  cycle?: boolean
+  /** Milliseconds visible before fading out (and vice versa). Default 3000. */
+  cycleMs?: number
 }
 
 /**
@@ -21,6 +25,8 @@ export default function AdsterraDelayedSlot({
   adKey,
   delayMs = 6000,
   className = '',
+  cycle = false,
+  cycleMs = 3000,
 }: AdsterraDelayedSlotProps) {
   const [visible, setVisible] = useState(false)
 
@@ -31,5 +37,5 @@ export default function AdsterraDelayedSlot({
 
   if (!visible) return null
 
-  return <AdsterraNativeBanner adKey={adKey} className={className} />
+  return <AdsterraNativeBanner adKey={adKey} className={className} cycle={cycle} cycleMs={cycleMs} />
 }
