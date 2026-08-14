@@ -4,7 +4,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getStripe, STRIPE_PRICES, type StripePlan } from '@/lib/stripe'
-import { initializeTransaction, PAYSTACK_PLANS, type PaystackPlan } from '@/lib/paystack'
+import { initializeTransaction, verifyTransaction, PAYSTACK_PLANS, type PaystackPlan } from '@/lib/paystack'
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -160,7 +160,12 @@ export async function createPaystackCheckout(plan: PaystackPlan): Promise<{
 
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 
-        // Calculate amount in kobo based on plan
+        // NOTE: this `amount` is cosmetic only. When a `plan` code is also
+        // passed to /transaction/initialize, Paystack ignores `amount` and
+        // charges whatever that plan is configured for on the dashboard. If
+        // checkout ever shows a price that doesn't match the plan the user
+        // picked, the bug is a mismatched plan code in PAYSTACK_PLANS below
+        // (i.e. the .env values), not this amount map.
         const amounts: Record<string, number> = {
             weekly: 499 * 100,    // ₦499
             monthly: 1499 * 100,  // ₦1,499
@@ -187,6 +192,116 @@ export async function createPaystackCheckout(plan: PaystackPlan): Promise<{
         console.error('Paystack checkout error:', err)
         return { success: false, error: err.message }
     }
+}
+
+// ─── Confirm Paystack Payment (fallback for /upgrade/success) ───────
+//
+// The webhook is the primary path that flips is_pro to true. This action
+// is a safety net for the redirect-back page: if the webhook is delayed,
+// misconfigured, or blocked (e.g. local dev without a tunnel), the user
+// landing on /upgrade/success can still self-heal their own subscription
+// by verifying the transaction directly against the Paystack API and
+// upserting the same way the webhook does.
+//
+// Idempotent: verifyTransaction + upsert + sync_pro_status all resolve
+// to the same end state whether the webhook already ran or not.
+export async function confirmPaystackPayment(reference: string): Promise<{
+    success: boolean
+    isPro?: boolean
+    error?: string
+}> {
+    try {
+        if (!reference) {
+            return { success: false, error: 'Missing transaction reference' }
+        }
+
+        const supabase = await createSupabaseServerClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            return { success: false, error: 'Not authenticated' }
+        }
+
+        const verified = await verifyTransaction(reference)
+
+        if (verified.status !== 'success') {
+            return { success: false, error: 'Payment was not successful' }
+        }
+
+        // Guard against confirming someone else's transaction reference.
+        if (verified.customer?.email && user.email && verified.customer.email.toLowerCase() !== user.email.toLowerCase()) {
+            return { success: false, error: 'This transaction does not belong to the current user' }
+        }
+
+        const adminSupabase = createSupabaseAdminClient()
+
+        const subCode = verified.subscription_code
+        const planObject = verified.plan_object
+
+        if (subCode) {
+            const plan = planObject ? mapPaystackInterval(planObject.interval) : 'monthly'
+
+            const { error } = await adminSupabase
+                .from('subscriptions')
+                .upsert({
+                    user_id: user.id,
+                    provider: 'paystack',
+                    provider_subscription_id: subCode,
+                    provider_customer_id: verified.customer?.customer_code,
+                    plan,
+                    status: 'active',
+                    current_period_start: new Date().toISOString(),
+                    current_period_end: planObject ? calculateNextPeriod(planObject.interval) : null,
+                    cancel_at_period_end: false,
+                    updated_at: new Date().toISOString(),
+                }, { onConflict: 'provider,provider_subscription_id' })
+
+            if (error) {
+                console.error('Failed to upsert subscription on confirm:', error)
+                return { success: false, error: 'Failed to record subscription' }
+            }
+        }
+
+        await adminSupabase.rpc('sync_pro_status', { target_user_id: user.id })
+
+        const { data: profile } = await adminSupabase
+            .from('profiles')
+            .select('is_pro')
+            .eq('id', user.id)
+            .maybeSingle()
+
+        return { success: true, isPro: !!profile?.is_pro }
+    } catch (err: any) {
+        console.error('Confirm Paystack payment error:', err)
+        return { success: false, error: err.message }
+    }
+}
+
+function mapPaystackInterval(interval: string): 'weekly' | 'monthly' | 'annual' {
+    switch (interval) {
+        case 'weekly': return 'weekly'
+        case 'monthly': return 'monthly'
+        case 'annually': return 'annual'
+        default: return 'monthly'
+    }
+}
+
+function calculateNextPeriod(interval: string): string {
+    const now = new Date()
+    switch (interval) {
+        case 'weekly':
+            now.setDate(now.getDate() + 7)
+            break
+        case 'monthly':
+            now.setMonth(now.getMonth() + 1)
+            break
+        case 'annually':
+            now.setFullYear(now.getFullYear() + 1)
+            break
+        default:
+            now.setMonth(now.getMonth() + 1)
+    }
+    return now.toISOString()
 }
 
 // ─── Cancel Subscription ────────────────────────────────────────────
