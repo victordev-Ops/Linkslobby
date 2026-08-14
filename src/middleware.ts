@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
+type GateProfile = {
+  id: string
+  username: string | null
+  slug: string | null
+  avatar_url: string | null
+  is_pro: boolean | null
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
@@ -58,7 +66,7 @@ export async function middleware(request: NextRequest) {
     if (authError) {
       console.log(`[Middleware] Auth error for ${pathname}:`, authError.message)
     }
- 
+
   }
 
   // 2. Define Public Routes
@@ -112,7 +120,13 @@ export async function middleware(request: NextRequest) {
     return redirectWithCookies(loginUrl)
   }
 
-  // 4. For authenticated users — fetch profile ONCE and reuse
+  // 4. For authenticated users — fetch profile ONCE and reuse.
+  //    `verifiedProfile` (when set) is the exact row middleware already
+  //    fetched and validated as complete. It gets forwarded to Server
+  //    Components in step 5 below via the `x-user-profile` header, so
+  //    page.tsx never needs to re-query `profiles` for the same data.
+  let verifiedProfile: GateProfile | null = null
+
   if (user) {
     const profileExemptPaths = ['/auth/setup']
     const isProfileExempt = profileExemptPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -122,14 +136,17 @@ export async function middleware(request: NextRequest) {
     const needsProfileCheck = isOnLoginPage || (!isPublicRoute && !isProfileExempt)
 
     if (needsProfileCheck) {
-      // SINGLE profile query — eliminates the double-query bottleneck
+      // SINGLE profile query — select every column any downstream Server
+      // Component on a protected route needs, so this one query can be
+      // forwarded and nothing has to query `profiles` again for the
+      // same user on the same request.
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, slug')
+        .select('id, username, slug, avatar_url, is_pro')
         .eq('id', user.id)
         .maybeSingle()
 
-      const isProfileComplete = profile && profile.username && profile.slug
+      const isProfileComplete = !!(profile && profile.username && profile.slug)
 
       if (isOnLoginPage) {
         // Logged-in user on /login or /signup
@@ -155,26 +172,35 @@ export async function middleware(request: NextRequest) {
         else setupUrl.searchParams.set('next', pathname)
         return redirectWithCookies(setupUrl)
       }
+
+      // Profile is confirmed complete and this request is going to reach
+      // the page — safe to forward downstream.
+      verifiedProfile = profile as GateProfile
     }
   }
 
-  // 5. Forward the identity we just verified so Server Components (page.tsx,
-  // layout.tsx, etc.) can skip calling supabase.auth.getUser() a second time
-  // — that call is a real network hit to the Supabase Auth server, and doing
-  // it twice per request was costing every /tod/* page load an extra round
-  // trip for zero benefit.
+  // 5. Forward the identity (and, when we already fetched it, the profile)
+  // we just verified so Server Components (page.tsx, layout.tsx, etc.) can
+  // skip calling supabase.auth.getUser() / querying `profiles` a second
+  // time — both are real network hits (Auth server + DB), and doing them
+  // twice per request was costing every protected page load extra round
+  // trips for zero benefit.
   //
-  // Safe by construction: this header is set here, unconditionally, on every
-  // request that reaches this point (middleware always runs before the page
-  // does — there's no way for a client request to skip middleware and reach
-  // the page directly), so any client-supplied value for it is always
-  // overwritten below before the request continues.
+  // Safe by construction: these headers are set here, unconditionally, on
+  // every request that reaches this point (middleware always runs before
+  // the page does — there's no way for a client request to skip
+  // middleware and reach the page directly), so any client-supplied value
+  // for them is always overwritten below before the request continues.
   const requestHeaders = new Headers(request.headers)
   requestHeaders.delete('x-user-id')
   requestHeaders.delete('x-user-email')
+  requestHeaders.delete('x-user-profile')
   if (user) {
     requestHeaders.set('x-user-id', user.id)
     if (user.email) requestHeaders.set('x-user-email', user.email)
+    if (verifiedProfile) {
+      requestHeaders.set('x-user-profile', JSON.stringify(verifiedProfile))
+    }
   }
 
   const finalResponse = NextResponse.next({
@@ -200,4 +226,4 @@ export const config = {
      */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
-      }
+}
