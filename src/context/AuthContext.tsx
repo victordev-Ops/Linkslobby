@@ -26,6 +26,15 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// How long a cached profile is trusted before we bother re-checking it in
+// the background. Previously there was no TTL at all — every single cache
+// hit still fired a background `profiles` query, which meant "cached" only
+// saved you the *wait*, not the actual DB round trip. On the dashboard this
+// query is redundant anyway once serverProfile is present (see
+// DashboardClient), but AuthProvider wraps the whole app, so this still
+// matters for every other authenticated page.
+const PROFILE_CACHE_TTL_MS = 60_000; // 1 minute
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -39,21 +48,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 1. Try cached profile from Dexie first
       const cached = await db.profiles.get(userId);
       if (cached) {
-        // Return cached immediately, but still fetch fresh in background
         const cachedProfile: Profile = { id: cached.id, username: cached.username, slug: cached.slug, is_pro: cached.is_pro };
-        // Fire-and-forget background sync
-        supabase
-          .from("profiles")
-          .select("id, username, slug, is_pro, avatar_url")
-          .eq("id", userId)
-          .maybeSingle()
-          .then(({ data }) => {
-            if (data) {
-              db.profiles.put({ ...data, cached_at: Date.now() });
-              setProfile(data as Profile);
-            }
-          })
-          .catch(() => { });
+
+        // Only sync in the background if the cache is actually stale.
+        // Firing this unconditionally on every cache hit turned "cached"
+        // into a UI-latency optimization only — the DB still took the hit
+        // every time.
+        const isStale = Date.now() - (cached.cached_at ?? 0) > PROFILE_CACHE_TTL_MS;
+        if (isStale) {
+          supabase
+            .from("profiles")
+            .select("id, username, slug, is_pro, avatar_url")
+            .eq("id", userId)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (data) {
+                db.profiles.put({ ...data, cached_at: Date.now() });
+                setProfile(data as Profile);
+              }
+            })
+            .catch(() => { });
+        }
         return cachedProfile;
       }
 
@@ -83,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    const handleSession = async (session: Session | null) => {
+    const handleSession = async (session: Session | null, event?: string) => {
       const currentUser = session?.user ?? null;
 
       if (mounted) {
@@ -93,15 +108,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const profileData = await fetchProfile(currentUser.id);
           if (mounted) setProfile(profileData);
 
-          // Trigger Daily Login Check
-          checkDailyLogin().then(result => {
-            if (result.success && result.awarded) {
-              toast.success(result.message || "Daily Login Bonus!", {
-                description: `+${result.xp} XP`,
-                duration: 5000
-              });
-            }
-          });
+          // Daily-login check only needs to run once per real session
+          // start: the initial page load, or an actual SIGNED_IN event.
+          // Previously this ran on *every* onAuthStateChange event,
+          // including TOKEN_REFRESHED — which Supabase fires on its own
+          // roughly every ~50 minutes per open tab (and on refocus in
+          // some SDK versions). That meant a server action round trip
+          // firing repeatedly in the background for no reason.
+          const isRealSignIn = event === undefined || event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
+          if (isRealSignIn) {
+            checkDailyLogin().then(result => {
+              if (result.success && result.awarded) {
+                toast.success(result.message || "Daily Login Bonus!", {
+                  description: `+${result.xp} XP`,
+                  duration: 5000
+                });
+              }
+            });
+          }
 
           // REMOVED: The automatic redirect logic here caused the loop.
           // We now rely on Middleware and Layouts to protect routes.
@@ -117,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      handleSession(session);
+      handleSession(session, _event);
 
       if (_event === 'SIGNED_OUT') {
         router.replace('/login');
@@ -223,4 +247,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
