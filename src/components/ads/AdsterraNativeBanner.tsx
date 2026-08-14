@@ -77,7 +77,7 @@ export default function AdsterraNativeBanner({
   cycle = false,
   visibleRangeMs = [5000, 9000],
   hiddenRangeMs = [2000, 4000],
-  maxHeightPx = 100,
+  maxHeightPx = 300,
 }: AdsterraNativeBannerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const mountedForKey = useRef<string | null>(null)
@@ -138,7 +138,7 @@ export default function AdsterraNativeBanner({
     >
       {showLabel && (
         <span className="text-[9px] uppercase tracking-widest text-gray-300 dark:text-gray-600 font-bold mb-1 select-none">
-          Advertisement
+          Sponsored 
         </span>
       )}
       <div ref={wrapperRef} className="w-full flex justify-center min-h-[1px] overflow-hidden" />
