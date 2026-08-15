@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti'
 import type { useRPSEngine } from "../useRPSEngine"
 import type { RPSMove } from "@/actions/rps"
 import { RPSCountdownHands } from "./RPSCountdownHands"
+import AdsterraNativeBanner from "@/components/ads/AdsterraNativeBanner"
 
 const WINS_NEEDED = 3
 
@@ -283,13 +284,23 @@ export function RPSArena({ engine }: { engine: ReturnType<typeof useRPSEngine> }
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2 text-left">
                             <p className="text-[10px] font-black text-white/30 uppercase tracking-wider">Match Summary</p>
                             {engine.roundHistory.map((r, i) => (
-                                <div key={i} className="flex items-center gap-3 py-1.5 border-b border-white/5 last:border-0">
-                                    <span className="text-[10px] font-mono text-white/20 w-6">R{r.round}</span>
-                                    <span className="text-lg">{choiceEmoji(r.playerChoice)}</span>
-                                    <span className="text-white/20 text-xs">vs</span>
-                                    <span className="text-lg">{choiceEmoji(r.opponentChoice)}</span>
-                                    <span className={`text-xs font-bold ml-auto uppercase ${resultColors[r.result]}`}>{r.result}</span>
-                                </div>
+                                <React.Fragment key={i}>
+                                    <div className="flex items-center gap-3 py-1.5 border-b border-white/5 last:border-0">
+                                        <span className="text-[10px] font-mono text-white/20 w-6">R{r.round}</span>
+                                        <span className="text-lg">{choiceEmoji(r.playerChoice)}</span>
+                                        <span className="text-white/20 text-xs">vs</span>
+                                        <span className="text-lg">{choiceEmoji(r.opponentChoice)}</span>
+                                        <span className={`text-xs font-bold ml-auto uppercase ${resultColors[r.result]}`}>{r.result}</span>
+                                    </div>
+                                    {/* A best-of-{WINS_NEEDED*2-1} match tops out at a handful of
+                                        rounds, so this only ever fits one ad slot — placed after the
+                                        2nd round rather than between every item. */}
+                                    {i === 1 && engine.roundHistory.length > 2 && (
+                                        <div className="py-1">
+                                            <AdsterraNativeBanner maxHeightPx={150} showLabel={false} />
+                                        </div>
+                                    )}
+                                </React.Fragment>
                             ))}
                         </div>
 
