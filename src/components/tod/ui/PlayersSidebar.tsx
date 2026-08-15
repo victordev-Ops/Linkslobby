@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { showAppSuccess, showAppError } from '@/components/AppToast';
 import { sendFriendRequest } from '@/actions/friends';
 import VerifiedBadge from '@/components/VerifiedBadge';
+import AdsterraNativeBanner from '@/components/ads/AdsterraNativeBanner';
 import { Participant } from '../hooks/useGameLogic';
 
 interface Message {
@@ -616,6 +617,13 @@ export const PlayersSidebar = ({
             )}
           </div>
         )}
+      </div>
+
+      {/* Sidebar ad — sits between the players/activity content and the
+          stats footer, so it's visible no matter which tab is active
+          without pushing into the scrollable list itself. */}
+      <div className="px-3 pt-3 flex-shrink-0 border-t border-slate-800/50">
+        <AdsterraNativeBanner maxHeightPx={200} />
       </div>
 
       {/* Stats Footer */}
