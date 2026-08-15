@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, Suspense } from "react"
+import { useEffect, useState, useRef, Suspense } from "react"
 import { motion } from "framer-motion"
 import { Loader2, BadgeCheck, XCircle } from "lucide-react"
 import Link from "next/link"
@@ -19,6 +19,11 @@ function SuccessContent() {
   const reference = searchParams.get("reference")
   const [state, setState] = useState<ConfirmState>("checking")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // Guards against re-firing this effect on every re-render. Without this,
+  // an unrelated re-render/remount (e.g. this app's realtime notification
+  // channel reconnecting) restarts the effect and re-triggers the whole
+  // confirm flow, hammering Paystack's API in a loop instead of running once.
+  const hasAttempted = useRef(false)
 
   useEffect(() => {
     // Already pro (e.g. webhook beat us here, or user navigated back to
@@ -33,6 +38,9 @@ function SuccessContent() {
       setErrorMessage("Missing payment reference.")
       return
     }
+
+    if (hasAttempted.current) return
+    hasAttempted.current = true
 
     let cancelled = false
 
@@ -115,7 +123,7 @@ function SuccessContent() {
           </p>
           <div className="flex items-center justify-center gap-3 pt-2">
             <button
-              onClick={() => router.push("/upgrade")}
+              onClick={() => window.location.reload()}
               className="px-6 py-3 bg-white text-black rounded-2xl font-bold text-sm hover:bg-white/90 transition"
             >
               Try again
