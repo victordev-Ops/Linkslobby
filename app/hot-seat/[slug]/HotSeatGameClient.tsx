@@ -22,6 +22,7 @@ import type { FriendshipWithProfile } from "@/actions/friends"
 import type { BannedUser } from "@/actions/hot-seat"
 import { useScrollLock } from "@/hooks/useScrollLock"
 import VerifiedBadge from "@/components/VerifiedBadge"
+import AdsterraNativeBanner from "@/components/ads/AdsterraNativeBanner"
 
 interface HotSeatGameClientProps {
     session: any
@@ -1213,32 +1214,52 @@ export default function HotSeatGameClient({ session, userProfile }: HotSeatGameC
                                     <p className="text-sm">No answered questions yet</p>
                                 </div>
                             ) : (
-                                answeredQuestions.map(q => (
-                                    <motion.div
-                                        key={q.id}
-                                        layout
-                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden mb-4"
-                                    >
-                                        <div className="p-4 border-b border-white/5 bg-white/5">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <div className="w-1 h-3 bg-amber-500 rounded-full" />
-                                                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Question</span>
+                                answeredQuestions.map((q, idx) => (
+                                    <motion.div key={q.id}>
+                                        <motion.div
+                                            layout
+                                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden mb-4"
+                                        >
+                                            <div className="p-4 border-b border-white/5 bg-white/5">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="w-1 h-3 bg-amber-500 rounded-full" />
+                                                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Question</span>
+                                                </div>
+                                                <p className="text-sm font-bold text-white leading-relaxed">"{q.question}"</p>
                                             </div>
-                                            <p className="text-sm font-bold text-white leading-relaxed">"{q.question}"</p>
-                                        </div>
-                                        <div className="p-4">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <div className={`w-1 h-3 rounded-full ${q.status === 'answered' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${q.status === 'answered' ? 'text-emerald-500' : 'text-red-500'}`}>
-                                                    {q.status === 'answered' ? 'Answer' : q.status.replace('_', ' ')}
-                                                </span>
+                                            <div className="p-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className={`w-1 h-3 rounded-full ${q.status === 'answered' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${q.status === 'answered' ? 'text-emerald-500' : 'text-red-500'}`}>
+                                                        {q.status === 'answered' ? 'Answer' : q.status.replace('_', ' ')}
+                                                    </span>
+                                                </div>
+                                                <p className={`text-sm leading-relaxed ${q.status === 'answered' ? 'text-white/80' : 'text-white/30 italic'}`}>
+                                                    {q.answer || `No answer provided (${q.status.replace('_', ' ')})`}
+                                                </p>
                                             </div>
-                                            <p className={`text-sm leading-relaxed ${q.status === 'answered' ? 'text-white/80' : 'text-white/30 italic'}`}>
-                                                {q.answer || `No answer provided (${q.status.replace('_', ' ')})`}
-                                            </p>
-                                        </div>
+                                        </motion.div>
+
+                                        {/* Native banner between history cards. Capped at two slots
+                                            total (after card 3 and card 8) rather than one per card —
+                                            AdsterraNativeBanner warns that reusing the same adKey more
+                                            than once on a page (which is what a per-card ad would be
+                                            here, since the whole list mounts at once) means only the
+                                            first instance actually fills; the rest sit blank. Each slot
+                                            below uses its own zone key from the Adsterra dashboard —
+                                            replace the placeholders with your real keys. */}
+                                        {idx === 2 && (
+                                            <div className="mb-4">
+                                                <AdsterraNativeBanner adKey="REPLACE_WITH_HISTORY_SLOT_1_KEY" maxHeightPx={250} />
+                                            </div>
+                                        )}
+                                        {idx === 7 && (
+                                            <div className="mb-4">
+                                                <AdsterraNativeBanner adKey="REPLACE_WITH_HISTORY_SLOT_2_KEY" maxHeightPx={250} />
+                                            </div>
+                                        )}
                                     </motion.div>
                                 ))
                             )}
