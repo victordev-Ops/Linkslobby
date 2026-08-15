@@ -446,7 +446,7 @@ export default function SettingsClient({
                 icon={<Sparkles size={16} />}
                 iconBg="bg-amber-100 dark:bg-amber-500/20"
                 iconColor="text-amber-600 dark:text-amber-400"
-                label="Say Pro"
+                label="Linkslobby Pro"
                 sublabel={
                   subscription.cancel_at_period_end
                     ? `Expires ${new Date(subscription.current_period_end!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
