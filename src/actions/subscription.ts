@@ -155,7 +155,14 @@ export async function createPaystackCheckout(plan: PaystackPlan): Promise<{
 
         const planCode = PAYSTACK_PLANS[plan]
         if (!planCode) {
-            return { success: false, error: 'Invalid plan selected' }
+            // This means the env var behind this plan (PAYSTACK_PLAN_WEEKLY /
+            // _MONTHLY / _ANNUAL) is empty or not set for this environment.
+            // Silently proceeding would send `plan: undefined` to Paystack,
+            // which just drops the key and creates a plain one-off charge
+            // with no subscription attached — is_pro would never flip, and
+            // there'd be no error anywhere to tell you why.
+            console.error(`[createPaystackCheckout] PAYSTACK_PLANS.${plan} is empty — check env var for this environment`)
+            return { success: false, error: 'This plan is not configured correctly. Please contact support.' }
         }
 
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
