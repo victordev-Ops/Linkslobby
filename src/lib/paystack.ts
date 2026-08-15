@@ -19,16 +19,28 @@ export const PAYSTACK_PLANS = {
 export type PaystackPlan = keyof typeof PAYSTACK_PLANS
 
 async function paystackFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const secret = PAYSTACK_SECRET()
     const res = await fetch(`${BASE_URL}${path}`, {
         ...options,
         headers: {
-            Authorization: `Bearer ${PAYSTACK_SECRET()}`,
+            Authorization: `Bearer ${secret}`,
             'Content-Type': 'application/json',
             ...options.headers,
         },
     })
     const data = await res.json()
     if (!data.status) {
+        // Temporary diagnostic logging — remove once root cause is
+        // confirmed. Never logs the key itself, only which mode it's in,
+        // plus Paystack's raw response so we see the real cause instead
+        // of guessing from a generic thrown message.
+        console.error('[paystackFetch] request failed', {
+            path,
+            keyMode: secret.startsWith('sk_live_') ? 'live' : secret.startsWith('sk_test_') ? 'test' : 'unknown',
+            httpStatus: res.status,
+            paystackMessage: data.message,
+            paystackData: data,
+        })
         throw new Error(data.message || 'Paystack API error')
     }
     return data.data as T
@@ -74,6 +86,19 @@ export async function disableSubscription(params: {
 
 // Verify a transaction
 export async function verifyTransaction(reference: string) {
+    // Paystack references only allow -, ., = and alphanumerics. Catch a
+    // malformed reference here (e.g. an unresolved template placeholder,
+    // stray whitespace from copy/paste, etc.) with a message that says
+    // exactly what's wrong, instead of forwarding it and getting back a
+    // generic "Invalid character" from Paystack with no context.
+    const trimmed = reference?.trim()
+    if (!trimmed) {
+        throw new Error('verifyTransaction called with an empty reference')
+    }
+    if (!/^[-.=A-Za-z0-9]+$/.test(trimmed)) {
+        throw new Error(`verifyTransaction received a malformed reference: "${trimmed}"`)
+    }
+
     return paystackFetch<{
         status: string
         reference: string
@@ -81,7 +106,7 @@ export async function verifyTransaction(reference: string) {
         customer: { email: string; customer_code: string }
         plan_object?: { plan_code: string; name: string; interval: string }
         subscription_code?: string
-    }>(`/transaction/verify/${reference}`)
+    }>(`/transaction/verify/${encodeURIComponent(trimmed)}`)
 }
 
 // Verify webhook signature
