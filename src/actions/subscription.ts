@@ -184,7 +184,11 @@ export async function createPaystackCheckout(plan: PaystackPlan): Promise<{
                     { display_name: 'Plan', variable_name: 'plan', value: plan },
                 ],
             },
-            callback_url: `${siteUrl}/upgrade/success?provider=paystack&reference={reference}`,
+            // Paystack does NOT support placeholder substitution in callback_url
+            // (unlike Stripe's {CHECKOUT_SESSION_ID}). It appends its own
+            // ?reference=xxx&trxref=xxx automatically on redirect, so the URL
+            // here should stay bare.
+            callback_url: `${siteUrl}/upgrade/success?provider=paystack`,
         })
 
         return { success: true, url: result.authorization_url }
