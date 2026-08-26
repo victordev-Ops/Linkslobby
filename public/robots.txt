@@ -1,0 +1,30 @@
+User-agent: *
+Allow: /
+Allow: /u/
+Allow: /confess/
+Allow: /ama/
+Allow: /dykm/
+Allow: /anonymous/
+Allow: /hot-seat/
+Allow: /three-words/
+Allow: /terms
+Allow: /privacy
+Allow: /safety
+
+Disallow: /dashboard
+Disallow: /messages/
+Disallow: /rps
+Disallow: /three-words
+Disallow: /word-scramble
+Disallow: /store
+Disallow: /login
+Disallow: /signup
+Disallow: /auth/
+Disallow: /upgrade/
+Disallow: /settings
+Disallow: /help
+Disallow: /ama
+
+Crawl-delay: 1
+
+Sitemap: https://www.linkslobby.com/sitemap.xml
