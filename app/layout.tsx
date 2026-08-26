@@ -1,6 +1,7 @@
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import type { Metadata, Viewport } from "next"
 import { GeistSans, GeistMono } from "geist/font"
+import Script from "next/script"
 import "./globals.css"
 import ClientLayout from "@/components/ClientLayout"
 import { ThemeProvider } from "@/components/ThemeProvider"
@@ -17,6 +18,10 @@ const BRAND_DESCRIPTION =
 const BRAND_COLOR = "#9333EA" // Tailwind purple-600, matches CTA buttons on landing
 const LIGHT_BG = "#F8F9FD"
 const DARK_BG = "#0f0a1e"
+
+// GA4 measurement ID — referenced by both Script tags below, so it's
+// defined once here rather than duplicated inline.
+const GA_MEASUREMENT_ID = "G-7XJLQZNKDE"
 
 export const metadata: Metadata = {
   title: {
@@ -69,13 +74,16 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
- <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6982582921064240"
-     crossOrigin="anonymous"></script>
-  <meta
-  name="impact-site-verification"
-  content="1ce85299-f0a8-4603-89ae-2dc158179031"
-/>   
-     <script
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6982582921064240"
+          crossOrigin="anonymous"
+        ></script>
+        <meta
+          name="impact-site-verification"
+          content="1ce85299-f0a8-4603-89ae-2dc158179031"
+        />
+        <script
           dangerouslySetInnerHTML={{
             __html: `
               try {
@@ -103,6 +111,28 @@ export default function RootLayout({
           <SpeedInsights />
           <ClientLayout>{children}</ClientLayout>
         </ThemeProvider>
+
+        {/*
+          Google Analytics (GA4). Loaded via next/script with
+          `afterInteractive` so it doesn't block hydration/first paint —
+          Next injects these at the right point regardless of where they
+          sit in the JSX tree, but they're kept at the end of <body> by
+          convention. This only fires a pageview on the initial document
+          load; SPA route changes need a separate gtag('event', 'page_view')
+          call wired to usePathname() (not yet added — see ClientLayout).
+        */}
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="gtag-init" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}');
+          `}
+        </Script>
       </body>
     </html>
   )
