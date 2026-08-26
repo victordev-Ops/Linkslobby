@@ -1,8 +1,8 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import NavbarWrapper from "./NavbarWrapper";
+import AnalyticsTracker from "./AnalyticsTracker";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { PresenceProvider } from "@/context/PresenceContext";
 import { AuthProvider } from "@/context/AuthContext";
@@ -15,15 +15,7 @@ import PWAInstallPrompt from "./PWAInstallPrompt";
 import NotificationRegister from "./NotificationRegister";
 import AppSplash from "./AppSplash";
 
-declare global {
-  interface Window {
-    gtag?: (...args: any[]) => void;
-  }
-}
-
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [profileId, setProfileId] = useState<string | null>(null);
   // Gates AppSplash: false until the very first getSession() resolves, so the
   // logo/loader covers exactly the window where the app doesn't yet know if
@@ -104,30 +96,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // 4. GA4 pageview tracking on client-side route changes.
-  //    The gtag('config', ...) call in RootLayout's <Script> only fires a
-  //    pageview for the initial document load. Every navigation after that
-  //    is a client-side route change that GA never sees unless we send it
-  //    an explicit page_view event ourselves — this effect is that event.
-  //    Runs on every pathname/searchParams change, including the first
-  //    render, so the very first client-rendered route also gets tracked
-  //    (harmless overlap with the initial gtag('config') pageview — GA
-  //    dedupes near-identical hits like this in practice, but if you want
-  //    to skip firing on mount, guard with a ref instead).
-  useEffect(() => {
-    if (typeof window.gtag !== "function") return;
-
-    const query = searchParams?.toString();
-    const url = query ? `${pathname}?${query}` : pathname;
-
-    window.gtag("event", "page_view", {
-      page_path: url,
-    });
-  }, [pathname, searchParams]);
-
   return (
     <>
       <AppSplash show={!authReady} />
+      {/*
+        Suspense boundary scoped tightly around AnalyticsTracker: it's the
+        only thing in this tree that calls useSearchParams(), and that hook
+        bails any ancestor without a Suspense boundary out of static
+        generation. Keeping the boundary here (instead of, say, wrapping
+        {children}) means only this leaf opts into that behavior — routes
+        rendered through {children} stay statically prerenderable.
+      */}
+      <Suspense fallback={null}>
+        <AnalyticsTracker />
+      </Suspense>
       <AuthProvider>
       {/*
         PresenceProvider goes here — same level as NotificationProvider,
