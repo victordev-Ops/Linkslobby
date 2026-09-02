@@ -110,7 +110,7 @@ export default async function ConfessPage({ params }: PageProps) {
         <AdsterraDelayedSlot
           delayMs={6000}
           className="[&_span]:text-white/50"
-          cycle
+          stick
           maxHeightPx={300}
         />
       </div>
