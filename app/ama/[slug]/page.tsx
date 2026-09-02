@@ -48,7 +48,7 @@ export default async function PublicAmaPage({ params }: PageProps) {
         <AdsterraDelayedSlot
           delayMs={6000}
           className="[&_span]:text-white/50"
-          cycle
+          stick
           maxHeightPx={155}
         />
       </div>
