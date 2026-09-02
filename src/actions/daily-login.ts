@@ -48,20 +48,20 @@ export async function checkDailyLogin(): Promise<DailyLoginResult> {
             return { success: true, awarded: false, message: claimResult.message }
         }
 
-        let message = `Crit! You earned ${amount} XP for checking in!`
+        let message = `Crit! You earned ${amount} Stars for checking in!`
         if (claimResult.bonus_activated) {
-            message = `🔥 7 Day Streak! You earned ${amount} XP and activated a 2X WEEKLY BONUS!`
+            message = `🔥 7 Day Streak! You earned ${amount} Stars and activated a 2X WEEKLY BONUS!`
             
             // Notify about the bonus
             await supabase.from('xp_transactions').insert({
                 user_id: user.id,
                 amount: 0,
                 type: 'earn',
-                reason: `🔥 7-DAY STREAK: 2x XP Bonus Activated! Valid for 7 days.`,
+                reason: `🔥 7-DAY STREAK: 2x Stars Bonus Activated! Valid for 7 days.`,
                 is_read: false,
             })
         } else if (claimResult.new_streak > 1) {
-            message = `🔥 ${claimResult.new_streak} Day Streak! You earned ${amount} XP!`
+            message = `🔥 ${claimResult.new_streak} Day Streak! You earned ${amount} Stars!`
         }
 
         return {
