@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             checkDailyLogin().then(result => {
               if (result.success && result.awarded) {
                 toast.success(result.message || "Daily Login Bonus!", {
-                  description: `+${result.xp} XP`,
+                  description: `+${result.xp} Stars`,
                   duration: 5000
                 });
               }
