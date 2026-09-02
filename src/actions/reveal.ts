@@ -111,16 +111,16 @@ export async function revealSenderHint(messageId: string): Promise<RevealResult>
             console.error('XP spend error:', xpError)
             // Handle "insufficient funds" or other DB errors
             if (xpError.message.includes('Insufficient') || xpError.message.includes('insufficient')) {
-                return { success: false, message: `Need ${cost} XP to reveal hint` }
+                return { success: false, message: `Need ${cost} Stars to reveal hint` }
             }
             throw xpError
         }
 
         // Verify XP was actually spent
         if (!xpResult || (xpResult as any).success === false) {
-            const errorMsg = (xpResult as any)?.error || 'Failed to spend XP'
+            const errorMsg = (xpResult as any)?.error || 'Failed to spend Stars'
             console.error('XP spend failed:', errorMsg)
-            return { success: false, message: errorMsg.includes('Insufficient') ? `Need ${cost} XP to reveal hint` : 'Failed to spend XP' }
+            return { success: false, message: errorMsg.includes('Insufficient') ? `Need ${cost} Stars to reveal hint` : 'Failed to spend Stars' }
         }
 
         console.log('✅ XP spent successfully:', xpResult)
@@ -214,13 +214,13 @@ export async function revealDYKMRespondent(scoreId: string): Promise<RevealResul
 
         if (xpError) {
             if (xpError.message.includes('Insufficient')) {
-                return { success: false, message: `Need ${cost} XP to reveal` }
+                return { success: false, message: `Need ${cost} Stars to reveal` }
             }
             throw xpError
         }
 
         if (!xpResult || (xpResult as any).success === false) {
-            return { success: false, message: (xpResult as any)?.error || 'Failed to spend XP' }
+            return { success: false, message: (xpResult as any)?.error || 'Failed to spend Stars' }
         }
 
         // 2. Mark as revealed in dykm_scores
@@ -268,13 +268,13 @@ export async function revealDYKMAnswer(scoreId: string, questionIndex: number): 
 
         if (xpError) {
             if (xpError.message.includes('Insufficient')) {
-                return { success: false, message: `Need ${cost} XP to reveal` }
+                return { success: false, message: `Need ${cost} Stars to reveal` }
             }
             throw xpError
         }
 
         if (!xpResult || (xpResult as any).success === false) {
-            return { success: false, message: (xpResult as any)?.error || 'Failed to spend XP' }
+            return { success: false, message: (xpResult as any)?.error || 'Failed to spend Stars' }
         }
 
         // 3. Track reveal
