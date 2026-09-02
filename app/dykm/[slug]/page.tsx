@@ -48,7 +48,7 @@ export default async function DykmPage({ params }: { params: Promise<{ slug: str
     <>
       <DykmGameClient profile={profile} questions={quiz.questions} />
       <div className="w-full max-w-md mx-auto px-4 pb-6">
-        <AdsterraDelayedSlot delayMs={6000} cycle maxHeightPx={155} />
+        <AdsterraDelayedSlot delayMs={6000} stick maxHeightPx={155} />
       </div>
     </>
   )
