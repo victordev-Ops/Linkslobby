@@ -76,7 +76,7 @@ export async function earnXP(
     return result
   } catch (error) {
     console.error('Error earning XP:', error)
-    return { success: false, error: 'Failed to earn XP' }
+    return { success: false, error: 'Failed to earn Stars' }
   }
 }
 
@@ -182,7 +182,7 @@ export async function spendXP(
     return data as XPResult
   } catch (error) {
     console.error('Error spending XP:', error)
-    return { success: false, error: 'Failed to spend XP' }
+    return { success: false, error: 'Failed to spend Stars' }
   }
 }
 
@@ -234,3 +234,4 @@ export async function getXPTransactions(limit: number = 20): Promise<XPTransacti
     return []
   }
 }
+V
