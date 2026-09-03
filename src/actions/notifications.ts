@@ -29,9 +29,15 @@ const NOTIFICATION_READS_TYPES: NotificationType[] = [
   'hot_seat_answer',
 ]
 
+// 'lobby' (tod_messages system events) belongs here — app/notifications/page.tsx
+// already filters lobby events against hidden_notifications keyed by type 'lobby'
+// (see `filteredLobbyEvents`), and the client's delete handler already has a
+// rollback branch for it. It was just missing from this list, which meant every
+// attempt to delete a lobby notification called deleteNotification, silently hit
+// the "can't be deleted" branch below, and got rolled back with an error toast.
 const DELETABLE_TYPES: NotificationType[] = [
   'message', 'dykm', 'xp', 'hot_seat', 'tod_turn', 'game_invite',
-  'friend_request', 'friend_request_response', 'three_word'
+  'friend_request', 'friend_request_response', 'three_word', 'lobby'
 ]
 
 const NOTIFICATION_TYPE_KEY: Record<string, string> = {
@@ -44,6 +50,7 @@ const NOTIFICATION_TYPE_KEY: Record<string, string> = {
   friend_request: 'friend_request',
   friend_request_response: 'friend_request_response',
   three_word: 'three_word_response',
+  lobby: 'lobby',
 }
 
 function notificationTypeKey(type: NotificationType): string {
@@ -152,115 +159,191 @@ export async function markAllNotificationsAsRead() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
 
-    await supabase.from('confessions').update({ is_read: true }).eq('profile_id', user.id).eq('is_read', false)
-    await supabase.from('dykm_scores').update({ is_read: true }).eq('quiz_owner_id', user.id).eq('is_read', false)
-    await supabase.from('xp_transactions').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
-    await supabase.from('three_word_responses').update({ is_read: true }).eq('host_id', user.id).eq('is_read', false)
-
-    const { data: sessions } = await supabase
-      .from('hot_seat_sessions')
-      .select('id')
-      .eq('host_id', user.id)
-      .eq('status', 'active')
-
-    if (sessions && sessions.length > 0) {
-      const sessionIds = sessions.map(s => s.id)
-      await supabase
-        .from('hot_seat_questions')
-        .update({ is_read: true })
-        .in('session_id', sessionIds)
-        .eq('is_read', false)
-    }
-
-    await supabase.from('tod_turn_events').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
-    await supabase.from('game_invites').update({ is_read: true }).eq('invitee_id', user.id).eq('is_read', false)
-
-    const { data: joinedLobbies } = await supabase
-      .from('tod_participants')
-      .select('lobby_id')
-      .eq('user_id', user.id)
-      .eq('status', 'joined')
-
-    if (joinedLobbies && joinedLobbies.length > 0) {
-      const lobbyIds = joinedLobbies.map(l => l.lobby_id)
-      const { data: events } = await supabase
-        .from('tod_messages')
-        .select('id')
-        .in('lobby_id', lobbyIds)
-        .eq('message_type', 'system')
-        .limit(100)
-
-      if (events && events.length > 0) {
-        await supabase
-          .from('notification_reads')
-          .upsert(
-            events.map(e => ({ user_id: user.id, notification_id: e.id, notification_type: 'lobby' })),
-            { onConflict: 'user_id, notification_id, notification_type' }
-          )
+    // Each step below is fault-isolated: previously these were bare sequential
+    // awaits under one try/catch, so a single failing table (e.g. an RLS hiccup
+    // on one update) threw immediately and skipped every step after it, even
+    // though those steps are otherwise independent of each other. That silent
+    // truncation was worse than "partial" — everything from the failure point
+    // onward simply never ran. `failedSteps` collects what actually failed so
+    // the caller (and the client's rollback logic) can react honestly instead
+    // of assuming a clean success. This is still not a single atomic DB
+    // transaction — a true all-or-nothing guarantee would need a Postgres RPC —
+    // but it stops one failure from masking every other step's outcome.
+    const failedSteps: string[] = []
+    const step = async (label: string, fn: () => Promise<{ error: any } | void>) => {
+      try {
+        const result = await fn()
+        if (result && (result as any).error) {
+          console.error(`Server Action Error (markAllNotificationsAsRead:${label}):`, (result as any).error)
+          failedSteps.push(label)
+        }
+      } catch (err) {
+        console.error(`Server Action Error (markAllNotificationsAsRead:${label}):`, err)
+        failedSteps.push(label)
       }
     }
 
-    const { data: friendRequests } = await supabase
-      .from('friendships')
-      .select('id')
-      .eq('addressee_id', user.id)
-      .eq('status', 'pending')
+    await step('confessions', () =>
+      supabase.from('confessions').update({ is_read: true }).eq('profile_id', user.id).eq('is_read', false)
+    )
+    await step('dykm_scores', () =>
+      supabase.from('dykm_scores').update({ is_read: true }).eq('quiz_owner_id', user.id).eq('is_read', false)
+    )
+    await step('xp_transactions', () =>
+      supabase.from('xp_transactions').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+    )
+    await step('three_word_responses', () =>
+      supabase.from('three_word_responses').update({ is_read: true }).eq('host_id', user.id).eq('is_read', false)
+    )
 
-    if (friendRequests && friendRequests.length > 0) {
-      await supabase
-        .from('notification_reads')
-        .upsert(
-          friendRequests.map(fr => ({ user_id: user.id, notification_id: fr.id, notification_type: 'friend_request' })),
-          { onConflict: 'user_id, notification_id, notification_type' }
-        )
-    }
+    await step('hot_seat_questions', async () => {
+      // Intentionally across ALL hosted sessions, not just `status: 'active'` ones —
+      // refreshUnreadCount (context/NotificationContext.tsx) counts unread hot seat
+      // questions across every hosted session regardless of status, so filtering to
+      // active-only here left questions from ended sessions permanently unread: the
+      // badge counted them but this could never clear them. Keep both in sync.
+      const { data: sessions, error: sessionsError } = await supabase
+        .from('hot_seat_sessions')
+        .select('id')
+        .eq('host_id', user.id)
 
-    const { data: friendResponses } = await supabase
-      .from('friendships')
-      .select('id')
-      .eq('requester_id', user.id)
-      .in('status', ['accepted', 'declined'])
+      if (sessionsError) return { error: sessionsError }
 
-    if (friendResponses && friendResponses.length > 0) {
-      await supabase
-        .from('notification_reads')
-        .upsert(
-          friendResponses.map(fr => ({ user_id: user.id, notification_id: fr.id, notification_type: 'friend_request_response' })),
-          { onConflict: 'user_id, notification_id, notification_type' }
-        )
-    }
+      if (sessions && sessions.length > 0) {
+        const sessionIds = sessions.map(s => s.id)
+        const { error } = await supabase
+          .from('hot_seat_questions')
+          .update({ is_read: true })
+          .in('session_id', sessionIds)
+          .eq('is_read', false)
+        if (error) return { error }
+      }
+    })
 
-    const { data: lobbyResponses } = await supabase
-      .from('tod_participants')
-      .select('id')
-      .eq('user_id', user.id)
-      .in('status', ['rejected', 'banned'])
+    await step('tod_turn_events', () =>
+      supabase.from('tod_turn_events').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+    )
+    await step('game_invites', () =>
+      supabase.from('game_invites').update({ is_read: true }).eq('invitee_id', user.id).eq('is_read', false)
+    )
 
-    if (lobbyResponses && lobbyResponses.length > 0) {
-      await supabase
-        .from('notification_reads')
-        .upsert(
-          lobbyResponses.map(p => ({ user_id: user.id, notification_id: p.id, notification_type: 'lobby_join_response' })),
-          { onConflict: 'user_id, notification_id, notification_type' }
-        )
-    }
+    await step('lobby_events', async () => {
+      const { data: joinedLobbies, error: joinedError } = await supabase
+        .from('tod_participants')
+        .select('lobby_id')
+        .eq('user_id', user.id)
+        .eq('status', 'joined')
 
-    const { data: myAnsweredQuestions } = await supabase
-      .from('hot_seat_questions')
-      .select('id')
-      .eq('asker_id', user.id)
-      .in('status', ['answered', 'skipped', 'timed_out'])
+      if (joinedError) return { error: joinedError }
 
-    if (myAnsweredQuestions && myAnsweredQuestions.length > 0) {
-      await supabase
-        .from('notification_reads')
-        .upsert(
-          myAnsweredQuestions.map(q => ({ user_id: user.id, notification_id: q.id, notification_type: 'hot_seat_answer' })),
-          { onConflict: 'user_id, notification_id, notification_type' }
-        )
-    }
+      if (joinedLobbies && joinedLobbies.length > 0) {
+        const lobbyIds = joinedLobbies.map(l => l.lobby_id)
+        const { data: events, error: eventsError } = await supabase
+          .from('tod_messages')
+          .select('id')
+          .in('lobby_id', lobbyIds)
+          .eq('message_type', 'system')
+          .limit(100)
+
+        if (eventsError) return { error: eventsError }
+
+        if (events && events.length > 0) {
+          const { error } = await supabase
+            .from('notification_reads')
+            .upsert(
+              events.map(e => ({ user_id: user.id, notification_id: e.id, notification_type: 'lobby' })),
+              { onConflict: 'user_id, notification_id, notification_type' }
+            )
+          if (error) return { error }
+        }
+      }
+    })
+
+    await step('friend_requests', async () => {
+      const { data: friendRequests, error: frError } = await supabase
+        .from('friendships')
+        .select('id')
+        .eq('addressee_id', user.id)
+        .eq('status', 'pending')
+
+      if (frError) return { error: frError }
+
+      if (friendRequests && friendRequests.length > 0) {
+        const { error } = await supabase
+          .from('notification_reads')
+          .upsert(
+            friendRequests.map(fr => ({ user_id: user.id, notification_id: fr.id, notification_type: 'friend_request' })),
+            { onConflict: 'user_id, notification_id, notification_type' }
+          )
+        if (error) return { error }
+      }
+    })
+
+    await step('friend_responses', async () => {
+      const { data: friendResponses, error: frRespError } = await supabase
+        .from('friendships')
+        .select('id')
+        .eq('requester_id', user.id)
+        .in('status', ['accepted', 'declined'])
+
+      if (frRespError) return { error: frRespError }
+
+      if (friendResponses && friendResponses.length > 0) {
+        const { error } = await supabase
+          .from('notification_reads')
+          .upsert(
+            friendResponses.map(fr => ({ user_id: user.id, notification_id: fr.id, notification_type: 'friend_request_response' })),
+            { onConflict: 'user_id, notification_id, notification_type' }
+          )
+        if (error) return { error }
+      }
+    })
+
+    await step('lobby_join_responses', async () => {
+      const { data: lobbyResponses, error: lobbyRespError } = await supabase
+        .from('tod_participants')
+        .select('id')
+        .eq('user_id', user.id)
+        .in('status', ['rejected', 'banned'])
+
+      if (lobbyRespError) return { error: lobbyRespError }
+
+      if (lobbyResponses && lobbyResponses.length > 0) {
+        const { error } = await supabase
+          .from('notification_reads')
+          .upsert(
+            lobbyResponses.map(p => ({ user_id: user.id, notification_id: p.id, notification_type: 'lobby_join_response' })),
+            { onConflict: 'user_id, notification_id, notification_type' }
+          )
+        if (error) return { error }
+      }
+    })
+
+    await step('hot_seat_answers', async () => {
+      const { data: myAnsweredQuestions, error: answeredError } = await supabase
+        .from('hot_seat_questions')
+        .select('id')
+        .eq('asker_id', user.id)
+        .in('status', ['answered', 'skipped', 'timed_out'])
+
+      if (answeredError) return { error: answeredError }
+
+      if (myAnsweredQuestions && myAnsweredQuestions.length > 0) {
+        const { error } = await supabase
+          .from('notification_reads')
+          .upsert(
+            myAnsweredQuestions.map(q => ({ user_id: user.id, notification_id: q.id, notification_type: 'hot_seat_answer' })),
+            { onConflict: 'user_id, notification_id, notification_type' }
+          )
+        if (error) return { error }
+      }
+    })
 
     revalidatePath('/notifications')
+
+    if (failedSteps.length > 0) {
+      return { success: false, error: `Some notifications couldn't be marked as read (${failedSteps.join(', ')})`, failedSteps }
+    }
     return { success: true }
   } catch (error) {
     console.error('Server Action Error:', error)
