@@ -170,7 +170,14 @@ export async function markAllNotificationsAsRead() {
     // transaction — a true all-or-nothing guarantee would need a Postgres RPC —
     // but it stops one failure from masking every other step's outcome.
     const failedSteps: string[] = []
-    const step = async (label: string, fn: () => Promise<{ error: any } | void>) => {
+    // fn is typed as PromiseLike, not Promise: Supabase's query builder
+    // (e.g. `supabase.from(...).update(...)`) is a "thenable" — it has
+    // `.then()` so `await` works fine on it at runtime — but it isn't a
+    // real Promise (no `.catch`/`.finally`/Symbol.toStringTag), which is
+    // exactly what broke the Vercel build (TS2345) on the simple one-line
+    // steps below that return the builder directly instead of an
+    // async-wrapped Promise.
+    const step = async (label: string, fn: () => PromiseLike<{ error: any } | void>) => {
       try {
         const result = await fn()
         if (result && (result as any).error) {
