@@ -83,17 +83,19 @@ export async function earnXP(
 // ... existing spendXP ...
 
 export const PRO_REWARD_MULTIPLIER = 2
-export const BONUS_DURATION_DAYS = 7
+export const STREAK_REQUIRED_DAYS = 7        // days needed to unlock the bonus
+export const BONUS_ACTIVE_DURATION_DAYS = 3  // how long the 2x bonus stays active once unlocked
 
 /**
- * Check if the 7-day 2x bonus is currently active based on its start date.
+ * Check if the 2x bonus is currently active based on its start date.
+ * Bonus is unlocked by a 7-day login streak, but only lasts 3 days once activated.
  */
 export function isBonusActive(bonusStartDate: string | null): boolean {
   if (!bonusStartDate) return false
   const start = new Date(bonusStartDate).getTime()
   const now = Date.now()
   const daysDiff = (now - start) / (1000 * 60 * 60 * 24)
-  return daysDiff < BONUS_DURATION_DAYS
+  return daysDiff < BONUS_ACTIVE_DURATION_DAYS
 }
 
 /**
@@ -234,4 +236,3 @@ export async function getXPTransactions(limit: number = 20): Promise<XPTransacti
     return []
   }
 }
-
