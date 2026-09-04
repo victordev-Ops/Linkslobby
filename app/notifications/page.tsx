@@ -190,7 +190,13 @@ export default async function NotificationsPage() {
     // in the client, so no filtering needed for them here)
     const confessions = (confessionsRes.data || []).filter(c => !isHidden(c.id, 'confession'))
     const dykmScores = (dykmRes.data || []).filter(s => !isHidden(s.id, 'dykm_score'))
-    const filteredLobbyEvents = lobbyEvents.filter(e => !isHidden(e.id, 'lobby'))
+    // NOTE: 'lobby_event', not 'lobby' — hidden_notifications' check constraint
+    // only allows 'lobby_event' (matches the 104 existing rows using that value
+    // and deleteNotification()'s NOTIFICATION_TYPE_KEY mapping for 'lobby').
+    // This used to say 'lobby', which meant hidden lobby events could never
+    // actually be filtered out here even on the rare row that got past the
+    // constraint, since the keys never matched.
+    const filteredLobbyEvents = lobbyEvents.filter(e => !isHidden(e.id, 'lobby_event'))
     const xpTransactions = (xpRes.data || []).filter(x => !isHidden(x.id, 'xp_transaction'))
     const hotSeatQuestions = (hotSeatRes.data || []).filter(q => !isHidden(q.id, 'hot_seat_question'))
     const turnEvents = (turnEventsRes.data || []).filter(t => !isHidden(t.id, 'tod_turn_event'))
@@ -222,4 +228,3 @@ export default async function NotificationsPage() {
         />
     )
 }
-               
