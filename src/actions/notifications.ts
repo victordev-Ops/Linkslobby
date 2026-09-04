@@ -50,7 +50,13 @@ const NOTIFICATION_TYPE_KEY: Record<string, string> = {
   friend_request: 'friend_request',
   friend_request_response: 'friend_request_response',
   three_word: 'three_word_response',
-  lobby: 'lobby',
+  // NOT 'lobby': hidden_notifications has a DB check constraint
+  // (hidden_notifications_notification_type_check) allowing 'lobby_event',
+  // not 'lobby'. There are already 104 historical rows using 'lobby_event'.
+  // Using 'lobby' here throws a 23514 check-violation on every lobby delete
+  // — confirmed in the project's postgres logs. page.tsx's isHidden() call
+  // for lobby events must use the same string; see the matching fix there.
+  lobby: 'lobby_event',
 }
 
 function notificationTypeKey(type: NotificationType): string {
