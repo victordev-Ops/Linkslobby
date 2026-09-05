@@ -4,6 +4,9 @@ import { verifyWebhookSignature, verifyTransaction } from '@/lib/paystack'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
+// charge.success verification can retry a few times with delays (see
+// below) — give the function room so Vercel doesn't kill it mid-retry.
+export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
     const body = await req.text()
@@ -135,7 +138,7 @@ export async function POST(req: NextRequest) {
                 break
             }
 
-            // ─── FIXED ───────────────────────────────────────────────────
+            // ─── FIXED (2026-08) ─────────────────────────────────────────
             // Previously this branch trusted `data.plan_object` /
             // `data.subscription_code` directly off the webhook body. The
             // charge.success webhook payload does not reliably use those
@@ -149,6 +152,22 @@ export async function POST(req: NextRequest) {
             // verifyTransaction() (a shape we control and already trust
             // elsewhere in the codebase), instead of parsing the raw
             // webhook body for subscription fields.
+            //
+            // ─── FIXED AGAIN (2026-09) ───────────────────────────────────
+            // Real production data showed a user charged 5 times in one
+            // session — only 1 charge ever attached to a subscription.
+            // Root cause: verifyTransaction() was called exactly once,
+            // immediately on receipt of charge.success. Paystack does not
+            // guarantee the subscription is fully linked to the
+            // transaction by the moment that webhook fires — a genuine
+            // subscription charge can come back with subscription_code
+            // still missing if checked too early. The old code treated
+            // that as "this must be a one-off charge" and gave up
+            // permanently, so is_pro never flipped and the user (seeing
+            // no change) paid again.
+            //
+            // Fix: retry verifyTransaction a few times with a short delay
+            // before concluding there's really no subscription attached.
             case 'charge.success': {
                 const data = event.data
                 const userId = data.metadata?.user_id
@@ -159,18 +178,36 @@ export async function POST(req: NextRequest) {
                     break
                 }
 
-                let verified
-                try {
-                    verified = await verifyTransaction(data.reference)
-                } catch (err) {
-                    console.error('Failed to verify Paystack transaction on charge.success:', err)
-                    break
+                const maxAttempts = 4
+                const delayMs = 3000
+                let verified: Awaited<ReturnType<typeof verifyTransaction>> | undefined
+                let verifyFailed = false
+
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    try {
+                        verified = await verifyTransaction(data.reference)
+                    } catch (err) {
+                        console.error('Failed to verify Paystack transaction on charge.success:', err)
+                        verifyFailed = true
+                        break
+                    }
+
+                    if (verified.status !== 'success') {
+                        console.warn('charge.success webhook but verify shows status:', verified.status)
+                        break
+                    }
+
+                    if (verified.subscription_code) break
+
+                    if (attempt < maxAttempts) {
+                        console.warn(
+                            `charge.success verified (attempt ${attempt}/${maxAttempts}) but no subscription_code yet for reference ${data.reference} — retrying in ${delayMs}ms`
+                        )
+                        await new Promise((resolve) => setTimeout(resolve, delayMs))
+                    }
                 }
 
-                if (verified.status !== 'success') {
-                    console.warn('charge.success webhook but verify shows status:', verified.status)
-                    break
-                }
+                if (verifyFailed || !verified || verified.status !== 'success') break
 
                 const subCode = verified.subscription_code
                 const planObject = verified.plan_object
@@ -195,11 +232,13 @@ export async function POST(req: NextRequest) {
 
                     if (error) console.error('Failed to update Paystack subscription on charge:', error)
                 } else {
-                    // A successful charge with no subscription attached (e.g. a
-                    // one-off payment). Nothing to link to `subscriptions`, but
-                    // still worth a log in case a plan charge is unexpectedly
-                    // missing a subscription_code.
-                    console.warn('charge.success verified but no subscription_code present for user', userId)
+                    // Genuinely no subscription after retrying — a real
+                    // one-off charge (or Paystack never attached one).
+                    // Surfaced loudly since this means a paying user got
+                    // nothing; worth wiring up an alert on this log line.
+                    console.error(
+                        `charge.success verified but NO subscription_code after ${maxAttempts} attempts for user ${userId}, reference ${data.reference} — payment may be unlinked`
+                    )
                 }
 
                 // Always resync — covers the case where the subscription row
