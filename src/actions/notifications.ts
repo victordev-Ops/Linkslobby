@@ -363,3 +363,152 @@ export async function markAllNotificationsAsRead() {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
+
+// ─── Bulk actions ─────────────────────────────────────────────────
+// handleBatchDelete/handleBatchMarkRead in NotificationsClient.tsx used to fire
+// one deleteNotification/markNotificationAsRead Server Action call PER selected
+// item via Promise.all — selecting 30 items meant 30 separate HTTP round trips
+// to Vercel, each spinning up its own function invocation and its own Supabase
+// connection simultaneously, plus 30 revalidatePath calls. Under load that's a
+// realistic way to exhaust the DB connection pool and make the whole batch
+// action appear to hang. These collapse a batch down to 1–2 queries total by
+// grouping items into single multi-row upserts / `.in()` updates, with a
+// per-item fallback only on the rare path where the bulk write itself fails
+// (a multi-row upsert is one atomic statement — one bad row fails all of them).
+
+type BulkItem = { id: string; type: NotificationType }
+type BulkResult = { success: boolean; failedIds: string[]; error?: string }
+
+export async function bulkDeleteNotifications(items: BulkItem[]): Promise<BulkResult> {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Unauthorized', failedIds: items.map(i => i.id) }
+  if (items.length === 0) return { success: true, failedIds: [] }
+
+  const failedIds = new Set<string>()
+
+  // Non-deletable types (lobby_join_response, hot_seat_answer) never reach the DB.
+  const deletable = items.filter(i => DELETABLE_TYPES.includes(i.type))
+  items.filter(i => !DELETABLE_TYPES.includes(i.type)).forEach(i => failedIds.add(i.id))
+
+  const gameInviteItems = deletable.filter(i => i.type === 'game_invite')
+  const hideItems = deletable.filter(i => i.type !== 'game_invite')
+
+  if (gameInviteItems.length > 0) {
+    const { data, error } = await supabase
+      .from('game_invites')
+      .delete()
+      .in('id', gameInviteItems.map(i => i.id))
+      .eq('invitee_id', user.id)
+      .select('id')
+    if (error) {
+      console.error('Server Action Error (bulkDeleteNotifications:game_invites):', error)
+      gameInviteItems.forEach(i => failedIds.add(i.id))
+    } else {
+      // .delete() silently drops ids that don't match (RLS, wrong owner, already
+      // gone) instead of erroring — .select('id') tells us which actually went.
+      const deletedIds = new Set((data || []).map((r: any) => r.id))
+      gameInviteItems.forEach(i => { if (!deletedIds.has(i.id)) failedIds.add(i.id) })
+    }
+  }
+
+  if (hideItems.length > 0) {
+    const rows = hideItems.map(i => ({
+      user_id: user.id,
+      notification_id: i.id,
+      notification_type: notificationTypeKey(i.type),
+    }))
+    const { error } = await supabase
+      .from('hidden_notifications')
+      .upsert(rows, { onConflict: 'user_id, notification_id, notification_type' })
+    if (error) {
+      console.error('Server Action Error (bulkDeleteNotifications:hidden_notifications):', error)
+      // Fall back to one-at-a-time only on failure, so a single bad row doesn't
+      // sink every other item that would otherwise have succeeded.
+      for (const item of hideItems) {
+        const { error: itemError } = await supabase
+          .from('hidden_notifications')
+          .upsert(
+            { user_id: user.id, notification_id: item.id, notification_type: notificationTypeKey(item.type) },
+            { onConflict: 'user_id, notification_id, notification_type' }
+          )
+        if (itemError) {
+          console.error(`Server Action Error (bulkDeleteNotifications:${item.id}):`, itemError)
+          failedIds.add(item.id)
+        }
+      }
+    }
+  }
+
+  revalidatePath('/notifications')
+  return { success: failedIds.size === 0, failedIds: Array.from(failedIds) }
+}
+
+export async function bulkMarkNotificationsAsRead(items: BulkItem[]): Promise<BulkResult> {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Unauthorized', failedIds: items.map(i => i.id) }
+  if (items.length === 0) return { success: true, failedIds: [] }
+
+  const failedIds = new Set<string>()
+
+  const readsItems = items.filter(i => NOTIFICATION_READS_TYPES.includes(i.type))
+  const directItems = items.filter(i => !NOTIFICATION_READS_TYPES.includes(i.type))
+
+  if (readsItems.length > 0) {
+    const rows = readsItems.map(i => ({ user_id: user.id, notification_id: i.id, notification_type: i.type }))
+    const { error } = await supabase
+      .from('notification_reads')
+      .upsert(rows, { onConflict: 'user_id, notification_id, notification_type' })
+    if (error) {
+      console.error('Server Action Error (bulkMarkNotificationsAsRead:notification_reads):', error)
+      for (const item of readsItems) {
+        const { error: itemError } = await supabase
+          .from('notification_reads')
+          .upsert(
+            { user_id: user.id, notification_id: item.id, notification_type: item.type },
+            { onConflict: 'user_id, notification_id, notification_type' }
+          )
+        if (itemError) failedIds.add(item.id)
+      }
+    }
+  }
+
+  // Direct-column types live in different tables with different owner columns,
+  // so they can't share one query — but grouping by type still turns what used
+  // to be N round trips into at most 7 (one per possible type below).
+  const byType = new Map<string, string[]>()
+  for (const item of directItems) {
+    const list = byType.get(item.type)
+    if (list) list.push(item.id)
+    else byType.set(item.type, [item.id])
+  }
+
+  // Typed as PromiseLike, not Promise — same reason as the `step` helper in
+  // markAllNotificationsAsRead above: these return Supabase's query builder
+  // directly rather than an async-wrapped Promise, and the builder is a
+  // thenable but not a full Promise (no catch/finally/Symbol.toStringTag).
+  // `Promise<...>` here would fail the build the exact same way TS2345 did before.
+  const directUpdaters: Record<string, (ids: string[]) => PromiseLike<{ error: any }>> = {
+    message: (ids) => supabase.from('confessions').update({ is_read: true }).in('id', ids).eq('profile_id', user.id),
+    dykm: (ids) => supabase.from('dykm_scores').update({ is_read: true }).in('id', ids).eq('quiz_owner_id', user.id),
+    xp: (ids) => supabase.from('xp_transactions').update({ is_read: true }).in('id', ids).eq('user_id', user.id),
+    hot_seat: (ids) => supabase.from('hot_seat_questions').update({ is_read: true }).in('id', ids),
+    tod_turn: (ids) => supabase.from('tod_turn_events').update({ is_read: true }).in('id', ids).eq('user_id', user.id),
+    game_invite: (ids) => supabase.from('game_invites').update({ is_read: true }).in('id', ids).eq('invitee_id', user.id),
+    three_word: (ids) => supabase.from('three_word_responses').update({ is_read: true }).in('id', ids).eq('host_id', user.id),
+  }
+
+  for (const [type, ids] of byType) {
+    const updater = directUpdaters[type]
+    if (!updater) { ids.forEach(id => failedIds.add(id)); continue }
+    const { error } = await updater(ids)
+    if (error) {
+      console.error(`Server Action Error (bulkMarkNotificationsAsRead:${type}):`, error)
+      ids.forEach(id => failedIds.add(id))
+    }
+  }
+
+  revalidatePath('/notifications')
+  return { success: failedIds.size === 0, failedIds: Array.from(failedIds) }
+}
