@@ -18,6 +18,7 @@ type NotificationContextType = {
   setFriendRequestCount: React.Dispatch<React.SetStateAction<number>>
   refreshUnreadCount: () => Promise<void>
   debouncedRefreshUnreadCount: () => void
+  setUnreadCountOptimistic: (value: number) => void
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
@@ -358,6 +359,21 @@ export function NotificationProvider({
     setUnreadMessagesCount(messagesTotal)
   }, [profileId, supabase])
 
+  // Optimistic callers (e.g. "mark all as read") that set the badge directly —
+  // bypassing a real refreshUnreadCount() call — need to invalidate any
+  // refreshUnreadCount() that's already in flight or queued in the debounce
+  // timer. Without this, a debounced refresh triggered by an earlier, unrelated
+  // realtime event (e.g. a new confession arriving moments before the user hit
+  // "mark all read") can resolve AFTER this optimistic update and overwrite it
+  // with a stale pre-update count — the badge briefly (or until the next event)
+  // shows the wrong number right after clearing everything. Bumping the
+  // generation here makes any such in-flight call's `gen !== refreshGenRef.current`
+  // check discard its result instead of applying it.
+  const setUnreadCountOptimistic = useCallback((value: number) => {
+    refreshGenRef.current++
+    setUnreadCount(value)
+  }, [])
+
   // Shared debounced refresh — exposed via context so other components (e.g. the
   // notifications page's own realtime channel) can coalesce their refresh calls
   // with this provider's instead of each independently hammering the 14-query
@@ -667,7 +683,8 @@ export function NotificationProvider({
       setUnreadMessagesCount,
       setFriendRequestCount,
       refreshUnreadCount,
-      debouncedRefreshUnreadCount: debouncedRefresh
+      debouncedRefreshUnreadCount: debouncedRefresh,
+      setUnreadCountOptimistic
     }}>
       {children}
     </NotificationContext.Provider>
@@ -686,7 +703,8 @@ export const useNotifications = () => {
         setUnreadMessagesCount: () => { },
         setFriendRequestCount: () => { },
         refreshUnreadCount: async () => { },
-        debouncedRefreshUnreadCount: () => { }
+        debouncedRefreshUnreadCount: () => { },
+        setUnreadCountOptimistic: () => { }
       }
     }
     throw new Error('useNotifications must be used within NotificationProvider')
