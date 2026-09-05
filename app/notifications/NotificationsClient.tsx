@@ -13,7 +13,7 @@ import { formatDistanceToNow } from "@/lib/utils"
 import { showAppSuccess, showAppError } from "@/components/AppToast"
 import { createClient } from "@/lib/supabase/client"
 import { markConfessionAsRead } from "@/actions/confessions"
-import { deleteNotification, markNotificationAsRead, markAllNotificationsAsRead } from "@/actions/notifications"
+import { deleteNotification, markNotificationAsRead, markAllNotificationsAsRead, bulkDeleteNotifications, bulkMarkNotificationsAsRead } from "@/actions/notifications"
 import { revealDYKMRespondent } from "@/actions/reveal"
 import { useRouter } from "next/navigation"
 import { db } from '@/lib/db'
@@ -83,7 +83,7 @@ export default function NotificationsClient({
     username,
     profileId
 }: NotificationsClientProps) {
-    const { refreshUnreadCount, setUnreadCount, debouncedRefreshUnreadCount } = useNotifications()
+    const { refreshUnreadCount, debouncedRefreshUnreadCount, setUnreadCountOptimistic } = useNotifications()
     const [confessions, setConfessions] = useState(initialConfessions || [])
     const [dykmScores, setDykmScores] = useState(initialDykmScores || [])
     const [lobbyEvents, setLobbyEvents] = useState(initialLobbyEvents || [])
@@ -211,7 +211,15 @@ export default function NotificationsClient({
                 const q = payload.new
                 if (payload.eventType === 'INSERT' && hotSeatSessionIds.includes(q?.session_id)) {
                     const { data } = await supabase.from('hot_seat_questions').select('*, session:hot_seat_sessions(name, slug)').eq('id', q.id).single()
-                    if (data) setHotSeatQuestions(prev => [data, ...prev])
+                    // Dedup by id: this channel has no filter on hot_seat_questions (it
+                    // has to see every host's rows to check hotSeatSessionIds client-side),
+                    // and a realtime reconnect can replay a recent INSERT that's already in
+                    // state. Every other handler in this effect (hotSeatAnswers, lobbyJoinResponses)
+                    // already guards this way; this one didn't, so a replayed event could add
+                    // a second copy of the same question — same id, duplicate React key —
+                    // which is exactly the kind of thing that makes deleting it look like it
+                    // silently does nothing (the visible copy isn't the one whose state got removed).
+                    if (data) setHotSeatQuestions(prev => prev.some(q2 => q2.id === data.id) ? prev : [data, ...prev])
                 }
                 if (payload.eventType === 'UPDATE' && q?.asker_id === profileId && ['answered', 'skipped', 'timed_out'].includes(q?.status)) {
                     const { data } = await supabase.from('hot_seat_questions').select('*, session:hot_seat_sessions(name, slug)').eq('id', q.id).single()
@@ -351,7 +359,11 @@ export default function NotificationsClient({
             hotSeatAnswers.forEach(q => next.add(`hot_seat_answer:${q.id}`))
             return next
         })
-        setUnreadCount(0)
+        // Bumps the shared refresh generation so a debounced refresh already
+        // queued from an earlier, unrelated realtime event can't land after
+        // this and overwrite it with a stale count (see setUnreadCountOptimistic
+        // in NotificationContext.tsx).
+        setUnreadCountOptimistic(0)
 
         const result = await markAllNotificationsAsRead()
         if (result?.success) {
@@ -500,16 +512,13 @@ export default function NotificationsClient({
         const count = itemsToMark.length
         handleCancelSelection()
 
-        // markNotificationAsRead never throws (it catches internally and returns
-        // {success:false}), so wrapping Promise.all in try/catch alone never actually
-        // detects a failed write — the catch block simply never runs, and a success
-        // toast fires even when some writes failed silently. Inspect each result
-        // explicitly instead, and roll back exactly the items that failed rather than
-        // leaving them stuck showing "read" locally when the server never recorded it.
-        const results = await Promise.all(
-            itemsToMark.map(item => markNotificationAsRead(item.id, item.type as any).then(result => ({ item, result })))
-        )
-        const failed = results.filter(({ result }) => !result?.success).map(({ item }) => item)
+        // One bulk round trip instead of one markNotificationAsRead call per item —
+        // N parallel Server Action invocations (each opening its own DB connection)
+        // is what made batch actions hang under load. Roll back exactly the items
+        // the server reports as failed, same as before.
+        const result = await bulkMarkNotificationsAsRead(itemsToMark.map(item => ({ id: item.id, type: item.type })))
+        const failedIdSet = new Set(result?.failedIds ?? (result?.success ? [] : itemsToMark.map(i => i.id)))
+        const failed = itemsToMark.filter(item => failedIdSet.has(item.id))
 
         if (failed.length > 0) {
             const failedIds = (type: string) => new Set(failed.filter(f => f.type === type).map(f => f.id))
@@ -591,10 +600,13 @@ export default function NotificationsClient({
         const count = itemsToDelete.length
         handleCancelSelection()
 
-        const results = await Promise.all(
-            itemsToDelete.map(item => deleteNotification(item.id, item.type as any).then(result => ({ item, result })))
-        )
-        const failed = results.filter(({ result }) => !result?.success).map(({ item }) => item)
+        // One bulk round trip instead of one deleteNotification call per selected item —
+        // this (N parallel Server Action invocations, each opening its own DB connection,
+        // plus N revalidatePath calls) is what made batch delete hang under load.
+        // bulkDeleteNotifications does the same work in at most 2 queries total.
+        const bulkResult = await bulkDeleteNotifications(itemsToDelete.map(item => ({ id: item.id, type: item.type as any })))
+        const failedIdSet = new Set(bulkResult?.failedIds ?? (bulkResult?.success ? [] : itemsToDelete.map(i => i.id)))
+        const failed = itemsToDelete.filter(item => failedIdSet.has(item.id))
 
         if (failed.length > 0) {
             // Restore exactly the items whose delete actually failed server-side, using
