@@ -180,7 +180,7 @@ export default function InboxClient({
       return hiddenConfessionIdsRef.current
     }
 
-    const hiddenIds = new Set((data || []).map((h: any) => h.notification_id))
+    const hiddenIds = new Set<string>((data || []).map((h: any) => h.notification_id as string))
     hiddenConfessionIdsRef.current = hiddenIds
 
     if (hiddenIds.size > 0) {
