@@ -207,6 +207,14 @@ export default async function NotificationsPage() {
     const friendRequests = (friendRequestsRes.data || []).filter(f => !isHidden(f.id, 'friend_request'))
     const friendResponses = (friendResponsesRes.data || []).filter(f => !isHidden(f.id, 'friend_request_response'))
 
+    // FIX: lobby_join_response and hot_seat_answer used to be passed straight
+    // through from the query with no hidden-notification filtering at all —
+    // deleteNotification() now supports hiding both (see actions/notifications.ts),
+    // so a deleted one has to actually disappear here too, or it just reappears
+    // on the next load even though the delete "succeeded".
+    const lobbyJoinResponses = (lobbyJoinResponsesRes.data || []).filter(p => !isHidden(p.id, 'lobby_join_response'))
+    const hotSeatAnswers = (hotSeatAnswersRes.data || []).filter(q => !isHidden(q.id, 'hot_seat_answer'))
+
     return (
         <NotificationsClient
             initialConfessions={confessions}
@@ -217,8 +225,8 @@ export default async function NotificationsPage() {
             initialTurnEvents={turnEvents}
             initialFriendRequests={friendRequests}
             initialFriendResponses={friendResponses}
-            initialLobbyJoinResponses={lobbyJoinResponsesRes.data || []}
-            initialHotSeatAnswers={hotSeatAnswersRes.data || []}
+            initialLobbyJoinResponses={lobbyJoinResponses}
+            initialHotSeatAnswers={hotSeatAnswers}
             initialGameInvites={gameInvites}
             initialThreeWordResponses={threeWordResponses}
             initialReadIds={allReadKeys}
