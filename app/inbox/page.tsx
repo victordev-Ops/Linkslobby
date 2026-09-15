@@ -41,7 +41,14 @@ async function ConfessionsLoader({
   // flicker that was originally caused by that client-side load is fixed at
   // the merge layer there (cache never clobbers live data), so nothing is
   // lost by not blocking the initial server render on it.
-  const [confessionsRes, profileRes] = await Promise.all([
+  //
+  // FIX: also fetch hidden_notifications (type 'confession'). The Notifications
+  // page's trash icon soft-deletes a "New Confession" notification by inserting
+  // a row here — it never touches the confessions table itself (see
+  // deleteNotification in actions/notifications.ts) — so without this filter,
+  // anything deleted from the bell page kept showing up here in the Inbox,
+  // fully visible and still counted as unread by InboxClient's tabStats.
+  const [confessionsRes, profileRes, hiddenRes] = await Promise.all([
     supabase
       .from('confessions')
       .select('id, message, created_at, is_read, profile_id, message_type')
@@ -52,7 +59,12 @@ async function ConfessionsLoader({
       .from('profiles')
       .select('username, slug, restricted_words, show_watermark')
       .eq('id', userId)
-      .single()
+      .single(),
+    supabase
+      .from('hidden_notifications')
+      .select('notification_id')
+      .eq('user_id', userId)
+      .eq('notification_type', 'confession')
   ])
 
   if (confessionsRes.error) {
@@ -67,6 +79,13 @@ async function ConfessionsLoader({
     )
   }
 
+  if (hiddenRes.error) {
+    console.error('Error fetching hidden_notifications:', hiddenRes.error)
+  }
+
+  const hiddenConfessionIds = new Set((hiddenRes.data || []).map(h => h.notification_id))
+  const visibleConfessions = (confessionsRes.data || []).filter(c => !hiddenConfessionIds.has(c.id))
+
   // Determine the display name for the share cards
   const username = profileRes.data?.username || profileRes.data?.slug || 'user'
   const restrictedWords: string[] = profileRes.data?.restricted_words || []
@@ -74,7 +93,7 @@ async function ConfessionsLoader({
 
   return (
     <InboxClient
-      initialConfessions={confessionsRes.data || []}
+      initialConfessions={visibleConfessions}
       userId={userId}
       username={username}
       restrictedWords={restrictedWords}
@@ -82,5 +101,3 @@ async function ConfessionsLoader({
     />
   )
 }
-
-
