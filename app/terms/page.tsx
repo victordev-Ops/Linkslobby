@@ -5,14 +5,14 @@ import { ArrowLeft, Mail } from "lucide-react"
 
 // Same two-role type system as the rest of the app: Space Grotesk for
 // personality (headings), Inter for quiet, legible body copy.
+
+
 const display = Space_Grotesk({
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
   variable: "--font-display",
 })
 const body = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
   variable: "--font-body",
 })
 
